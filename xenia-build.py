@@ -1939,7 +1939,7 @@ def build_shaders(targets=None, config="release", target_os=None):
                 # Target Metal 2.3 explicitly for checked-in bytecode.
                 compile_args = [
                     "-x", "metal",
-                    "-std=ios-metal2.3" if target_os == "ios"
+                    "-std=ios-metal2.3", "-mios-version-min=16.0" if target_os == "ios"
                     else "-std=macos-metal2.3",
                     "-D", "SHADING_LANGUAGE_MSL_XE=1",
                     "-I", src_dir,
