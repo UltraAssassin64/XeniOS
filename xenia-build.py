@@ -1957,10 +1957,10 @@ def build_shaders(targets=None, config="release", target_os=None):
                     if subprocess.call(cmd) != 0:
                         print("ERROR: failed to compile Metal shader")
                         return 1
-                    link_args = [air_path,"-o", metallib_path,]
+                    link_args = ["metallib", air_path,"-o", metallib_path]
                     if target_os == "ios":
                         link_args.append("-mios-version-min=16.0")
-                    cmd = metal_tool("metallib", link_args)
+                    cmd = metal_tool(link_args)
                     if subprocess.call(cmd) != 0:
                         print("ERROR: failed to link Metal library")
                         return 1
