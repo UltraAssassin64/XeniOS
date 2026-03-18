@@ -73,6 +73,7 @@
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>stikjit</string>
+		<string>apple-magnifier</string>
     </array>
     <key>UIApplicationSceneManifest</key>
     <dict>
