@@ -2623,8 +2623,6 @@ class CleanGeneratedCommand(Command):
 # Generated files that should be excluded from linting/formatting
 GENERATED_FILES = [
     "src/xenia/ui/ui_resources_qrc.cpp",  # Qt resource file
-    "/workspaces/XeniOS/src/xenia/apu/xma_context_dumb.cc",
-    "/workspaces/XeniOS/src/xenia/apu/xma_context_dumb.h"
 ]
 
 def find_xenia_source_files():
