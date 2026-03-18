@@ -1940,6 +1940,7 @@ def build_shaders(targets=None, config="release", target_os=None):
 
                 # Common compile args.
                 # Target Metal 2.3 explicitly for checked-in bytecode.
+                compile_args = []
                 if target_os == "ios":
                     compile_args = [
                         "-x", "metal",
@@ -1970,6 +1971,7 @@ def build_shaders(targets=None, config="release", target_os=None):
                     if subprocess.call(cmd) != 0:
                         print("ERROR: failed to compile Metal shader")
                         return 1
+                    link_args = []
                     if target_os == "ios":
                         link_args = [
                             air_path,

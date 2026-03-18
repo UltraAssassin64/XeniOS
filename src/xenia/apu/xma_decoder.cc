@@ -10,7 +10,6 @@
 #include "xenia/apu/xma_decoder.h"
 
 #include "xenia/apu/xma_context.h"
-#include "xenia/apu/xma_context_dumb.h"
 #include "xenia/apu/xma_context_fake.h"
 #include "xenia/apu/xma_context_master.h"
 #include "xenia/apu/xma_context_new.h"
@@ -184,8 +183,6 @@ X_STATUS XmaDecoder::Setup(kernel::KernelState* kernel_state) {
       contexts_[i] = new XmaContextOld();
     } else if (cvars::xma_decoder == "new") {
       contexts_[i] = new XmaContextNew();
-    } else if (cvars::xma_decoder == "dumb") {
-      contexts_[i] = new XmaContextDumb();
     } else {
       contexts_[i] = new XmaContextNew();
     }
