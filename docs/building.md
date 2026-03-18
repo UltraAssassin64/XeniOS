@@ -119,6 +119,22 @@ You will also need some development libraries. To get them on an Ubuntu system:
 sudo apt-get install build-essential mesa-vulkan-drivers valgrind libc++-dev libc++abi-dev liblz4-dev libsdl2-dev libvulkan-dev libx11-xcb-dev clang-19 llvm-19 ninja-build libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-cursor0
 ```
 
+##Add Lunar GPG key:
+
+wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+
+##Add Lunar Repository:
+
+sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+
+##Run the system update command:
+
+sudo apt update
+
+##Finally install Vulkan SDK using APT on Ubuntu 24.04:
+
+sudo apt install vulkan-sdk
+
 In addition, you will need up to date Vulkan libraries and drivers for your hardware, which most distributions have in their standard repositories nowadays.
 
 **Qt 6.10.1 (for the UI)**
