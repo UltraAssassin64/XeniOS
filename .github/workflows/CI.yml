@@ -29,7 +29,9 @@ jobs:
           sudo apt-get -y update
           sudo apt-get -y install clang-format-$LLVM_VERSION
       - name: Lint
-        run: ./xenia-build.py lint --all
+        run: |
+          ./xenia-build.py format --all
+          ./xenia-build.py lint --all
 
   build-linux-x86_64:
     name: Build Linux x86_64

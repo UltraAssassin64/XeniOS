@@ -267,13 +267,13 @@ jobs:
       - name: Build trusted artifact
         shell: bash
         env:
-          XENIOS_BUILD_ATTESTATION_KEY: "${{ secrets.XENIOS_BUILD_ATTESTATION_KEY }}"
+          #XENIOS_BUILD_ATTESTATION_KEY: "${{ secrets.XENIOS_BUILD_ATTESTATION_KEY }}"
           XENIOS_BUILD_ATTESTATION_KEY_ID: "${{ secrets.XENIOS_BUILD_ATTESTATION_KEY_ID }}"
           CHANNEL: "${{ needs.resolve-metadata.outputs.channel }}"
           VERSION: "${{ needs.resolve-metadata.outputs.version }}"
           BUILD_NUMBER: "${{ needs.resolve-metadata.outputs.build_number }}"
           STAGE: "${{ needs.resolve-metadata.outputs.stage }}"
-        run: 
+        run: |
           set -euo pipefail
           if [ -z "${XENIOS_BUILD_ATTESTATION_KEY}" ]; then
             echo "::error::XENIOS_BUILD_ATTESTATION_KEY is not configured"
