@@ -82,6 +82,9 @@
 #if XE_PLATFORM_IOS
 namespace {
 
+extern "C" void ios_request_jit();
+
+void AskForJIT() { ios_request_jit(); }
 extern "C" int csops(pid_t pid, unsigned int ops, void* useraddr,
                      size_t usersize);
 
