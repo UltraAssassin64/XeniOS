@@ -1940,14 +1940,28 @@ def build_shaders(targets=None, config="release", target_os=None):
 
                 # Common compile args.
                 # Target Metal 2.3 explicitly for checked-in bytecode.
-                compile_args = [
-                    "-x", "metal",
-                    "-std=ios-metal2.3", "-mios-version-min=16.0" if target_os == "ios"
-                    else "-std=macos-metal2.3",
-                    "-D", "SHADING_LANGUAGE_MSL_XE=1",
-                    "-I", src_dir,
-                    f"-fmodules-cache-path={module_cache}",
-                ]
+                if target_os == "ios":
+                    compile_args = [
+                        "-x", "metal",
+                        "-std=ios-metal2.3",
+                        "-mios-version-min=16.0"
+                    ]
+                else:
+                    compile_args = [
+                        "-x", "metal",
+                        "-std=macos-metal2.3",
+                        "-D", "SHADING_LANGUAGE_MSL_XE=1",
+                        "-I", src_dir,
+                        f"-fmodules-cache-path={module_cache}",
+                    ]
+                #compile_args = [
+                #    "-x", "metal",
+                #    "-std=ios-metal2.3", "-mios-version-min=16.0" if target_os == "ios"
+                #    else "-std=macos-metal2.3",
+                #    "-D", "SHADING_LANGUAGE_MSL_XE=1",
+                #    "-I", src_dir,
+                #    f"-fmodules-cache-path={module_cache}",
+                #]
 
                 if is_release:
                     # Release: .xesl -> .air -> .metallib (no debug info)
