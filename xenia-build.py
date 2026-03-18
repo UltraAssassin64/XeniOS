@@ -1539,6 +1539,7 @@ class BaseBuildCommand(Command):
                 ios_args = [
                     "-sdk", "iphoneos",
                     "-destination", "generic/platform=iOS",
+                    "IPHONEOS_DEPLOYMENT_TARGET=16.0"
                 ]
             # Use a local DerivedData path for cacheable incremental builds.
             derived_data_path = os.path.join("build", "DerivedData")
@@ -1683,6 +1684,7 @@ def build_shaders(targets=None, config="release", target_os=None):
     # Check if shaders need rebuilding by comparing source vs generated timestamps
     gpu_shaders = "src/xenia/gpu/shaders"
     ui_shaders = "src/xenia/ui/shaders"
+    ios_min_version = os.environ.get("IPHONEOS_DEPLOYMENT_TARGET", "16.0")
     src_paths = [os.path.join(root, name)
                  for root, dirs, files in os.walk("src")
                  for name in files
@@ -1877,7 +1879,8 @@ def build_shaders(targets=None, config="release", target_os=None):
     if all_targets or "metal" in targets:
         if sys.platform == "darwin":
             print("Building Metal MSL shaders...")
-
+            if target_os == "ios"
+                print(f"Using iOS Metal minimum version: {ios_min_version}")
             # Find Metal tools - prefer direct invocation, fall back to xcrun.
             use_xcrun = target_os == "ios"
             if not has_bin("metal") or not has_bin("metallib"):
@@ -1953,7 +1956,9 @@ def build_shaders(targets=None, config="release", target_os=None):
                     if subprocess.call(cmd) != 0:
                         print("ERROR: failed to compile Metal shader")
                         return 1
-                    cmd = metal_tool("metallib", [air_path, "-o", metallib_path])
+                    link_args = [air_path, "-o", metallib_path "-mios-version-min=16.0" if target_os == "ios" 
+                    else air_path, "-o", metallib_path ]
+                    cmd = metal_tool("metallib", [link_args])
                     if subprocess.call(cmd) != 0:
                         print("ERROR: failed to link Metal library")
                         return 1
