@@ -85,6 +85,7 @@ namespace {
 extern "C" void ios_request_jit();
 
 void AskForJIT() { ios_request_jit(); }
+
 extern "C" int csops(pid_t pid, unsigned int ops, void* useraddr,
                      size_t usersize);
 
@@ -344,7 +345,7 @@ X_STATUS Emulator::Setup(
       XELOGW(
           "JIT is not available. Games will not run.\n"
           "CS_DEBUGGED={} mmap(PROT_EXEC)={}\n"
-          "Enable JIT via StikDebug, AltJIT, or SideJITServer.\n"
+          "Enable JIT via TrollStore, AltJIT, or SideJITServer.\n"
           "If installed via Xcode, launch with the debugger attached.",
           cs_debugged, can_map_exec);
     }
