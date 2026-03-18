@@ -1879,7 +1879,7 @@ def build_shaders(targets=None, config="release", target_os=None):
     if all_targets or "metal" in targets:
         if sys.platform == "darwin":
             print("Building Metal MSL shaders...")
-            if target_os == "ios"
+            if target_os == "ios":
                 print(f"Using iOS Metal minimum version: {ios_min_version}")
             # Find Metal tools - prefer direct invocation, fall back to xcrun.
             use_xcrun = target_os == "ios"
