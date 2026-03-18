@@ -1940,25 +1940,20 @@ def build_shaders(targets=None, config="release", target_os=None):
 
                 # Common compile args.
                 # Target Metal 2.3 explicitly for checked-in bytecode.
-                compile_args = []
+                compile_args = [
+                    "-x", "metal",
+                    "-std=ios-metal2.3" if target_os == "ios" else "-std=macos-metal2.3",
+                ]
+
                 if target_os == "ios":
-                    compile_args = [
-                        "-x", "metal",
-                        "-std=ios-metal2.3",
-                        "-mios-version-min=16.0",
-                        "-DSHADING_LANGUAGE_MSL_XE=1",
-                        "-I", src_dir,
-                        f"-fmodules-cache-path={module_cache}",
-                    ]
-                else:
-                    compile_args = [
-                        "-x", "metal",
-                        "-std=macos-metal2.3",
-                        "-DSHADING_LANGUAGE_MSL_XE=1",
-                        "-DSHADING_LANGUAGE_METAL=1",
-                        "-I", src_dir,
-                        f"-fmodules-cache-path={module_cache}",
-                    ]
+                    compile_args.append("-mios-version-min=16.0")
+
+                compile_args += [
+                    "-DSHADING_LANGUAGE_MSL_XE=1",
+                    "-DSHADING_LANGUAGE_METAL=1",
+                    "-I", src_dir,
+                    f"-fmodules-cache-path={module_cache}",
+                ]
                 #compile_args = [
                 #    "-x", "metal",
                 #    "-std=ios-metal2.3", "-mios-version-min=16.0" if target_os == "ios"
@@ -1975,18 +1970,9 @@ def build_shaders(targets=None, config="release", target_os=None):
                     if subprocess.call(cmd) != 0:
                         print("ERROR: failed to compile Metal shader")
                         return 1
-                    link_args = []
-                    if target_os == "ios":
-                        link_args = [
-                            air_path,
-                            "-o", metallib_path,
-                            "-mios-version-min=16.0"
-                         ]
-                    else:
-                        link_args = [
-                            air_path,
-                            "-o", metallib_path
-                        ]
+                    link_args = [air_path,"-o", metallib_path,
+                    "mios-version-min=16.0" if target_os == "ios"
+                    ]
                     cmd = metal_tool("metallib", [link_args])
                     if subprocess.call(cmd) != 0:
                         print("ERROR: failed to link Metal library")
