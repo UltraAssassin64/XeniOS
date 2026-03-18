@@ -1940,28 +1940,15 @@ def build_shaders(targets=None, config="release", target_os=None):
 
                 # Common compile args.
                 # Target Metal 2.3 explicitly for checked-in bytecode.
+                
                 compile_args = [
                     "-x", "metal",
-                    "-std=ios-metal2.3" if target_os == "ios" else "-std=macos-metal2.3",
-                ]
-
-                if target_os == "ios":
-                    compile_args.append("-mios-version-min=16.0")
-
-                compile_args += [
-                    "-DSHADING_LANGUAGE_MSL_XE=1",
-                    "-DSHADING_LANGUAGE_METAL=1",
+                    "-std=ios-metal2.3", "-mios-version-min=16.0" if target_os == "ios"
+                    else "-std=macos-metal2.3",
+                    "-D", "SHADING_LANGUAGE_MSL_XE=1",
                     "-I", src_dir,
                     f"-fmodules-cache-path={module_cache}",
                 ]
-                #compile_args = [
-                #    "-x", "metal",
-                #    "-std=ios-metal2.3", "-mios-version-min=16.0" if target_os == "ios"
-                #    else "-std=macos-metal2.3",
-                #    "-D", "SHADING_LANGUAGE_MSL_XE=1",
-                #    "-I", src_dir,
-                #    f"-fmodules-cache-path={module_cache}",
-                #]
 
                 if is_release:
                     # Release: .xesl -> .air -> .metallib (no debug info)
@@ -1973,7 +1960,7 @@ def build_shaders(targets=None, config="release", target_os=None):
                     link_args = [air_path,"-o", metallib_path,]
                     if target_os == "ios":
                         link_args.append("-mios-version-min=16.0")
-                    cmd = metal_tool("metallib", [link_args])
+                    cmd = metal_tool("metallib", link_args)
                     if subprocess.call(cmd) != 0:
                         print("ERROR: failed to link Metal library")
                         return 1
