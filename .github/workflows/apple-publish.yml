@@ -264,7 +264,7 @@ jobs:
           ./xenia-build.py premake
           ./xenia-build.py fetchdata
 
-      - name: Build trusted artifact
+      - name: Build artifacts
         shell: bash
         env:
           CHANNEL: "${{ needs.resolve-metadata.outputs.channel }}"
@@ -272,12 +272,183 @@ jobs:
           BUILD_NUMBER: "${{ needs.resolve-metadata.outputs.build_number }}"
           STAGE: "${{ needs.resolve-metadata.outputs.stage }}"
         run: 
-          set -euo pipefail
-          args=(--channel "${CHANNEL}" --version "${VERSION}" --build-number "${BUILD_NUMBER}" --stage "${STAGE}")
-          IFS=' ' read -r -a extra_args <<< "${{ matrix.script_args }}"
-          ./tools/build_apple_release.sh "${args[@]}" "${extra_args[@]}"
 
-          test -f "${{ matrix.artifact_path }}"
+          ./xenia-build.py build --config=Release --target_os=ios --no_premake -- \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_IDENTITY= \
+            IPHONEOS_DEPLOYMENT_TARGET=${IPHONEOS_DEPLOYMENT_TARGET}
+          app_bundle="$(find build/bin/iOS-ARM64/Release -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          if [ -z "$app_bundle" ]; then
+            echo "::error::iOS app bundle not found in build/bin/iOS-ARM64/Release"
+            exit 1
+          fi
+
+          ./tools/build_apple_release.sh --platform ios --stamp-bundle "$app_bundle"
+
+          xattr -cr "$app_bundle"
+          if ! codesign --force --sign - --timestamp=none --entitlements xenia_ios.entitlements "$app_bundle"; then
+            echo "::warning::Ad-hoc signing failed; packaging unsigned app bundle"
+          fi
+
+          mkdir -p artifacts/release
+          ipa_out="$PWD/artifacts/release/xenios_ios_iphone_ipad.ipa"
+          tmp="$(mktemp -d "${TMPDIR:-/tmp}/xenios_ci_ipa.XXXXXX")"
+          mkdir -p "$tmp/Payload"
+          ditto "$app_bundle" "$tmp/Payload/$(basename "$app_bundle")"
+          (
+            cd "$tmp"
+            ditto -c -k --sequesterRsrc --keepParent Payload "$ipa_out"
+          )
+          rm -rf "$tmp"
+
+          ./xenia-build.py build --config=Release --target=xenia-app --no_premake -- \
+          MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}
+          app_bundle="build/bin/Mac-ARM64/Release/XeniOS.app"
+          if [ ! -d "$app_bundle" ]; then
+            echo "::error::App bundle not found in build/bin/Mac-ARM64/Release"
+            exit 1
+          fi
+
+          macdeployqt="$HOME/Qt/6.10.1/macos/bin/macdeployqt"
+          if [ -x "$macdeployqt" ]; then
+            "$macdeployqt" "$app_bundle" -always-overwrite -verbose=2 \
+              -libpath=third_party/metal-shader-converter/lib \
+              -libpath=third_party/DirectXShaderCompiler/build_dxilconv_macos/lib \
+              -libpath=/opt/homebrew/opt/sdl2/lib \
+              -libpath=/usr/local/opt/sdl2/lib
+          else
+            echo "::warning::macdeployqt not found at $macdeployqt"
+          fi
+
+          if [ -f third_party/metal-shader-converter/lib/libmetalirconverter.dylib ]; then
+            cp -f third_party/metal-shader-converter/lib/libmetalirconverter.dylib \
+              "$app_bundle/Contents/Frameworks/" || true
+          fi
+          if [ -f third_party/DirectXShaderCompiler/build_dxilconv_macos/lib/libdxilconv.dylib ]; then
+            cp -f third_party/DirectXShaderCompiler/build_dxilconv_macos/lib/libdxilconv.dylib \
+              "$app_bundle/Contents/Frameworks/" || true
+          fi
+
+          ./tools/build_apple_release.sh --platform macos --stamp-bundle "$app_bundle"
+
+          main_exe_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_bundle/Contents/Info.plist" 2>/dev/null || echo xenios)"
+          main_exe="$app_bundle/Contents/MacOS/$main_exe_name"
+          if [ -f "$main_exe" ]; then
+            codesign --remove-signature "$main_exe" || true
+          fi
+          codesign --remove-signature "$app_bundle" || true
+          frameworks_dir="$app_bundle/Contents/Frameworks"
+          plugins_dir="$app_bundle/Contents/PlugIns"
+          if [ -d "$frameworks_dir" ]; then
+            find "$frameworks_dir" -maxdepth 2 -name "*.framework" -type d -print0 | \
+              xargs -0 -I{} codesign --remove-signature "{}" || true
+            find "$frameworks_dir" -name "*.dylib" -type f -print0 | \
+              xargs -0 -I{} codesign --remove-signature "{}" || true
+            find "$frameworks_dir" -maxdepth 2 -name "*.framework" -type d -print0 | \
+              xargs -0 -I{} codesign --force --sign - --timestamp=none "{}"
+            find "$frameworks_dir" -name "*.dylib" -type f -print0 | \
+              xargs -0 -I{} codesign --force --sign - --timestamp=none "{}"
+          fi
+          if [ -d "$plugins_dir" ]; then
+            find "$plugins_dir" -name "*.dylib" -type f -print0 | \
+              xargs -0 -I{} codesign --remove-signature "{}" || true
+            find "$plugins_dir" -name "*.dylib" -type f -print0 | \
+              xargs -0 -I{} codesign --force --sign - --timestamp=none "{}"
+          fi
+          if [ -f "$main_exe" ]; then
+            codesign --force --sign - --timestamp=none "$main_exe"
+          fi
+          codesign --force --deep --timestamp=none \
+            --sign - --entitlements xenia.entitlements "$app_bundle"
+          xattr -cr "$app_bundle"
+
+          mkdir -p artifacts/release
+
+          mkdir -p dmg_contents
+          cp -R "$app_bundle" dmg_contents/
+          cp LICENSE dmg_contents/
+          ln -s /Applications dmg_contents/Applications
+
+          hdiutil create -volname "XeniOS" -srcfolder dmg_contents -ov -format UDZO "artifacts/release/xenios_macos_apple_silicon.dmg"
+          rm -rf dmg_contents
+
+          ./xenia-build.py build --config=Release --target=xenia-app --arch=x86_64 --no_premake -- \
+          MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}
+          
+          app_bundle="build/bin/Mac-x86_64/Release/XeniOS.app"
+          if [ ! -d "$app_bundle" ]; then
+            echo "::error::App bundle not found in build/bin/Mac-x86_64/Release"
+            exit 1
+          fi
+
+          macdeployqt="$HOME/Qt/6.10.1/macos/bin/macdeployqt"
+          if [ -x "$macdeployqt" ]; then
+            "$macdeployqt" "$app_bundle" -always-overwrite -verbose=2 \
+              -libpath=third_party/metal-shader-converter/lib \
+              -libpath=third_party/DirectXShaderCompiler/build_dxilconv_macos_x86_64/lib \
+              -libpath=/opt/homebrew/opt/sdl2/lib \
+              -libpath=/usr/local/opt/sdl2/lib
+          else
+            echo "::warning::macdeployqt not found at $macdeployqt"
+          fi
+
+          if [ -f third_party/metal-shader-converter/lib/libmetalirconverter.dylib ]; then
+            cp -f third_party/metal-shader-converter/lib/libmetalirconverter.dylib \
+              "$app_bundle/Contents/Frameworks/" || true
+          fi
+          if [ -f third_party/DirectXShaderCompiler/build_dxilconv_macos_x86_64/lib/libdxilconv.dylib ]; then
+            cp -f third_party/DirectXShaderCompiler/build_dxilconv_macos_x86_64/lib/libdxilconv.dylib \
+              "$app_bundle/Contents/Frameworks/" || true
+          fi
+
+          ./tools/build_apple_release.sh --platform macos --stamp-bundle "$app_bundle"
+
+          main_exe_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_bundle/Contents/Info.plist" 2>/dev/null || echo xenios)"
+          main_exe="$app_bundle/Contents/MacOS/$main_exe_name"
+          if [ -f "$main_exe" ]; then
+            codesign --remove-signature "$main_exe" || true
+          fi
+          codesign --remove-signature "$app_bundle" || true
+          frameworks_dir="$app_bundle/Contents/Frameworks"
+          plugins_dir="$app_bundle/Contents/PlugIns"
+          if [ -d "$frameworks_dir" ]; then
+            find "$frameworks_dir" -maxdepth 2 -name "*.framework" -type d -print0 | \
+              xargs -0 -I{} codesign --remove-signature "{}" || true
+            find "$frameworks_dir" -name "*.dylib" -type f -print0 | \
+              xargs -0 -I{} codesign --remove-signature "{}" || true
+            find "$frameworks_dir" -maxdepth 2 -name "*.framework" -type d -print0 | \
+              xargs -0 -I{} codesign --force --sign - --timestamp=none "{}"
+            find "$frameworks_dir" -name "*.dylib" -type f -print0 | \
+              xargs -0 -I{} codesign --force --sign - --timestamp=none "{}"
+          fi
+          if [ -d "$plugins_dir" ]; then
+            find "$plugins_dir" -name "*.dylib" -type f -print0 | \
+              xargs -0 -I{} codesign --remove-signature "{}" || true
+            find "$plugins_dir" -name "*.dylib" -type f -print0 | \
+              xargs -0 -I{} codesign --force --sign - --timestamp=none "{}"
+          fi
+          if [ -f "$main_exe" ]; then
+            codesign --force --sign - --timestamp=none "$main_exe"
+          fi
+          codesign --force --deep --timestamp=none \
+            --sign - --entitlements xenia.entitlements "$app_bundle"
+          xattr -cr "$app_bundle"
+
+          mkdir -p artifacts/release
+          
+          mkdir -p dmg_contents
+          cp -R "$app_bundle" dmg_contents/
+          cp LICENSE dmg_contents/
+          ln -s /Applications dmg_contents/Applications
+
+          hdiutil create -volname "XeniOS" -srcfolder dmg_contents -ov -format UDZO "artifacts/release/xenios_macos_intel.dmg"
+          rm -rf dmg_contents
+
+          
 
       - name: Upload published artifact
         uses: actions/upload-artifact@v4
@@ -288,7 +459,7 @@ jobs:
           overwrite: true
 
   publish:
-    name: Publish release and xenios.jp manifests
+    name: Publish release
     needs:
       - resolve-metadata
       - build-apple
