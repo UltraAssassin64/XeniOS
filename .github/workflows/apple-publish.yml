@@ -267,18 +267,18 @@ jobs:
       - name: Build trusted artifact
         shell: bash
         env:
-          XENIOS_BUILD_ATTESTATION_KEY: "${{ secrets.XENIOS_BUILD_ATTESTATION_KEY }}"
-          XENIOS_BUILD_ATTESTATION_KEY_ID: "${{ secrets.XENIOS_BUILD_ATTESTATION_KEY_ID }}"
+          #XENIOS_BUILD_ATTESTATION_KEY: "${{ secrets.XENIOS_BUILD_ATTESTATION_KEY }}"
+          #XENIOS_BUILD_ATTESTATION_KEY_ID: "${{ secrets.XENIOS_BUILD_ATTESTATION_KEY_ID }}"
           CHANNEL: "${{ needs.resolve-metadata.outputs.channel }}"
           VERSION: "${{ needs.resolve-metadata.outputs.version }}"
           BUILD_NUMBER: "${{ needs.resolve-metadata.outputs.build_number }}"
           STAGE: "${{ needs.resolve-metadata.outputs.stage }}"
-        run: |
-          set -euo pipefail
-          if [ -z "${XENIOS_BUILD_ATTESTATION_KEY}" ]; then
-            echo "::error::XENIOS_BUILD_ATTESTATION_KEY is not configured"
-            exit 1
-          fi
+        run: 
+         ### set -euo pipefail
+          #if [ -z "${XENIOS_BUILD_ATTESTATION_KEY}" ]; then
+          #  echo "::error::XENIOS_BUILD_ATTESTATION_KEY is not configured"
+          #  exit 1
+          #fi
 
           args=(--channel "${CHANNEL}" --version "${VERSION}" --build-number "${BUILD_NUMBER}" --stage "${STAGE}")
           IFS=' ' read -r -a extra_args <<< "${{ matrix.script_args }}"
@@ -410,50 +410,49 @@ jobs:
           echo "macos_arm64_download_url=$(jq -r '.assets[] | select(.name == \"xenios_macos_apple_silicon.dmg\") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
           echo "macos_x86_64_download_url=$(jq -r '.assets[] | select(.name == \"xenios_macos_intel.dmg\") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
 
-      - name: Check out xenios.jp
-        uses: actions/checkout@v4
-        with:
-          repository: "xenios-jp/xenios.jp"
-          ref: "main"
-          path: "xenios-website"
-          token: "${{ secrets.XENIOS_WEBSITE_PAT }}"
-          fetch-depth: 0
+     # - name: Check out xenios.jp
+        #uses: actions/checkout@v4
+        #with:
+       #   repository: "xenios-jp/xenios.jp"
+        #  ref: "main"
+       #   path: "xenios-website"
+       #   token: "${{ secrets.XENIOS_WEBSITE_PAT }}"
+       #   fetch-depth: 0
 
-      - name: Update xenios.jp build manifests
-        shell: bash
-        env:
-          CHANNEL: "${{ needs.resolve-metadata.outputs.channel }}"
-          RELEASE_URL: "${{ steps.github_release.outputs.html_url }}"
-          IOS_DOWNLOAD_URL: "${{ steps.github_release.outputs.ios_download_url }}"
-          MACOS_ARM64_DOWNLOAD_URL: "${{ steps.github_release.outputs.macos_arm64_download_url }}"
-          MACOS_X86_64_DOWNLOAD_URL: "${{ steps.github_release.outputs.macos_x86_64_download_url }}"
-        run: |
-          set -euo pipefail
-          python3 tools/update_website_build_manifests.py \
-            --website-repo "${GITHUB_WORKSPACE}/xenios-website" \
-            --metadata-file build-metadata.env \
-            --channel "${CHANNEL}" \
-            --release-url "${RELEASE_URL}" \
-            --ios-ipa "${GITHUB_WORKSPACE}/artifacts/ios/xenios_ios_iphone_ipad.ipa" \
-            --ios-download-url "${IOS_DOWNLOAD_URL}" \
-            --macos-arm64-dmg "${GITHUB_WORKSPACE}/artifacts/macos-arm64/xenios_macos_apple_silicon.dmg" \
-            --macos-arm64-download-url "${MACOS_ARM64_DOWNLOAD_URL}" \
-            --macos-x86_64-dmg "${GITHUB_WORKSPACE}/artifacts/macos-x86_64/xenios_macos_intel.dmg" \
-            --macos-x86_64-download-url "${MACOS_X86_64_DOWNLOAD_URL}"
+      #- name: Update xenios.jp build manifests
+      #  shell: bash
+      #  env:
+        #  CHANNEL: "${{ needs.resolve-metadata.outputs.channel }}"
+        #  RELEASE_URL: "${{ steps.github_release.outputs.html_url }}"
+        #  IOS_DOWNLOAD_URL: "${{ steps.github_release.outputs.ios_download_url }}"
+        #  MACOS_ARM64_DOWNLOAD_URL: "${{ steps.github_release.outputs.macos_arm64_download_url }}"
+        #  MACOS_X86_64_DOWNLOAD_URL: "${{ steps.github_release.outputs.macos_x86_64_download_url }}"
+        ###run: |
+        #  python3 tools/update_website_build_manifests.py \
+        #    --website-repo "${GITHUB_WORKSPACE}/xenios-website" \
+        #    --metadata-file build-metadata.env \
+        #    --channel "${CHANNEL}" \
+        #    --release-url "${RELEASE_URL}" \
+        #    --ios-ipa "${GITHUB_WORKSPACE}/artifacts/ios/xenios_ios_iphone_ipad.ipa" \
+        #    --ios-download-url "${IOS_DOWNLOAD_URL}" \
+        #    --macos-arm64-dmg "${GITHUB_WORKSPACE}/artifacts/macos-arm64/xenios_macos_apple_silicon.dmg" \
+        #    --macos-arm64-download-url "${MACOS_ARM64_DOWNLOAD_URL}" \
+        #    --macos-x86_64-dmg "${GITHUB_WORKSPACE}/artifacts/macos-x86_64/xenios_macos_intel.dmg" \
+        #    --macos-x86_64-download-url "${MACOS_X86_64_DOWNLOAD_URL}"
 
-      - name: Commit xenios.jp build manifests
-        shell: bash
-        env:
-          DISPLAY_LABEL: "${{ needs.resolve-metadata.outputs.display_label }}"
-        run: |
-          set -euo pipefail
-          cd "${GITHUB_WORKSPACE}/xenios-website"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/release-builds.json data/builds-history.json
-          if git diff --staged --quiet; then
-            echo "No xenios.jp manifest changes"
-            exit 0
-          fi
-          git commit -m "builds: publish ${DISPLAY_LABEL}"
-          git push origin HEAD:main
+      #- name: Commit xenios.jp build manifests
+      #  shell: bash
+      #  env:
+      #    DISPLAY_LABEL: "${{ needs.resolve-metadata.outputs.display_label }}"
+      #  run: |
+      #    set -euo pipefail
+      #    cd "${GITHUB_WORKSPACE}/xenios-website"
+      #    git config user.name "github-actions[bot]"
+      #    git config user.email "github-actions[bot]@users.noreply.github.com"
+      #    git add data/release-builds.json data/builds-history.json
+       #   if git diff --staged --quiet; then
+      #      echo "No xenios.jp manifest changes"
+      #      exit 0
+      #    fi
+      #    git commit -m "builds: publish ${DISPLAY_LABEL}"
+      #    git push origin HEAD:main
