@@ -1945,13 +1945,17 @@ def build_shaders(targets=None, config="release", target_os=None):
                     compile_args = [
                         "-x", "metal",
                         "-std=ios-metal2.3",
-                        "-mios-version-min=16.0"
+                        "-mios-version-min=16.0",
+                        "-DSHADING_LANGUAGE_MSL_XE=1",
+                        "-I", src_dir,
+                        f"-fmodules-cache-path={module_cache}",
                     ]
                 else:
                     compile_args = [
                         "-x", "metal",
                         "-std=macos-metal2.3",
-                        "-D", "SHADING_LANGUAGE_MSL_XE=1",
+                        "-DSHADING_LANGUAGE_MSL_XE=1",
+                        "-DSHADING_LANGUAGE_METAL=1",
                         "-I", src_dir,
                         f"-fmodules-cache-path={module_cache}",
                     ]
