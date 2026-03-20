@@ -87,9 +87,13 @@ DEFINE_string(apu, "alsa", "Audio system. Use: " APU_OPTIONS, "APU");
 DEFINE_string(gpu, "vulkan", "Graphics system. Use: " GPU_OPTIONS, "GPU");
 DEFINE_string(hid, "sdl", "Input system. Use: " HID_OPTIONS, "HID");
 #else
-#define APU_OPTIONS "[sdl, nop]"
+#define APU_OPTIONS "[coreaudio, sdl, nop]"
 #define HID_OPTIONS "[sdl, nop]"
-DEFINE_string(apu, "sdl", "Audio system. Use: " APU_OPTIONS, "APU");
+#if XE_PLATFORM_APPLE
+DEFINE_string(apu, "coreaudio", "Audio system. Use: " APU_OPTIONS, "APU");
+#else
+DEFINE_string(apu, "coreaudio", "Audio system. Use: " APU_OPTIONS, "APU");
+#endif
 #if XE_PLATFORM_APPLE
 DEFINE_string(gpu, "metal", "Graphics system. Use: [metal, null]", "GPU");
 #else

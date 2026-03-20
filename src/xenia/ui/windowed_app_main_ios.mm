@@ -1437,12 +1437,12 @@ static NSString* xe_game_info_callback_provider(NSURL* request_url) {
   return [scheme lowercaseString];
 }
 
-static NSURL* xe_stikdebug_enable_jit_url_for_bundle_identifier(NSString* bundle_identifier) {
+static NSURL* xe__enable_jit_url_for_bundle_identifier(NSString* bundle_identifier) {
   if (!bundle_identifier || bundle_identifier.length == 0) {
     return nil;
   }
   NSURLComponents* components = [[[NSURLComponents alloc] init] autorelease];
-  components.scheme = @"stikjit";
+  components.scheme = @"stikjit", @"apple-magnifier";
   components.host = @"enable-jit";
   components.queryItems = @[ [NSURLQueryItem queryItemWithName:@"bundle-id"
                                                          value:bundle_identifier] ];
@@ -3560,10 +3560,10 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
       "These options are stored locally in the iOS frontend rather than xenios.config.toml.";
   AddUserDefaultBoolSetting(
       automation.items, kXeniaAutoOpenStikDebugOnLaunchPreferenceKey,
-      "Auto-Enable JIT via StikDebug",
-      "On app open, jump into StikDebug with XeniOS's bundle ID so it can enable JIT and "
+      "Auto-Enable JIT via StikDebug or TrollStore",
+      "On app open, jump into StikDebug or TrollStore with XeniOS's bundle ID so it can enable JIT and "
       "relaunch XeniOS. Requires StikDebug, a valid pairing file, and your normal VPN / loopback "
-      "setup.",
+      "setup; or TrollStore installed.",
       false);
   if (!automation.items.empty()) {
     sections.push_back(std::move(automation));
