@@ -39,7 +39,10 @@
 #include "xenia/apu/nop/nop_audio_system.h"
 #if XE_PLATFORM_LINUX
 #include "xenia/apu/alsa/alsa_audio_system.h"
-#endif  // XE_PLATFORM_LINUX
+#endif// XE_PLATFORM_LINUX
+#if XE_PLATFORM_IOS
+#include "xenia/apu/coreaudio/coreaudio_audio_system.h"
+#endif  // XE_PLATFORM_IOS
 #if !XE_PLATFORM_ANDROID
 #include "xenia/apu/sdl/sdl_audio_system.h"
 #endif  // !XE_PLATFORM_ANDROID
@@ -385,6 +388,8 @@ std::unique_ptr<apu::AudioSystem> EmulatorApp::CreateAudioSystem(
 #if XE_PLATFORM_WIN32
   factory.Add<apu::xaudio2::XAudio2AudioSystem>("xaudio2");
 #endif  // XE_PLATFORM_WIN32
+#if XE_PLATFORM_IOS
+  factory.Add<apu::CoreAudioAudioSystem>("coreaudio");
 #if XE_PLATFORM_LINUX
   factory.Add<apu::alsa::ALSAAudioSystem>("alsa");
 #endif  // XE_PLATFORM_LINUX
