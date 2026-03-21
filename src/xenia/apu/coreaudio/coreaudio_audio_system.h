@@ -11,6 +11,7 @@ namespace coreaudio {
 class CoreAudioAudioSystem : public AudioSystem {
  public:
   static std::unique_ptr<AudioSystem> Create(cpu::Processor* processor);
+  std::string name() const override { return "CoreAudio"; }
 
   explicit CoreAudioAudioSystem(cpu::Processor* processor);
   ~CoreAudioAudioSystem() override;

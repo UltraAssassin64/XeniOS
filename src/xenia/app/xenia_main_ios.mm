@@ -797,7 +797,7 @@ std::unique_ptr<apu::AudioSystem> EmulatorAppIOS::CreateAudioSystem(
   // Attempt CoreAudio first (native iOS backend).
   auto coreaudio = std::make_unique<apu::coreaudio::CoreAudioAudioSystem>(processor);
 
-  if (coreaudio && XSUCCEEDED(coreaudio->Setup())) {
+  if (coreaudio && XSUCCEEDED(coreaudio->Setup(nullptr))) {
     XELOGI("iOS: Using CoreAudio audio backend");
     return coreaudio;
   }
@@ -807,7 +807,7 @@ std::unique_ptr<apu::AudioSystem> EmulatorAppIOS::CreateAudioSystem(
   // Fallback to SDL audio backend
   auto sdl = std::make_unique<apu::sdl::SDLAudioSystem>(processor);
 
-  if (sdl && XSUCCEEDED(sdl->Setup())) {
+  if (sdl && XSUCCEEDED(sdl->Setup(nullptr))) {
     XELOGI("iOS: Using SDL audio backend");
     return sdl;
   }
