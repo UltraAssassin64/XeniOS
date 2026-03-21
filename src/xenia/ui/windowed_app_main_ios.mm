@@ -10329,17 +10329,6 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
     XELOGI("iOS: Skipping automatic StikDebug handoff (cooldown active)");
     return NO;
   }
-static NSURL* xe_trollstore_enable_jit_url_for_bundle_identifier(NSString* bundle_identifier) {
-  if (!bundle_identifier || bundle_identifier.length == 0) {
-    return nil;
-  }
-  NSURLComponents* components = [[[NSURLComponents alloc] init] autorelease];
-  components.scheme = @"apple-magnifier";
-  components.host = @"enable-jit";
-  components.queryItems = @[ [NSURLQueryItem queryItemWithName:@"bundle-id"
-                                                         value:bundle_identifier] ];
-  return components.URL;
-}
   NSString* bundle_identifier = NSBundle.mainBundle.bundleIdentifier;
   NSURL* stikdebug_url = xe_stikdebug_enable_jit_url_for_bundle_identifier(bundle_identifier);
   NSURL* trollstore_url = xe_trollstore_enable_jit_url_for_bundle_identifier(bundle_identifier);
@@ -10348,13 +10337,13 @@ static NSURL* xe_trollstore_enable_jit_url_for_bundle_identifier(NSString* bundl
     return NO;
   }
   if(!trollstore_url){
-    XELOGW("iOS: Unable to build TrollStore JIT handoff URL")
+    XELOGW("iOS: Unable to build TrollStore JIT handoff URL");
   }
 
   UIApplication* application = [UIApplication sharedApplication];
   if (![application canOpenURL:stikdebug_url]) {
     if(![application canOpenURL:trollstore_url]){
-      XELOGW("iOS: TrollStore URL scheme unavailable")
+      XELOGW("iOS: TrollStore URL scheme unavailable");
     }
     XELOGW("iOS: StikDebug URL scheme unavailable");
     self.statusLabel.text = @"StikDebug or TrollStore is not installed, or unavailable.";
@@ -10375,20 +10364,22 @@ static NSURL* xe_trollstore_enable_jit_url_for_bundle_identifier(NSString* bundl
   XELOGI("iOS: Opening StikDebug handoff URL {}", stikdebug_url.absoluteString.UTF8String);
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                  dispatch_get_main_queue(), ^{
-                   [application openURL:stikdebug_url
-                       options:@{}
-                       completionHandler:^(BOOL success) {
-                         if (!success) {
-                           XELOGW("iOS: Failed to open StikDebug handoff URL");
-                           self.statusLabel.text = @"Failed to open StikDebug.";
-                           if (has_pending_launch) {
-                             ClearPendingExternalLaunchPathPreference();
-                           }
-                         }
-                       }];
+                   if (stikdebug_url && [application canOpenURL:stikdebug_url]) {
+                    [application openURL:stikdebug_url options:@{} completionHandler:nil];
+                  }
+                  else if (trollstore_url && [application canOpenURL:trollstore_url]) {
+                   [application openURL:trollstore_url options:@{} completionHandler:nil];
+                  }
+                  else{
+                     XELOGW("iOS: Failed to open StikDebug or TrollStore handoff URL");
+                     self.statusLabel.text = @"Failed to open StikDebug or TrollStore.";
+                       if (has_pending_launch) {
+                          ClearPendingExternalLaunchPathPreference();
+                       }
+                     }
                  });
   return YES;
-}
+
 
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                dispatch_get_main_queue(), ^{
