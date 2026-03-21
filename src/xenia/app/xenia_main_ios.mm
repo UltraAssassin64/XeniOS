@@ -11,10 +11,6 @@
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
 
-[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-[[AVAudioSession sharedInstance] setActive:YES error:nil];
-[[AVAudioSession sharedInstance] setPreferredSampleRate:48000 error:nil];
-
 #include <algorithm>
 #include <atomic>
 #include <filesystem>
