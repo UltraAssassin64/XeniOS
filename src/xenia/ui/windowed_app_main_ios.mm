@@ -12,6 +12,7 @@
 #import <PhotosUI/PhotosUI.h>
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <AVFoundation/AVFoundation.h>
 
 #include <TargetConditionals.h>
 #include <sys/mman.h>
@@ -11390,6 +11391,9 @@ static NSURL* xe_trollstore_enable_jit_url_for_bundle_identifier(NSString* bundl
   }
   return nil;
 }
+[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+[[AVAudioSession sharedInstance] setPreferredSampleRate:48000 error:nil];
+[[AVAudioSession sharedInstance] setActive:YES error:nil];
 
 - (BOOL)handleExternalLaunchURL:(NSURL*)url sourceTag:(const char*)source_tag {
   if (!url) {

@@ -8,6 +8,11 @@
  */
 
 #import <Foundation/Foundation.h>
+#import <AVFoundation/AVFoundation.h>
+
+[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+[[AVAudioSession sharedInstance] setActive:YES error:nil];
+[[AVAudioSession sharedInstance] setPreferredSampleRate:48000 error:nil];
 
 #include <algorithm>
 #include <atomic>
@@ -36,6 +41,7 @@
 #include "xenia/gpu/metal/metal_graphics_system.h"
 
 // Audio systems.
+#include "xenia/apu/coreaudio/coreaudio_audio_system.h"
 #include "xenia/apu/sdl/sdl_audio_system.h"
 
 // Input drivers.
@@ -788,8 +794,30 @@ void EmulatorAppIOS::EmulatorThread(const std::filesystem::path& game_path,
 
 std::unique_ptr<apu::AudioSystem> EmulatorAppIOS::CreateAudioSystem(
     cpu::Processor* processor) {
-  // SDL2 uses CoreAudio on iOS for audio output.
-  return std::make_unique<apu::sdl::SDLAudioSystem>(processor);
+
+  XELOGI("iOS: Initializing CoreAudio audio system");
+
+  // Attempt CoreAudio first (native iOS backend).
+  auto coreaudio = std::make_unique<apu::coreaudio::CoreAudioAudioSystem>(processor);
+
+  if (coreaudio && XSUCCEEDED(coreaudio->Setup())) {
+    XELOGI("iOS: Using CoreAudio audio backend");
+    return coreaudio;
+  }
+
+  XELOGW("iOS: CoreAudio initialization failed, falling back to SDL");
+
+  // Fallback to SDL audio backend
+  auto sdl = std::make_unique<apu::sdl::SDLAudioSystem>(processor);
+
+  if (sdl && XSUCCEEDED(sdl->Setup())) {
+    XELOGI("iOS: Using SDL audio backend");
+    return sdl;
+  }
+
+  XELOGE("iOS: Failed to initialize any audio backend");
+
+  return nullptr;
 }
 
 std::unique_ptr<gpu::GraphicsSystem> EmulatorAppIOS::CreateGraphicsSystem() {

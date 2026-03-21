@@ -1,12 +1,9 @@
 #pragma once
 
-#include <atomic>
-#include <vector>
-
 #include <AudioUnit/AudioUnit.h>
 
 #include "xenia/apu/audio_driver.h"
-#include "xenia/apu/audio_timing_controller.h"
+#include "xenia/apu/audio_system.h"
 
 namespace xe {
 namespace apu {
@@ -19,11 +16,9 @@ class CoreAudioDriver : public AudioDriver {
   bool Initialize() override;
   void Shutdown() override;
 
-  void SubmitFrame(uint32_t frame_ptr) override;
+  void SetAudioSystem(AudioSystem* system);
 
   double GetLatencyMs() const;
-
-  AudioTimingController& timing() { return timing_; }
 
  private:
   static OSStatus RenderCallback(void* inRefCon,
@@ -33,18 +28,13 @@ class CoreAudioDriver : public AudioDriver {
                                  UInt32 inNumberFrames,
                                  AudioBufferList* ioData);
 
-  void FillAudio(float* out, uint32_t frames);
-
  private:
-  AudioUnit audio_unit_;
+  AudioUnit audio_unit_ = nullptr;
 
-  std::vector<float> ring_buffer_;
-  std::atomic<size_t> write_pos_{0};
-  std::atomic<size_t> read_pos_{0};
-  size_t buffer_mask_ = 0;
+  AudioSystem* audio_system_ = nullptr;
 
   AudioTimingController timing_;
 };
 
-} // namespace apu
-} // namespace xe
+}  // namespace apu
+}  // namespace xe
