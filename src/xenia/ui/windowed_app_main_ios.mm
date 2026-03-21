@@ -10,9 +10,10 @@
 #import <GameController/GameController.h>
 #import <MetalKit/MetalKit.h>
 #import <PhotosUI/PhotosUI.h>
+#import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
-#import <AVFoundation/AVFoundation.h>
+
 
 #include <TargetConditionals.h>
 #include <sys/mman.h>
@@ -10372,6 +10373,22 @@ static NSURL* xe_trollstore_enable_jit_url_for_bundle_identifier(NSString* bundl
   self.statusLabel.text =
       has_pending_launch ? @"Opening StikDebug to enable JIT..." : @"Opening StikDebug for JIT...";
   XELOGI("iOS: Opening StikDebug handoff URL {}", stikdebug_url.absoluteString.UTF8String);
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+                 dispatch_get_main_queue(), ^{
+                   [application openURL:stikdebug_url
+                       options:@{}
+                       completionHandler:^(BOOL success) {
+                         if (!success) {
+                           XELOGW("iOS: Failed to open StikDebug handoff URL");
+                           self.statusLabel.text = @"Failed to open StikDebug.";
+                           if (has_pending_launch) {
+                             ClearPendingExternalLaunchPathPreference();
+                           }
+                         }
+                       }];
+                 });
+  return YES;
+}
 
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                  dispatch_get_main_queue(), ^{
@@ -10391,11 +10408,11 @@ static NSURL* xe_trollstore_enable_jit_url_for_bundle_identifier(NSString* bundl
                        }];
                  });
   return YES;
-}
+  }
 
 - (void)evaluateAutomaticStikDebugJITHandoffIfNeeded {
   [self requestAutomaticStikDebugJITHandoffForPendingLaunchPath:nullptr];
-}
+  }
 
 - (void)copyLaunchURLForGameAtIndex:(size_t)game_index {
   if (game_index >= discovered_games_.size()) {
@@ -11391,9 +11408,6 @@ static NSURL* xe_trollstore_enable_jit_url_for_bundle_identifier(NSString* bundl
   }
   return nil;
 }
-[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-[[AVAudioSession sharedInstance] setPreferredSampleRate:48000 error:nil];
-[[AVAudioSession sharedInstance] setActive:YES error:nil];
 
 - (BOOL)handleExternalLaunchURL:(NSURL*)url sourceTag:(const char*)source_tag {
   if (!url) {
