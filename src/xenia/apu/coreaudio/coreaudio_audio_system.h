@@ -37,3 +37,4 @@ class CoreAudioAudioSystem : public AudioSystem {
 }  // namespace coreaudio
 }  // namespace apu
 }  // namespace xe
+#endif  // XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_SYSTEM_H_

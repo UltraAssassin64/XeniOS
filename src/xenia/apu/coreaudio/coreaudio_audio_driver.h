@@ -41,3 +41,4 @@ class CoreAudioDriver : public AudioDriver {
 
 }  // namespace apu
 }  // namespace xe
+#endif  // XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_DRIVER_H_
