@@ -8,6 +8,7 @@
 
 namespace xe {
 namespace apu {
+namespace coreaudio {
 
 CoreAudioDriver::CoreAudioDriver(Memory* memory)
     : AudioDriver(memory) {}
@@ -117,5 +118,6 @@ double CoreAudioDriver::GetLatencyMs() const {
   return timing_.GetLatencyMs();
 }
 
+}  // namespace coreaudio
 }  // namespace apu
 }  // namespace xe

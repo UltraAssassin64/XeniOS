@@ -10,6 +10,7 @@
 
 namespace xe {
 namespace apu {
+namespace coreaudio {
 
 class CoreAudioDriver : public AudioDriver {
  public:
@@ -39,6 +40,7 @@ class CoreAudioDriver : public AudioDriver {
   AudioTimingController timing_;
 };
 
+}  // namespace coreaudio
 }  // namespace apu
 }  // namespace xe
 #endif  // XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_DRIVER_H_
