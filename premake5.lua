@@ -478,7 +478,7 @@ if is_ios_target() then
   filter("platforms:iOS-*")
     system("ios")
     xcodebuildsettings({
-      ["IPHONEOS_DEPLOYMENT_TARGET"] = "17.0",
+      ["IPHONEOS_DEPLOYMENT_TARGET"] = "16.0",
       ["SDKROOT"] = "iphoneos",
       ["TARGETED_DEVICE_FAMILY"] = "1,2",  -- iPhone and iPad
     })
@@ -703,7 +703,7 @@ workspace("xenia")
         architecture("ARM64")
         xcodebuildsettings({
           ["ARCHS"] = "arm64",
-          ["IPHONEOS_DEPLOYMENT_TARGET"] = "17.0",
+          ["IPHONEOS_DEPLOYMENT_TARGET"] = "16.0",
           ["SDKROOT"] = "iphoneos",
         })
       filter({})
@@ -898,6 +898,7 @@ workspace("xenia")
   include("src/xenia/app/discord")
   include("src/xenia/apu")
   include("src/xenia/apu/nop")
+  include("src/xenia/apu/coreaudio")
   include("src/xenia/base")
   include("src/xenia/cpu")
   if TARGET_ARCH == "ARM64" then

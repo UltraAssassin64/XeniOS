@@ -1,3 +1,6 @@
+#ifndef XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_SYSTEM_H_
+#define XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_SYSTEM_H_
+
 #pragma once
 
 #include <memory>

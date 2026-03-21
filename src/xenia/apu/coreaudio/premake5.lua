@@ -2,8 +2,8 @@ project_root = "../../../.."
 include(project_root.."/tools/build")
 
 group("src")
-project('xenia-apu-coreaudio')
-    uuid("153b4e8b-813a-40e6-9366-4b51abc73c45")
+project("xenia-apu-coreaudio")
+    uuid("173b4e8b-841b-51d7-8455-5b41abc73c13")
     kind("StaticLib")
     language("C++")
     links({

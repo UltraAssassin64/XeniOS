@@ -1,3 +1,6 @@
+#ifndef XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_DRIVER_H_
+#define XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_DRIVER_H_
+
 #pragma once
 
 #include <AudioUnit/AudioUnit.h>
