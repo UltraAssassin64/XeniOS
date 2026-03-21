@@ -10,8 +10,10 @@
 #import <GameController/GameController.h>
 #import <MetalKit/MetalKit.h>
 #import <PhotosUI/PhotosUI.h>
+#import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
 
 #include <TargetConditionals.h>
 #include <sys/mman.h>
@@ -10360,7 +10362,6 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
   self.statusLabel.text =
       has_pending_launch ? @"Opening StikDebug to enable JIT..." : @"Opening StikDebug for JIT...";
   XELOGI("iOS: Opening StikDebug handoff URL {}", stikdebug_url.absoluteString.UTF8String);
-
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                  dispatch_get_main_queue(), ^{
                    if (stikdebug_url && [application canOpenURL:stikdebug_url]) {
@@ -10380,9 +10381,27 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
   return YES;
 
 
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+               dispatch_get_main_queue(), ^{
+                if (stikdebug_url && [application canOpenURL:stikdebug_url]) {
+                  [application openURL:stikdebug_url options:@{} completionHandler:nil];
+                }
+                else if (trollstore_url && [application canOpenURL:trollstore_url]) {
+                  [application openURL:trollstore_url options:@{} completionHandler:nil];
+                }
+                else {
+                  XELOGW("iOS: Failed to open StikDebug or TrollStore handoff URL");
+                self.statusLabel.text = @"Failed to open StikDebug or TrollStore.";
+                if (has_pending_launch) {
+                  ClearPendingExternalLaunchPathPreference();
+                }
+              }
+    });
+    return YES;
+}
 - (void)evaluateAutomaticStikDebugJITHandoffIfNeeded {
   [self requestAutomaticStikDebugJITHandoffForPendingLaunchPath:nullptr];
-}
+  }
 
 - (void)copyLaunchURLForGameAtIndex:(size_t)game_index {
   if (game_index >= discovered_games_.size()) {

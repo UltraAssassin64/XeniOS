@@ -117,6 +117,7 @@ AudioDriver* CoreAudioAudioSystem::CreateDriver(
     uint32_t frequency, uint32_t channels,
     bool need_format_conversion) {
   auto* driver = new CoreAudioDriver(memory());
+  driver->SetAudioSystem(this);
 
   if (!driver->Initialize()) {
 #if XE_PLATFORM_IOS
@@ -130,7 +131,17 @@ AudioDriver* CoreAudioAudioSystem::CreateDriver(
 
   return driver;
 }
+void CoreAudioAudioSystem::Pump(uint32_t frames, float* out_buffer) {
 
+  if (frames > 4096)
+    frames = 4096;
+
+  uint32_t samples = frames * 2;
+
+  auto* mix = reinterpret_cast<float*>(GetMixBuffer());
+
+  std::memcpy(out_buffer, mix, samples * sizeof(float));
+}
 //------------------------------------------------------------------------------
 // Driver Destruction
 //------------------------------------------------------------------------------

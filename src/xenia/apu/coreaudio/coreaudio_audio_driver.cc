@@ -1,6 +1,9 @@
-#include "xenia/apu/coreaudio_audio_driver.h"
+#include "xenia/apu/coreaudio/coreaudio_audio_driver.h"
+
+#include "xenia/apu/audio_system.h"
 
 #include <AudioToolbox/AudioToolbox.h>
+#include <AVFoundation/AVFoundation.h>
 #include <cstring>
 
 namespace xe {
@@ -13,12 +16,20 @@ CoreAudioDriver::~CoreAudioDriver() {
   Shutdown();
 }
 
-bool CoreAudioDriver::Initialize() {
-  timing_.Initialize(48000);
-  timing_.SetTarget(2048, 4096);
+void CoreAudioDriver::SetAudioSystem(AudioSystem* system) {
+  audio_system_ = system;
+}
 
-  ring_buffer_.resize(16384);
-  buffer_mask_ = ring_buffer_.size() - 1;
+bool CoreAudioDriver::Initialize() {
+
+  AVAudioSession* session = [AVAudioSession sharedInstance];
+  [session setCategory:AVAudioSessionCategoryPlayback error:nil];
+  [session setPreferredSampleRate:48000 error:nil];
+  [session setPreferredIOBufferDuration:2048.0 / 48000.0 error:nil];
+  [session setActive:YES error:nil];
+
+  timing_.Initialize(48000);
+  timing_.SetTarget(2048, 8192);
 
   AudioComponentDescription desc = {};
   desc.componentType = kAudioUnitType_Output;
@@ -58,6 +69,15 @@ bool CoreAudioDriver::Initialize() {
                        &fmt,
                        sizeof(fmt));
 
+  UInt32 buffer_size = 2048;
+
+  AudioUnitSetProperty(audio_unit_,
+                       kAudioDevicePropertyBufferFrameSize,
+                       kAudioUnitScope_Global,
+                       0,
+                       &buffer_size,
+                       sizeof(buffer_size));
+
   AudioUnitInitialize(audio_unit_);
   AudioOutputUnitStart(audio_unit_);
 
@@ -73,61 +93,29 @@ void CoreAudioDriver::Shutdown() {
   }
 }
 
-void CoreAudioDriver::SubmitFrame(uint32_t frame_ptr) {
-  float* samples =
-      reinterpret_cast<float*>(memory()->Translate(frame_ptr));
-
-  size_t write = write_pos_.load();
-
-  for (int i = 0; i < 512 * 2; i++) {
-    ring_buffer_[write & buffer_mask_] = samples[i];
-    write++;
-  }
-
-  write_pos_.store(write);
-
-  timing_.OnSubmit(512);
-}
-
 OSStatus CoreAudioDriver::RenderCallback(void* inRefCon,
                                          AudioUnitRenderActionFlags*,
                                          const AudioTimeStamp*,
                                          UInt32,
                                          UInt32 inNumberFrames,
                                          AudioBufferList* ioData) {
+
   auto* driver = reinterpret_cast<CoreAudioDriver*>(inRefCon);
 
   float* out = reinterpret_cast<float*>(ioData->mBuffers[0].mData);
 
-  driver->FillAudio(out, inNumberFrames);
+  if (driver->audio_system_) {
+    driver->audio_system_->Pump(inNumberFrames, out);
+  } else {
+    std::memset(out, 0, inNumberFrames * 2 * sizeof(float));
+  }
 
   return noErr;
-}
-
-void CoreAudioDriver::FillAudio(float* out, uint32_t frames) {
-  size_t read = read_pos_.load();
-  size_t write = write_pos_.load();
-
-  size_t available = write - read;
-
-  if (available < frames * 2) {
-    std::memset(out, 0, frames * 2 * sizeof(float));
-    return;
-  }
-
-  for (uint32_t i = 0; i < frames * 2; i++) {
-    out[i] = ring_buffer_[read & buffer_mask_];
-    read++;
-  }
-
-  read_pos_.store(read);
-
-  timing_.OnConsume(frames);
 }
 
 double CoreAudioDriver::GetLatencyMs() const {
   return timing_.GetLatencyMs();
 }
 
-} // namespace apu
-} // namespace xe
+}  // namespace apu
+}  // namespace xe

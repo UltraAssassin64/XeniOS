@@ -555,6 +555,32 @@ bool EmulatorApp::OnInitialize() {
   Profiler::Initialize();
   Profiler::ThreadEnter("Main");
 
+  #if XE_PLATFORM_IOS
+  @autoreleasepool {
+    NSError* error = nil;
+    AVAudioSession* session = [AVAudioSession sharedInstance];
+
+    [session setCategory:AVAudioSessionCategoryPlayback error:&error];
+    if (error) {
+      XELOGW("iOS: Failed to set AVAudioSession category");
+    }
+
+    error = nil;
+    [session setPreferredSampleRate:48000 error:&error];
+    if (error) {
+      XELOGW("iOS: Failed to set preferred sample rate");
+    }
+
+    error = nil;
+    [session setActive:YES error:&error];
+    if (error) {
+      XELOGW("iOS: Failed to activate AVAudioSession");
+    }
+
+    XELOGI("iOS: AVAudioSession initialized");
+  }
+  #endif
+
   // Figure out where internal files and content should go.
   std::filesystem::path storage_root = cvars::storage_root;
   if (storage_root.empty()) {
