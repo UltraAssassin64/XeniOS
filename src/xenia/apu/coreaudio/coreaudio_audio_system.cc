@@ -64,17 +64,15 @@ CoreAudioAudioSystem::CoreAudioAudioSystem(cpu::Processor* processor)
 
 CoreAudioAudioSystem::~CoreAudioAudioSystem() = default;
 
-void CoreAudioAudioSystem::Initialize() {
-  AudioSystem::Initialize();
-}
+void CoreAudioAudioSystem::Initialize() { AudioSystem::Initialize(); }
 
 //------------------------------------------------------------------------------
 // Driver Creation (multi-client path)
 //------------------------------------------------------------------------------
 
-X_STATUS CoreAudioAudioSystem::CreateDriver(
-    size_t index, xe::threading::Semaphore* semaphore,
-    AudioDriver** out_driver) {
+X_STATUS CoreAudioAudioSystem::CreateDriver(size_t index,
+                                            xe::threading::Semaphore* semaphore,
+                                            AudioDriver** out_driver) {
   assert_not_null(out_driver);
 
 #if XE_PLATFORM_IOS
@@ -113,8 +111,7 @@ X_STATUS CoreAudioAudioSystem::CreateDriver(
 //------------------------------------------------------------------------------
 
 AudioDriver* CoreAudioAudioSystem::CreateDriver(
-    xe::threading::Semaphore* semaphore,
-    uint32_t frequency, uint32_t channels,
+    xe::threading::Semaphore* semaphore, uint32_t frequency, uint32_t channels,
     bool need_format_conversion) {
   auto* driver = new CoreAudioDriver(memory());
   driver->SetAudioSystem(this);
@@ -132,9 +129,7 @@ AudioDriver* CoreAudioAudioSystem::CreateDriver(
   return driver;
 }
 void CoreAudioAudioSystem::Pump(uint32_t frames, float* out_buffer) {
-
-  if (frames > 4096)
-    frames = 4096;
+  if (frames > 4096) frames = 4096;
 
   uint32_t samples = frames * 2;
 

@@ -2,27 +2,23 @@
 
 #include "xenia/apu/audio_system.h"
 
-#include <AudioToolbox/AudioToolbox.h>
 #include <AVFoundation/AVFoundation.h>
+#include <AudioToolbox/AudioToolbox.h>
 #include <cstring>
 
 namespace xe {
 namespace apu {
 namespace coreaudio {
 
-CoreAudioDriver::CoreAudioDriver(Memory* memory)
-    : AudioDriver(memory) {}
+CoreAudioDriver::CoreAudioDriver(Memory* memory) : AudioDriver(memory) {}
 
-CoreAudioDriver::~CoreAudioDriver() {
-  Shutdown();
-}
+CoreAudioDriver::~CoreAudioDriver() { Shutdown(); }
 
 void CoreAudioDriver::SetAudioSystem(AudioSystem* system) {
   audio_system_ = system;
 }
 
 bool CoreAudioDriver::Initialize() {
-
   AVAudioSession* session = [AVAudioSession sharedInstance];
   [session setCategory:AVAudioSessionCategoryPlayback error:nil];
   [session setPreferredSampleRate:48000 error:nil];
@@ -46,12 +42,8 @@ bool CoreAudioDriver::Initialize() {
   callback.inputProc = RenderCallback;
   callback.inputProcRefCon = this;
 
-  AudioUnitSetProperty(audio_unit_,
-                       kAudioUnitProperty_SetRenderCallback,
-                       kAudioUnitScope_Input,
-                       0,
-                       &callback,
-                       sizeof(callback));
+  AudioUnitSetProperty(audio_unit_, kAudioUnitProperty_SetRenderCallback,
+                       kAudioUnitScope_Input, 0, &callback, sizeof(callback));
 
   AudioStreamBasicDescription fmt = {};
   fmt.mSampleRate = 48000;
@@ -63,20 +55,13 @@ bool CoreAudioDriver::Initialize() {
   fmt.mBytesPerFrame = 8;
   fmt.mBytesPerPacket = 8;
 
-  AudioUnitSetProperty(audio_unit_,
-                       kAudioUnitProperty_StreamFormat,
-                       kAudioUnitScope_Input,
-                       0,
-                       &fmt,
-                       sizeof(fmt));
+  AudioUnitSetProperty(audio_unit_, kAudioUnitProperty_StreamFormat,
+                       kAudioUnitScope_Input, 0, &fmt, sizeof(fmt));
 
   UInt32 buffer_size = 2048;
 
-  AudioUnitSetProperty(audio_unit_,
-                       kAudioDevicePropertyBufferFrameSize,
-                       kAudioUnitScope_Global,
-                       0,
-                       &buffer_size,
+  AudioUnitSetProperty(audio_unit_, kAudioDevicePropertyBufferFrameSize,
+                       kAudioUnitScope_Global, 0, &buffer_size,
                        sizeof(buffer_size));
 
   AudioUnitInitialize(audio_unit_);
@@ -96,11 +81,9 @@ void CoreAudioDriver::Shutdown() {
 
 OSStatus CoreAudioDriver::RenderCallback(void* inRefCon,
                                          AudioUnitRenderActionFlags*,
-                                         const AudioTimeStamp*,
-                                         UInt32,
+                                         const AudioTimeStamp*, UInt32,
                                          UInt32 inNumberFrames,
                                          AudioBufferList* ioData) {
-
   auto* driver = reinterpret_cast<CoreAudioDriver*>(inRefCon);
 
   float* out = reinterpret_cast<float*>(ioData->mBuffers[0].mData);
@@ -114,9 +97,7 @@ OSStatus CoreAudioDriver::RenderCallback(void* inRefCon,
   return noErr;
 }
 
-double CoreAudioDriver::GetLatencyMs() const {
-  return timing_.GetLatencyMs();
-}
+double CoreAudioDriver::GetLatencyMs() const { return timing_.GetLatencyMs(); }
 
 }  // namespace coreaudio
 }  // namespace apu

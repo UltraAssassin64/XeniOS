@@ -3,26 +3,17 @@ include(project_root.."/tools/build")
 
 group("src")
 project("xenia-apu-coreaudio")
-    uuid("173b4e8b-841b-51d7-8455-5b41abc73c13")
-    kind("StaticLib")
-    language("C++")
-    links({
-        "xenia-apu",
-        "xenia-base",
-        "AudioToolbox.framework",
-        "CoreAudio.framework",
-    })
-    
-  filter ("platforms:macos or platforms:ios")
-    buildoptions {
-  "-fobjc-arc"
-    }
-    files {
-    "src/xenia/apu/coreaudio/coreaudio_audio_driver.cc",
-    "src/xenia/apu/coreaudio/coreaudio_audio_driver.h",
-    "src/xenia/apu/coreaudio/coreaudio_audio_system.cc",
-    "src/xenia/apu/coreaudio/coreaudio_audio_system.h",
-  }
+  uuid("173b4e8b-841b-51d7-8455-5b41abc73c13")
+  kind("StaticLib")
+  language("C++")
+  links({
+      "xenia-apu",
+      "xenia-base",
+      "AudioToolbox.framework",
+      "CoreAudio.framework",
+      "AVFoundation.framework",
+      "AudioUnit.framework"
+  }) 
   local_platform_files()
   
   

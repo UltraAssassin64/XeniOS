@@ -39,7 +39,7 @@
 #include "xenia/apu/nop/nop_audio_system.h"
 #if XE_PLATFORM_LINUX
 #include "xenia/apu/alsa/alsa_audio_system.h"
-#endif// XE_PLATFORM_LINUX
+#endif  // XE_PLATFORM_LINUX
 #if XE_PLATFORM_IOS
 #include "xenia/apu/coreaudio/coreaudio_audio_system.h"
 #endif  // XE_PLATFORM_IOS
@@ -555,7 +555,7 @@ bool EmulatorApp::OnInitialize() {
   Profiler::Initialize();
   Profiler::ThreadEnter("Main");
 
-  #if XE_PLATFORM_IOS
+#if XE_PLATFORM_IOS
   @autoreleasepool {
     NSError* error = nil;
     AVAudioSession* session = [AVAudioSession sharedInstance];
@@ -579,7 +579,7 @@ bool EmulatorApp::OnInitialize() {
 
     XELOGI("iOS: AVAudioSession initialized");
   }
-  #endif
+#endif
 
   // Figure out where internal files and content should go.
   std::filesystem::path storage_root = cvars::storage_root;

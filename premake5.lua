@@ -898,7 +898,9 @@ workspace("xenia")
   include("src/xenia/app/discord")
   include("src/xenia/apu")
   include("src/xenia/apu/nop")
-  include("src/xenia/apu/coreaudio")
+  if os.istarget("macosx") or is_ios_target() then
+    include("src/xenia/apu/coreaudio")
+  end
   include("src/xenia/base")
   include("src/xenia/cpu")
   if TARGET_ARCH == "ARM64" then

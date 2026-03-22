@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <AudioUnit/AudioUnit.h>
+#import <AudioUnit/AudioUnit.h>
 
 #include "xenia/apu/audio_driver.h"
 #include "xenia/apu/audio_system.h"
@@ -28,8 +28,7 @@ class CoreAudioDriver : public AudioDriver {
   static OSStatus RenderCallback(void* inRefCon,
                                  AudioUnitRenderActionFlags* ioActionFlags,
                                  const AudioTimeStamp* inTimeStamp,
-                                 UInt32 inBusNumber,
-                                 UInt32 inNumberFrames,
+                                 UInt32 inBusNumber, UInt32 inNumberFrames,
                                  AudioBufferList* ioData);
 
  private:

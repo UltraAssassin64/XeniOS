@@ -23,8 +23,7 @@ class CoreAudioAudioSystem : public AudioSystem {
 
   void Initialize() override;
 
-  X_STATUS CreateDriver(size_t index,
-                        xe::threading::Semaphore* semaphore,
+  X_STATUS CreateDriver(size_t index, xe::threading::Semaphore* semaphore,
                         AudioDriver** out_driver) override;
 
   AudioDriver* CreateDriver(xe::threading::Semaphore* semaphore,

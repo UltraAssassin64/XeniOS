@@ -44,7 +44,7 @@ UPDATE_from_uint32(apu_max_queued_frames, 2024, 8, 31, 20, 64);
 
 namespace xe {
 namespace apu {
-  
+
 AudioSystem::AudioSystem(cpu::Processor* processor)
     : memory_(processor->memory()),
       processor_(processor),
