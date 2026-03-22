@@ -42,7 +42,7 @@ class CoreAudioDriver : public AudioDriver {
   Memory* memory_ = nullptr;
   AudioUnit audio_unit_ = nullptr;
   AudioSystem* audio_system_ = nullptr;
-  AudioTimingController timing_;
+
 };
 
 }  // namespace coreaudio
