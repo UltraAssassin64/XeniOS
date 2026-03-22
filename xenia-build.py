@@ -94,7 +94,7 @@ def import_subprocess_environment(args):
         "CC",
         "CXX",
         )
-
+    #fixing something
     # Extract and parse environment variables from stdout
     for line in variables.splitlines():
         if line.find("=") != -1:
