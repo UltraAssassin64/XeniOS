@@ -13,6 +13,7 @@
 #include "xenia/cpu/hir/instr.h"
 
 #include <unordered_map>
+#include <oaknut/oaknut.hpp>
 
 #include "xenia/base/logging.h"
 
@@ -30,6 +31,14 @@ inline std::unordered_map<uint32_t, SequenceSelectFn>& GetSequenceTable() {
   static std::unordered_map<uint32_t, SequenceSelectFn> sequence_table;
   return sequence_table;
 }
+void EmitAdd(A64Emitter& e, const oaknut::XReg& dst,
+             const oaknut::XReg& src1, const oaknut::XReg& src2);
+
+void EmitSub(A64Emitter& e, const oaknut::XReg& dst,
+             const oaknut::XReg& src1, const oaknut::XReg& src2);
+
+void EmitMul(A64Emitter& e, const oaknut::XReg& dst,
+             const oaknut::XReg& src1, const oaknut::XReg& src2);
 
 template <typename T>
 bool RegisterSingle() {
