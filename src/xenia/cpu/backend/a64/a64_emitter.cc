@@ -17,55 +17,37 @@ namespace cpu {
 namespace backend {
 namespace a64 {
 
-A64Emitter::A64Emitter(uint8_t* buffer, size_t capacity)
-    : buffer_(buffer), capacity_(capacity), offset_(0) {}
+A64Emitter::A64Emitter(A64Backend* backend)
+    : processor_(backend->processor()),
+      backend_(backend),
+      code_cache_(backend->code_cache()) {
+  feature_flags_ = 0;  // TODO: set features
+
+  epilog_label_ = new oaknut::Label();
+}
 
 A64Emitter::~A64Emitter() = default;
 
-uint32_t* A64Emitter::Emit(uint32_t instr) {
-  if (offset_ + sizeof(uint32_t) > capacity_) {
-    return nullptr;
-  }
-
-  uint32_t* ptr = reinterpret_cast<uint32_t*>(buffer_ + offset_);
-  *ptr = instr;
-  offset_ += sizeof(uint32_t);
-  return ptr;
-}
-
-uint32_t* A64Emitter::EmitPair(uint32_t a, uint32_t b) {
-  if (offset_ + sizeof(uint32_t) * 2 > capacity_) {
-    return nullptr;
-  }
-
-  uint32_t* ptr = reinterpret_cast<uint32_t*>(buffer_ + offset_);
-  ptr[0] = a;
-  ptr[1] = b;
-
-  offset_ += sizeof(uint32_t) * 2;
-  return ptr;
-}
-
 uint8_t* A64Emitter::current_address() const {
-  return buffer_ + offset_;
+  return getCode() + getSize();
 }
 
 size_t A64Emitter::offset() const {
-  return offset_;
+  return getSize();
 }
 
 void A64Emitter::Reset() {
-  offset_ = 0;
+  reset();
 }
 
 void A64Emitter::FlushInstructionCache() {
 #if defined(__APPLE__)
-  sys_icache_invalidate(buffer_, offset_);
+  sys_icache_invalidate(getCode(), getSize());
 #else
 #if defined(__GNUC__)
   __builtin___clear_cache(
-      reinterpret_cast<char*>(buffer_),
-      reinterpret_cast<char*>(buffer_ + offset_));
+      reinterpret_cast<char*>(getCode()),
+      reinterpret_cast<char*>(getCode() + getSize()));
 #endif
 #endif
 }
