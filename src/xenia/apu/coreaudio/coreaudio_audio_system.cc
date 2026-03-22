@@ -1,6 +1,8 @@
 #include "coreaudio_audio_system.h"
 #include "coreaudio_audio_driver.h"
 
+#include "xenia/apu/audio_system.h"
+
 namespace xe {
 namespace apu {
 namespace coreaudio {
@@ -15,6 +17,21 @@ std::unique_ptr<AudioSystem> CoreAudioAudioSystem::Create(
 
 void CoreAudioAudioSystem::Initialize() {
   AudioSystem::Initialize();
+}
+AudioDriver* CoreAudioAudioSystem::CreateDriver(
+    xe::threading::Semaphore* semaphore,
+    uint32_t frequency,
+    uint32_t channels,
+    bool need_format_conversion) {
+
+  auto driver = new CoreAudioDriver(memory(), semaphore);
+
+  if (!driver->Initialize()) {
+    delete driver;
+    return nullptr;
+  }
+
+  return driver;
 }
 
 X_STATUS CoreAudioAudioSystem::CreateDriver(

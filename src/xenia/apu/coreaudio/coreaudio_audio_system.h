@@ -16,6 +16,13 @@ public:
 
   void Initialize() override;
 
+  AudioDriver* CreateDriver(
+    xe::threading::Semaphore* semaphore,
+    uint32_t frequency,
+    uint32_t channels,
+    bool need_format_conversion) override;
+
+
   X_STATUS CreateDriver(
       size_t index,
       xe::threading::Semaphore* semaphore,

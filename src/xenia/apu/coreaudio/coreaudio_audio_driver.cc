@@ -154,9 +154,6 @@ OSStatus CoreAudioDriver::RenderCallback(
 
   auto* driver = reinterpret_cast<CoreAudioDriver*>(inRefCon);
 
-
-  auto* driver = reinterpret_cast<CoreAudioDriver*>(inRefCon);
-
   float* out = reinterpret_cast<float*>(data->mBuffers[0].mData);
 
   size_t samples_needed = frames * 2;
