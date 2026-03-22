@@ -139,6 +139,7 @@ project("xenia-app")
   -- iOS: use SDL for audio and input (built from source as static lib).
   filter("system:ios")
     links({
+      "xenia-apu-coreaudio",
       "xenia-apu-sdl",
       "xenia-helper-sdl",
       "xenia-hid-sdl",
@@ -174,6 +175,9 @@ project("xenia-app")
   filter("platforms:Windows-*")
 
   filter("system:macosx")
+    links({
+      "xenia-apu-coreaudio",
+    })
     xcodebuildsettings({
       ["INFOPLIST_FILE"] = path.getabsolute("Info.plist"),
       ["CODE_SIGN_ENTITLEMENTS"] =
@@ -261,9 +265,9 @@ project("xenia-app")
       ["IPHONEOS_DEPLOYMENT_TARGET"] = "16.0",
       ["SDKROOT"] = "iphoneos",
       ["TARGETED_DEVICE_FAMILY"] = "1,2",
-      ["PRODUCT_NAME"] = "XeniOS",
-      ["EXECUTABLE_NAME"] = "xenios",
-      ["PRODUCT_BUNDLE_IDENTIFIER"] = "jp.xenios.xenios.ios",
+      ["PRODUCT_NAME"] = "Not XeniOS",
+      ["EXECUTABLE_NAME"] = "not-xenios",
+      ["PRODUCT_BUNDLE_IDENTIFIER"] = "jp.UltraAssassin64.not-xenios.ios",
       ["ASSETCATALOG_COMPILER_APPICON_NAME"] = "AppIcon",
       ["CODE_SIGN_STYLE"] = "Automatic",
       ["CODE_SIGN_ENTITLEMENTS"] = ios_entitlements_path,
