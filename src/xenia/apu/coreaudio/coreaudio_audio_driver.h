@@ -29,6 +29,11 @@ class CoreAudioDriver : public AudioDriver {
   bool Initialize() override;
   void Shutdown() override;
   void SubmitFrame(float* samples) override;
+  
+  // Add these three methods:
+  void Pause() override;
+  void Resume() override;
+  void SetVolume(float volume) override;
 
   void SetAudioSystem(AudioSystem* system);
 
@@ -48,6 +53,7 @@ class CoreAudioDriver : public AudioDriver {
 
   AudioTimingController timing_;
 };
+
 
 }  // namespace coreaudio
 }  // namespace apu

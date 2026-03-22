@@ -1,104 +1,173 @@
+/**
+ ******************************************************************************
+ * UltraXeniOS : CoreAudio Audio System                                       *
+ ******************************************************************************
+ */
+
+#include "xenia/apu/coreaudio/coreaudio_audio_system.h"
+
+#include <atomic>
+
 #include "xenia/apu/coreaudio/coreaudio_audio_driver.h"
-
-#include "xenia/apu/audio_system.h"
-
-#include <AVFoundation/AVFoundation.h>
-#include <AudioToolbox/AudioToolbox.h>
-#include <cstring>
+#include "xenia/base/logging.h"
+#include "xenia/base/threading.h"
 
 namespace xe {
 namespace apu {
 namespace coreaudio {
 
-CoreAudioDriver::CoreAudioDriver(Memory* memory) : AudioDriver(memory) {}
+namespace {
 
-CoreAudioDriver::~CoreAudioDriver() { Shutdown(); }
+#if XE_PLATFORM_IOS
+// Silent fallback (matches SDL behavior)
+class SilentAudioDriver final : public AudioDriver {
+ public:
+  explicit SilentAudioDriver(xe::threading::Semaphore* semaphore)
+      : semaphore_(semaphore) {}
 
-void CoreAudioDriver::SetAudioSystem(AudioSystem* system) {
-  audio_system_ = system;
+  bool Initialize() override { return true; }
+  void Shutdown() override {}
+
+  void SubmitFrame(float* samples) override {
+    (void)samples;
+    if (semaphore_) {
+      semaphore_->Release(1, nullptr);
+    }
+  }
+
+  void Pause() override {}
+  void Resume() override {}
+  void SetVolume(float volume) override { (void)volume; }
+
+ private:
+  xe::threading::Semaphore* semaphore_ = nullptr;
+};
+#endif  // XE_PLATFORM_IOS
+
+}  // namespace
+
+//------------------------------------------------------------------------------
+// Factory
+//------------------------------------------------------------------------------
+
+std::unique_ptr<AudioSystem> CoreAudioAudioSystem::Create(
+    cpu::Processor* processor) {
+  return std::make_unique<CoreAudioAudioSystem>(processor);
 }
 
-bool CoreAudioDriver::Initialize() {
-  AVAudioSession* session = [AVAudioSession sharedInstance];
-  [session setCategory:AVAudioSessionCategoryPlayback error:nil];
-  [session setPreferredSampleRate:48000 error:nil];
-  [session setPreferredIOBufferDuration:2048.0 / 48000.0 error:nil];
-  [session setActive:YES error:nil];
+//------------------------------------------------------------------------------
+// Lifecycle
+//------------------------------------------------------------------------------
 
-  timing_.Initialize(48000);
-  timing_.SetTarget(2048, 8192);
+CoreAudioAudioSystem::CoreAudioAudioSystem(cpu::Processor* processor)
+    : AudioSystem(processor) {}
 
-  AudioComponentDescription desc = {};
-  desc.componentType = kAudioUnitType_Output;
-  desc.componentSubType = kAudioUnitSubType_RemoteIO;
-  desc.componentManufacturer = kAudioUnitManufacturer_Apple;
+CoreAudioAudioSystem::~CoreAudioAudioSystem() = default;
 
-  AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
-  if (!comp) return false;
+void CoreAudioAudioSystem::Initialize() { AudioSystem::Initialize(); }
 
-  AudioComponentInstanceNew(comp, &audio_unit_);
+//------------------------------------------------------------------------------
+// Driver Creation (multi-client path)
+//------------------------------------------------------------------------------
 
-  AURenderCallbackStruct callback = {};
-  callback.inputProc = RenderCallback;
-  callback.inputProcRefCon = this;
+X_STATUS CoreAudioAudioSystem::CreateDriver(size_t index,
+                                            xe::threading::Semaphore* semaphore,
+                                            AudioDriver** out_driver) {
+  assert_not_null(out_driver);
 
-  AudioUnitSetProperty(audio_unit_, kAudioUnitProperty_SetRenderCallback,
-                       kAudioUnitScope_Input, 0, &callback, sizeof(callback));
+#if XE_PLATFORM_IOS
+  // Same logic as SDL: only one real device allowed
+  if (index > 0) {
+    static std::atomic<bool> logged_secondary{false};
+    if (!logged_secondary.exchange(true)) {
+      XELOGW("CoreAudioAudioSystem: secondary clients use silent fallback");
+    }
 
-  AudioStreamBasicDescription fmt = {};
-  fmt.mSampleRate = 48000;
-  fmt.mFormatID = kAudioFormatLinearPCM;
-  fmt.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
-  fmt.mBitsPerChannel = 32;
-  fmt.mChannelsPerFrame = 2;
-  fmt.mFramesPerPacket = 1;
-  fmt.mBytesPerFrame = 8;
-  fmt.mBytesPerPacket = 8;
+    *out_driver = new SilentAudioDriver(semaphore);
+    return X_STATUS_SUCCESS;
+  }
+#endif
 
-  AudioUnitSetProperty(audio_unit_, kAudioUnitProperty_StreamFormat,
-                       kAudioUnitScope_Input, 0, &fmt, sizeof(fmt));
+  auto driver = std::make_unique<CoreAudioDriver>(memory());
 
-  UInt32 buffer_size = 2048;
+  if (!driver->Initialize()) {
+    driver->Shutdown();
 
-  AudioUnitSetProperty(audio_unit_, kAudioDevicePropertyBufferFrameSize,
-                       kAudioUnitScope_Global, 0, &buffer_size,
-                       sizeof(buffer_size));
+#if XE_PLATFORM_IOS
+    XELOGW("CoreAudioAudioSystem: init failed, using silent fallback");
+    *out_driver = new SilentAudioDriver(semaphore);
+    return X_STATUS_SUCCESS;
+#else
+    return X_STATUS_UNSUCCESSFUL;
+#endif
+  }
 
-  AudioUnitInitialize(audio_unit_);
-  AudioOutputUnitStart(audio_unit_);
-
-  return true;
+  *out_driver = driver.release();
+  return X_STATUS_SUCCESS;
 }
 
-void CoreAudioDriver::Shutdown() {
+//------------------------------------------------------------------------------
+// Driver Creation (direct path used by APU)
+//------------------------------------------------------------------------------
+
+AudioDriver* CoreAudioAudioSystem::CreateDriver(
+    xe::threading::Semaphore* semaphore, uint32_t frequency, uint32_t channels,
+    bool need_format_conversion) {
+  auto* driver = new CoreAudioDriver(memory());
+  driver->SetAudioSystem(this);
+
+  if (!driver->Initialize()) {
+#if XE_PLATFORM_IOS
+    XELOGW("CoreAudioAudioSystem: direct init failed, silent fallback");
+    return new SilentAudioDriver(semaphore);
+#else
+    delete driver;
+    return nullptr;
+#endif
+  }
+
+  return driver;
+}
+
+//------------------------------------------------------------------------------
+// Driver Destruction
+//------------------------------------------------------------------------------
+
+void CoreAudioAudioSystem::DestroyDriver(AudioDriver* driver) {
+  assert_not_null(driver);
+
+#if XE_PLATFORM_IOS
+  if (auto* silent = dynamic_cast<SilentAudioDriver*>(driver)) {
+    silent->Shutdown();
+    delete silent;
+    return;
+  }
+#endif
+
+  auto* core = dynamic_cast<CoreAudioDriver*>(driver);
+  assert_not_null(core);
+
+  core->Shutdown();
+  delete core;
+}
+void CoreAudioDriver::Pause() {
   if (audio_unit_) {
-    AudioOutputUnitStop(audio_unit_);
-    AudioUnitUninitialize(audio_unit_);
-    AudioComponentInstanceDispose(audio_unit_);
-    audio_unit_ = nullptr;
+    AudioUnitStop(audio_unit_);
   }
 }
 
-OSStatus CoreAudioDriver::RenderCallback(void* inRefCon,
-                                         AudioUnitRenderActionFlags*,
-                                         const AudioTimeStamp*, UInt32,
-                                         UInt32 inNumberFrames,
-                                         AudioBufferList* ioData) {
-  auto* driver = reinterpret_cast<CoreAudioDriver*>(inRefCon);
-
-  float* out = reinterpret_cast<float*>(ioData->mBuffers[0].mData);
-
-  if (driver->audio_system_) {
-    driver->audio_system_->Pump(inNumberFrames, out);
-  } else {
-    std::memset(out, 0, inNumberFrames * 2 * sizeof(float));
+void CoreAudioDriver::Resume() {
+  if (audio_unit_) {
+    AudioUnitStart(audio_unit_);
   }
-
-  return noErr;
 }
 
-double CoreAudioDriver::GetLatencyMs() const { return timing_.GetLatencyMs(); }
-
+void CoreAudioDriver::SetVolume(float volume) {
+  if (audio_unit_) {
+    AudioUnitSetParameter(audio_unit_, kHALOutputParamVolume, 
+                         kAudioUnitScope_Global, 0, volume, 0);
+  }
+}
 }  // namespace coreaudio
 }  // namespace apu
 }  // namespace xe
