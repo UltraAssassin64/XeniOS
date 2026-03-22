@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>application-identifier</key>
-	<string>jp.xenios.xenios.ios</string>
+	<string>com.UltraAssassin64.xenios.ios</string>
 	<key>com.apple.developer.kernel.increased-memory-limit</key>
 	<true/>
 	<key>com.apple.developer.kernel.extended-virtual-addressing</key>

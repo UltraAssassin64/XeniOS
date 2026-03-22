@@ -57,7 +57,7 @@
             <key>CFBundleTypeRole</key>
             <string>Editor</string>
             <key>CFBundleURLName</key>
-            <string>jp.xenios.xenios.launch</string>
+            <string>com.UltraAssassin64.xenios.launch</string>
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>xenios</string>
