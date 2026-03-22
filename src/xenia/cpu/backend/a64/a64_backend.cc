@@ -19,8 +19,7 @@ namespace cpu {
 namespace backend {
 namespace a64 {
 
-A64Backend::A64Backend(cpu::Processor* processor)
-    : Backend(processor) {}
+A64Backend::A64Backend(cpu::Processor* processor) : Backend(processor) {}
 
 A64Backend::~A64Backend() = default;
 
@@ -40,9 +39,7 @@ bool A64Backend::Initialize() {
   return true;
 }
 
-void A64Backend::Shutdown() {
-  code_cache_.reset();
-}
+void A64Backend::Shutdown() { code_cache_.reset(); }
 
 std::unique_ptr<Assembler> A64Backend::CreateAssembler() {
   uint8_t* cache_ptr = code_cache_->data();
@@ -52,9 +49,7 @@ std::unique_ptr<Assembler> A64Backend::CreateAssembler() {
     return nullptr;
   }
 
-  auto emitter = std::make_unique<A64Emitter>(
-      cache_ptr,
-      code_cache_->size());
+  auto emitter = std::make_unique<A64Emitter>(cache_ptr, code_cache_->size());
 
   return emitter;
 }

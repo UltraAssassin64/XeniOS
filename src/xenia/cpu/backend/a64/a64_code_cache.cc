@@ -1,7 +1,7 @@
 #include "xenia/cpu/backend/a64/a64_code_cache.h"
 
-#include <cstring>
 #include <sys/mman.h>
+#include <cstring>
 
 #if defined(__APPLE__)
 #include <pthread.h>
@@ -31,21 +31,13 @@ bool A64CodeCache::Initialize() {
 #if defined(__APPLE__)
 
   // Apple platforms require MAP_JIT for executable writable memory
-  ptr = mmap(nullptr,
-             size_,
-             PROT_READ | PROT_WRITE | PROT_EXEC,
-             MAP_PRIVATE | MAP_ANON | MAP_JIT,
-             -1,
-             0);
+  ptr = mmap(nullptr, size_, PROT_READ | PROT_WRITE | PROT_EXEC,
+             MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
 
 #else
 
-  ptr = mmap(nullptr,
-             size_,
-             PROT_READ | PROT_WRITE | PROT_EXEC,
-             MAP_PRIVATE | MAP_ANON,
-             -1,
-             0);
+  ptr = mmap(nullptr, size_, PROT_READ | PROT_WRITE | PROT_EXEC,
+             MAP_PRIVATE | MAP_ANON, -1, 0);
 
 #endif
 
@@ -68,21 +60,13 @@ bool A64CodeCache::Initialize() {
   return true;
 }
 
-uint8_t* A64CodeCache::data() const {
-  return code_cache_;
-}
+uint8_t* A64CodeCache::data() const { return code_cache_; }
 
-uintptr_t A64CodeCache::base_address() const {
-  return code_cache_base_;
-}
+uintptr_t A64CodeCache::base_address() const { return code_cache_base_; }
 
-uintptr_t A64CodeCache::end_address() const {
-  return code_cache_end_;
-}
+uintptr_t A64CodeCache::end_address() const { return code_cache_end_; }
 
-size_t A64CodeCache::size() const {
-  return size_;
-}
+size_t A64CodeCache::size() const { return size_; }
 
 void A64CodeCache::BeginWrite() {
 #if defined(__APPLE__)

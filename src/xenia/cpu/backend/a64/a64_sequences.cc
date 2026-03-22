@@ -16,15 +16,18 @@ namespace a64 {
 
 using oaknut::XReg;
 
-void EmitAdd(A64Emitter& e, const XReg& dst, const XReg& src1, const XReg& src2) {
+void EmitAdd(A64Emitter& e, const XReg& dst, const XReg& src1,
+             const XReg& src2) {
   e.ADD(dst, src1, src2);
 }
 
-void EmitSub(A64Emitter& e, const XReg& dst, const XReg& src1, const XReg& src2) {
+void EmitSub(A64Emitter& e, const XReg& dst, const XReg& src1,
+             const XReg& src2) {
   e.SUB(dst, src1, src2);
 }
 
-void EmitMul(A64Emitter& e, const XReg& dst, const XReg& src1, const XReg& src2) {
+void EmitMul(A64Emitter& e, const XReg& dst, const XReg& src1,
+             const XReg& src2) {
   e.MUL(dst, src1, src2);
 }
 

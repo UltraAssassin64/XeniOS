@@ -1,15 +1,15 @@
 #pragma once
 
 #include <atomic>
-#include <vector>
 #include <cstring>
+#include <vector>
 
 namespace xe {
 namespace apu {
 namespace coreaudio {
 
 class RingBuffer {
-public:
+ public:
   explicit RingBuffer(size_t capacity)
       : buffer_(capacity), capacity_(capacity) {}
 
@@ -44,7 +44,7 @@ public:
     return to_read;
   }
 
-private:
+ private:
   std::vector<float> buffer_;
   size_t capacity_;
 
@@ -52,6 +52,6 @@ private:
   std::atomic<size_t> write_pos_{0};
 };
 
-}
-}
-}
+}  // namespace coreaudio
+}  // namespace apu
+}  // namespace xe

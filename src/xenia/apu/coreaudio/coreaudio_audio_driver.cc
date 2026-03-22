@@ -1,7 +1,7 @@
 #include "coreaudio_audio_driver.h"
 
-#include <cstring>
 #include <pthread.h>
+#include <cstring>
 
 #include "xenia/base/logging.h"
 
@@ -9,17 +9,13 @@ namespace xe {
 namespace apu {
 namespace coreaudio {
 
-CoreAudioDriver::CoreAudioDriver(
-    Memory* memory,
-    xe::threading::Semaphore* semaphore)
+CoreAudioDriver::CoreAudioDriver(Memory* memory,
+                                 xe::threading::Semaphore* semaphore)
     : memory_(memory), semaphore_(semaphore) {}
 
-CoreAudioDriver::~CoreAudioDriver() {
-  Shutdown();
-}
+CoreAudioDriver::~CoreAudioDriver() { Shutdown(); }
 
 bool CoreAudioDriver::Initialize() {
-
   AudioComponentDescription desc{};
   desc.componentType = kAudioUnitType_Output;
   desc.componentSubType = kAudioUnitSubType_RemoteIO;
@@ -41,13 +37,8 @@ bool CoreAudioDriver::Initialize() {
   callback.inputProc = RenderCallback;
   callback.inputProcRefCon = this;
 
-  AudioUnitSetProperty(
-      audio_unit_,
-      kAudioUnitProperty_SetRenderCallback,
-      kAudioUnitScope_Input,
-      0,
-      &callback,
-      sizeof(callback));
+  AudioUnitSetProperty(audio_unit_, kAudioUnitProperty_SetRenderCallback,
+                       kAudioUnitScope_Input, 0, &callback, sizeof(callback));
 
   AudioStreamBasicDescription format{};
   format.mSampleRate = 48000;
@@ -59,13 +50,8 @@ bool CoreAudioDriver::Initialize() {
   format.mBytesPerFrame = sizeof(float) * 2;
   format.mBytesPerPacket = format.mBytesPerFrame;
 
-  AudioUnitSetProperty(
-      audio_unit_,
-      kAudioUnitProperty_StreamFormat,
-      kAudioUnitScope_Input,
-      0,
-      &format,
-      sizeof(format));
+  AudioUnitSetProperty(audio_unit_, kAudioUnitProperty_StreamFormat,
+                       kAudioUnitScope_Input, 0, &format, sizeof(format));
 
   if (AudioUnitInitialize(audio_unit_) != noErr) {
     XELOGE("CoreAudio: initialization failed");
@@ -80,7 +66,6 @@ bool CoreAudioDriver::Initialize() {
 }
 
 void CoreAudioDriver::Shutdown() {
-
   if (!audio_unit_) return;
 
   AudioOutputUnitStop(audio_unit_);
@@ -91,9 +76,7 @@ void CoreAudioDriver::Shutdown() {
 }
 
 void CoreAudioDriver::MixFrame(float* input, float* output) {
-
   for (size_t i = 0; i < 256; i++) {
-
     float L = input[i * 6 + 0];
     float R = input[i * 6 + 1];
 
@@ -103,14 +86,13 @@ void CoreAudioDriver::MixFrame(float* input, float* output) {
 }
 
 void CoreAudioDriver::SubmitFrame(float* samples) {
-
   float stereo[256 * 2];
 
   MixFrame(samples, stereo);
 
   ring_buffer_.Push(stereo, 256 * 2);
 
-  if(!ring_buffer_.Push(stereo, 256 * 2)){
+  if (!ring_buffer_.Push(stereo, 256 * 2)) {
     XELOGW("CoreAudio: audio buffer overflow - dropping frame");
     return;
   }
@@ -121,31 +103,23 @@ void CoreAudioDriver::SubmitFrame(float* samples) {
 }
 
 void CoreAudioDriver::Pause() {
-
   if (audio_unit_) {
     AudioOutputUnitStop(audio_unit_);
   }
 }
 
 void CoreAudioDriver::Resume() {
-
   if (audio_unit_) {
     AudioOutputUnitStart(audio_unit_);
   }
 }
 
-void CoreAudioDriver::SetVolume(float volume) {
-  volume_.store(volume);
-}
+void CoreAudioDriver::SetVolume(float volume) { volume_.store(volume); }
 
-OSStatus CoreAudioDriver::RenderCallback(
-    void* inRefCon,
-    AudioUnitRenderActionFlags* flags,
-    const AudioTimeStamp* ts,
-    UInt32 bus,
-    UInt32 frames,
-    AudioBufferList* data) {
-
+OSStatus CoreAudioDriver::RenderCallback(void* inRefCon,
+                                         AudioUnitRenderActionFlags* flags,
+                                         const AudioTimeStamp* ts, UInt32 bus,
+                                         UInt32 frames, AudioBufferList* data) {
   static bool priority_set = false;
   if (!priority_set) {
     pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
@@ -161,11 +135,10 @@ OSStatus CoreAudioDriver::RenderCallback(
   size_t popped = driver->ring_buffer_.Pop(out, samples_needed);
 
   if (popped < samples_needed) {
-    std::memset(out + popped, 0,
-                (samples_needed - popped) * sizeof(float));
+    std::memset(out + popped, 0, (samples_needed - popped) * sizeof(float));
 
     if (++driver->starvation_count_ > 50) {
-    driver->starvation_count_ = 0;
+      driver->starvation_count_ = 0;
     }
   } else {
     driver->starvation_count_ = 0;
@@ -174,7 +147,6 @@ OSStatus CoreAudioDriver::RenderCallback(
   float volume = driver->volume_.load();
 
   if (volume != 1.0f) {
-
     for (size_t i = 0; i < samples_needed; i++) {
       out[i] *= volume;
     }
@@ -183,6 +155,6 @@ OSStatus CoreAudioDriver::RenderCallback(
   return noErr;
 }
 
-}
-}
-}
+}  // namespace coreaudio
+}  // namespace apu
+}  // namespace xe

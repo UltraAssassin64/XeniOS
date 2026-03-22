@@ -15,15 +15,10 @@ std::unique_ptr<AudioSystem> CoreAudioAudioSystem::Create(
   return std::make_unique<CoreAudioAudioSystem>(processor);
 }
 
-void CoreAudioAudioSystem::Initialize() {
-  AudioSystem::Initialize();
-}
+void CoreAudioAudioSystem::Initialize() { AudioSystem::Initialize(); }
 AudioDriver* CoreAudioAudioSystem::CreateDriver(
-    xe::threading::Semaphore* semaphore,
-    uint32_t frequency,
-    uint32_t channels,
+    xe::threading::Semaphore* semaphore, uint32_t frequency, uint32_t channels,
     bool need_format_conversion) {
-
   auto driver = new CoreAudioDriver(memory(), semaphore);
 
   if (!driver->Initialize()) {
@@ -34,11 +29,9 @@ AudioDriver* CoreAudioAudioSystem::CreateDriver(
   return driver;
 }
 
-X_STATUS CoreAudioAudioSystem::CreateDriver(
-    size_t index,
-    xe::threading::Semaphore* semaphore,
-    AudioDriver** out_driver) {
-
+X_STATUS CoreAudioAudioSystem::CreateDriver(size_t index,
+                                            xe::threading::Semaphore* semaphore,
+                                            AudioDriver** out_driver) {
   auto driver = new CoreAudioDriver(memory(), semaphore);
 
   if (!driver->Initialize()) {
@@ -51,11 +44,10 @@ X_STATUS CoreAudioAudioSystem::CreateDriver(
 }
 
 void CoreAudioAudioSystem::DestroyDriver(AudioDriver* driver) {
-
   driver->Shutdown();
   delete driver;
 }
 
-}
-}
-}
+}  // namespace coreaudio
+}  // namespace apu
+}  // namespace xe

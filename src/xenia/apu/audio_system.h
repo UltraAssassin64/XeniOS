@@ -13,13 +13,13 @@
 #include <atomic>
 #include <queue>
 
+#include "xenia/base/byte_stream.h"
 #include "xenia/base/mutex.h"
 #include "xenia/base/threading.h"
 #include "xenia/cpu/processor.h"
 #include "xenia/kernel/xthread.h"
 #include "xenia/memory.h"
 #include "xenia/xbox.h"
-#include "xenia/base/byte_stream.h"
 
 namespace xe {
 namespace apu {

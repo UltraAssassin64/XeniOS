@@ -5,8 +5,8 @@
 
 #include <atomic>
 
-#include "xenia/apu/audio_driver.h"
 #include "coreaudio_ring_buffer.h"
+#include "xenia/apu/audio_driver.h"
 #include "xenia/base/threading.h"
 
 namespace xe {
@@ -29,13 +29,11 @@ class CoreAudioDriver : public AudioDriver {
   void SetVolume(float volume) override;
 
  private:
-  static OSStatus RenderCallback(
-      void* inRefCon,
-      AudioUnitRenderActionFlags* ioActionFlags,
-      const AudioTimeStamp* inTimeStamp,
-      UInt32 inBusNumber,
-      UInt32 inNumberFrames,
-      AudioBufferList* ioData);
+  static OSStatus RenderCallback(void* inRefCon,
+                                 AudioUnitRenderActionFlags* ioActionFlags,
+                                 const AudioTimeStamp* inTimeStamp,
+                                 UInt32 inBusNumber, UInt32 inNumberFrames,
+                                 AudioBufferList* ioData);
 
   void MixFrame(float* input, float* output);
 
@@ -52,6 +50,6 @@ class CoreAudioDriver : public AudioDriver {
   std::atomic<int> starvation_count_{0};
 };
 
-}  
-}  
-}
+}  // namespace coreaudio
+}  // namespace apu
+}  // namespace xe
