@@ -193,6 +193,40 @@ struct XMP_GET_DASH_INIT_STATE {
 };
 static_assert_size(XMP_GET_DASH_INIT_STATE, 0x8);
 
+struct XMP_METADATA_HEADER {
+  be<uint32_t> file_path_ptr;
+  be<uint32_t> title_ptr;
+  be<uint32_t> artist_ptr;
+  be<uint32_t> album_ptr;
+  be<uint32_t> album_artist_ptr;
+  be<uint32_t> genre_ptr;
+  be<uint32_t> track_number;
+  be<uint32_t> duration;
+  be<uint32_t> song_format;
+};
+
+struct XMP_METADATA {
+  be<char16_t> title[kMaxXmpMetadataStringLength];
+  be<char16_t> artist[kMaxXmpMetadataStringLength];
+  be<char16_t> album[kMaxXmpMetadataStringLength];
+  be<char16_t> album_artist[kMaxXmpMetadataStringLength];
+  be<char16_t> genre[kMaxXmpMetadataStringLength];
+  be<uint32_t> track_number;
+  be<uint32_t> duration;
+  be<uint32_t> song_format;
+};
+
+struct XMP_CONTEXT {
+  be<uint32_t> xmp_client;
+  be<uint32_t> storage_ptr;
+  be<uint32_t> song_handle;
+  be<uint32_t> unk;
+  be<uint32_t> flags;
+  be<uint32_t> playback_mode;
+  be<uint32_t> repeat_mode;
+  be<uint32_t> playback_flags;
+};
+
 class XmpApp : public App {
  public:
   enum class State : uint32_t {
