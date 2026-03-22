@@ -1,33 +1,123 @@
-#ifndef XENIA_APU_AUDIO_DRIVER_H_
-#define XENIA_APU_AUDIO_DRIVER_H_
+/**
+ ******************************************************************************
+ * Xenia : Xbox 360 Emulator Research Project                                 *
+ ******************************************************************************
+ * Copyright 2013 Ben Vanik. All rights reserved.                             *
+ * Released under the BSD license - see LICENSE in the root for more details. *
+ ******************************************************************************
+ */
 
+#ifndef XENIA_APU_AUDIO_SYSTEM_H_
+#define XENIA_APU_AUDIO_SYSTEM_H_
+
+#include <atomic>
+#include <queue>
+
+#include "xenia/base/mutex.h"
+#include "xenia/base/threading.h"
+#include "xenia/cpu/processor.h"
+#include "xenia/kernel/xthread.h"
 #include "xenia/memory.h"
 #include "xenia/xbox.h"
+#include "xenia/base/byte_stream.h"
 
 namespace xe {
 namespace apu {
 
-class AudioDriver {
+constexpr fourcc_t kAudioSaveSignature = make_fourcc("XAUD");
+
+class AudioDriver;
+class XmaDecoder;
+
+class AudioSystem {
  public:
-  static constexpr uint32_t kFrameFrequencyDefault = 48000;
-  static constexpr uint32_t kFrameChannelsDefault = 6;
-  static constexpr uint32_t kChannelSamplesDefault = 256;
-  static constexpr uint32_t kFrameSamplesMax =
-      kFrameChannelsDefault * kChannelSamplesDefault;
-  static constexpr uint32_t kFrameSizeMax = sizeof(float) * kFrameSamplesMax;
+  // TODO(gibbed): respect XAUDIO2_MAX_QUEUED_BUFFERS somehow (ie min(64,
+  // XAUDIO2_MAX_QUEUED_BUFFERS))
+  static constexpr size_t kMaximumQueuedFrames = 64;
 
-  virtual ~AudioDriver();
+  virtual ~AudioSystem();
 
-  virtual bool Initialize() = 0;
-  virtual void Shutdown() = 0;
+  virtual std::string name() const = 0;
 
-  virtual void SubmitFrame(float* samples) = 0;
-  virtual void Pause() = 0;
-  virtual void Resume() = 0;
-  virtual void SetVolume(float volume) = 0;
+  Memory* memory() const { return memory_; }
+  cpu::Processor* processor() const { return processor_; }
+  XmaDecoder* xma_decoder() const { return xma_decoder_.get(); }
+
+  virtual X_STATUS Setup(kernel::KernelState* kernel_state);
+  virtual void Shutdown();
+
+  X_STATUS RegisterClient(uint32_t callback, uint32_t callback_arg,
+                          size_t* out_index);
+  void UnregisterClient(size_t index);
+  void SubmitFrame(size_t index, float* samples);
+
+  // Get performance statistics for a client
+  struct ClientPerformance {
+    uint32_t frames_submitted;
+    uint32_t frames_processed;
+    uint32_t frames_dropped;
+  };
+  bool GetClientPerformance(size_t index, ClientPerformance* out_perf);
+
+  // Creates an independent, non-registered driver instance.
+  virtual AudioDriver* CreateDriver(xe::threading::Semaphore* semaphore,
+                                    uint32_t frequency, uint32_t channels,
+                                    bool need_format_conversion) = 0;
+
+  bool Save(ByteStream* stream);
+  bool Restore(ByteStream* stream);
+
+  bool is_paused() const { return paused_.load(std::memory_order_acquire); }
+  void Pause();
+  void Resume();
+
+ protected:
+  explicit AudioSystem(cpu::Processor* processor);
+
+  virtual void Initialize();
+
+  void WorkerThreadMain();
+
+  virtual X_STATUS CreateDriver(size_t index,
+                                xe::threading::Semaphore* semaphore,
+                                AudioDriver** out_driver) = 0;
+  virtual void DestroyDriver(AudioDriver* driver) = 0;
+
+  Memory* memory_ = nullptr;
+  cpu::Processor* processor_ = nullptr;
+  std::unique_ptr<XmaDecoder> xma_decoder_;
+  uint32_t queued_frames_;
+
+  std::atomic<bool> worker_running_ = {false};
+  kernel::object_ref<kernel::XHostThread> worker_thread_;
+
+  xe::global_critical_region global_critical_region_;
+  static constexpr size_t kMaximumClientCount = 8;
+  struct {
+    AudioDriver* driver;
+    uint32_t callback;
+    uint32_t callback_arg;
+    uint32_t wrapped_callback_arg;
+    bool in_use;
+    std::atomic<uint32_t> frames_submitted{0};
+    std::atomic<uint32_t> frames_processed{0};
+    std::atomic<uint32_t> frames_dropped{0};
+  } clients_[kMaximumClientCount];
+
+  int FindFreeClient();
+
+  std::unique_ptr<xe::threading::Semaphore>
+      client_semaphores_[kMaximumClientCount];
+  // Event is always there in case we have no clients.
+  std::unique_ptr<xe::threading::Event> shutdown_event_;
+  xe::threading::WaitHandle* wait_handles_[kMaximumClientCount + 1];
+
+  std::atomic<bool> paused_ = false;
+  xe::threading::Fence pause_fence_;
+  std::unique_ptr<xe::threading::Event> resume_event_;
 };
 
 }  // namespace apu
 }  // namespace xe
 
-#endif
+#endif  // XENIA_APU_AUDIO_SYSTEM_H_
