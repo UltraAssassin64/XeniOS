@@ -218,12 +218,6 @@ class A64Emitter : public oaknut::VectorCodeGenerator {
   void PopStackpoint();
   void EnsureSynchronizedGuestAndHostStack();
 
-  uint8_t* current_address() const;
-  size_t offset() const;
-  void Reset();
-  void FlushInstructionCache();
-  void Finalize();
-
   // Moves a 64bit immediate into memory.
   static bool ConstantFitsIn32Reg(uint64_t v);
   void MovMem64(const oaknut::XRegSp& addr, intptr_t offset, uint64_t v);
