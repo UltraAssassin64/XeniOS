@@ -1,9 +1,4 @@
-#ifndef XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_SYSTEM_H_
-#define XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_SYSTEM_H_
-
 #pragma once
-
-#include <memory>
 
 #include "xenia/apu/audio_system.h"
 
@@ -12,28 +7,23 @@ namespace apu {
 namespace coreaudio {
 
 class CoreAudioAudioSystem : public AudioSystem {
- public:
-  static std::unique_ptr<AudioSystem> Create(cpu::Processor* processor);
-  std::string name() const override { return "CoreAudio"; }
-
+public:
   explicit CoreAudioAudioSystem(cpu::Processor* processor);
-  ~CoreAudioAudioSystem() override;
 
-  static bool IsAvailable() { return true; }
+  static std::unique_ptr<AudioSystem> Create(cpu::Processor* processor);
+
+  std::string name() const override { return "CoreAudio"; }
 
   void Initialize() override;
 
-  X_STATUS CreateDriver(size_t index, xe::threading::Semaphore* semaphore,
-                        AudioDriver** out_driver) override;
-
-  AudioDriver* CreateDriver(xe::threading::Semaphore* semaphore,
-                            uint32_t frequency, uint32_t channels,
-                            bool need_format_conversion) override;
+  X_STATUS CreateDriver(
+      size_t index,
+      xe::threading::Semaphore* semaphore,
+      AudioDriver** out_driver) override;
 
   void DestroyDriver(AudioDriver* driver) override;
 };
 
-}  // namespace coreaudio
-}  // namespace apu
-}  // namespace xe
-#endif  // XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_SYSTEM_H_
+}
+}
+}

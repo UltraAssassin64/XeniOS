@@ -1,61 +1,57 @@
-#ifndef XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_DRIVER_H_
-#define XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_DRIVER_H_
-
 #pragma once
 
+#include <AudioToolbox/AudioToolbox.h>
 #include <AudioUnit/AudioUnit.h>
 
+#include <atomic>
+
 #include "xenia/apu/audio_driver.h"
-#include "xenia/apu/audio_system.h"
+#include "coreaudio_ring_buffer.h"
+#include "xenia/base/threading.h"
 
 namespace xe {
 namespace apu {
 namespace coreaudio {
 
-class AudioTimingController {
- public:
-  AudioTimingController() = default;
-  ~AudioTimingController() = default;
-  
- private:
-  // Add timing-related members as needed
-};
-
 class CoreAudioDriver : public AudioDriver {
  public:
-  CoreAudioDriver(Memory* memory);
+  CoreAudioDriver(Memory* memory, xe::threading::Semaphore* semaphore);
   ~CoreAudioDriver() override;
 
   bool Initialize() override;
   void Shutdown() override;
+
   void SubmitFrame(float* samples) override;
-  
-  // Add these three methods:
+
   void Pause() override;
   void Resume() override;
+
   void SetVolume(float volume) override;
 
-  void SetAudioSystem(AudioSystem* system);
+ private:
+  static OSStatus RenderCallback(
+      void* inRefCon,
+      AudioUnitRenderActionFlags* ioActionFlags,
+      const AudioTimeStamp* inTimeStamp,
+      UInt32 inBusNumber,
+      UInt32 inNumberFrames,
+      AudioBufferList* ioData);
 
-  double GetLatencyMs() const;
+  void MixFrame(float* input, float* output);
 
  private:
-  static OSStatus RenderCallback(void* inRefCon,
-                                 AudioUnitRenderActionFlags* ioActionFlags,
-                                 const AudioTimeStamp* inTimeStamp,
-                                 UInt32 inBusNumber, UInt32 inNumberFrames,
-                                 AudioBufferList* ioData);
+  Memory* memory_;
+  xe::threading::Semaphore* semaphore_;
 
- private:
   AudioUnit audio_unit_ = nullptr;
 
-  AudioSystem* audio_system_ = nullptr;
+  RingBuffer ring_buffer_{48000 * 2};
 
-  AudioTimingController timing_;
+  std::atomic<float> volume_{1.0f};
+
+  std::atomic<int> starvation_count_{0};
 };
 
-
-}  // namespace coreaudio
-}  // namespace apu
-}  // namespace xe
-#endif  // XENIA_APU_COREAUDIO_COREAUDIO_AUDIO_DRIVER_H_
+}  
+}  
+}

@@ -10,7 +10,6 @@ project("xenia-apu-coreaudio")
       "xenia-apu",
       "xenia-base",
       "AudioToolbox.framework",
-      "CoreAudio.framework",
       "AVFoundation.framework",
       "AudioUnit.framework"
   }) 
