@@ -3,7 +3,7 @@
 
 #pragma once
 
-#import <AudioUnit/AudioUnit.h>
+#include <AudioUnit/AudioUnit.h>
 
 #include "xenia/apu/audio_driver.h"
 #include "xenia/apu/audio_system.h"
@@ -12,6 +12,15 @@ namespace xe {
 namespace apu {
 namespace coreaudio {
 
+class AudioTimingController {
+ public:
+  AudioTimingController() = default;
+  ~AudioTimingController() = default;
+  
+ private:
+  // Add timing-related members as needed
+};
+
 class CoreAudioDriver : public AudioDriver {
  public:
   CoreAudioDriver(Memory* memory);
@@ -19,6 +28,7 @@ class CoreAudioDriver : public AudioDriver {
 
   bool Initialize() override;
   void Shutdown() override;
+  void SubmitFrame(float* samples) override;
 
   void SetAudioSystem(AudioSystem* system);
 
