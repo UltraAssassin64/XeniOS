@@ -27,8 +27,11 @@ struct XMA_CONTEXT_DATA;
 
 class XmaDecoder {
  public:
-  explicit XmaDecoder(cpu::Processor* processor);
+  XmaDecoder(cpu::Processor* processor, kernel::KernelState* kernel_state);
   ~XmaDecoder();
+
+  // Setup with kernel state validation
+  void Setup(kernel::KernelState* kernel_state);
 
   Memory* memory() const { return memory_; }
   cpu::Processor* processor() const { return processor_; }
@@ -75,6 +78,8 @@ class XmaDecoder {
  protected:
   Memory* memory_ = nullptr;
   cpu::Processor* processor_ = nullptr;
+  kernel::KernelState* kernel_state_ = nullptr;
+  AudioSystem* audio_system_ = nullptr;
 
   std::atomic<bool> worker_running_ = {false};
   kernel::object_ref<kernel::XHostThread> worker_thread_;

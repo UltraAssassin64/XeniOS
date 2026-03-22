@@ -15,18 +15,21 @@ namespace coreaudio {
 
 class CoreAudioDriver : public AudioDriver {
  public:
-  CoreAudioDriver(Memory* memory, xe::threading::Semaphore* semaphore);
+  CoreAudioDriver(Memory* memory);
   ~CoreAudioDriver() override;
 
   bool Initialize() override;
   void Shutdown() override;
-
   void SubmitFrame(float* samples) override;
-
   void Pause() override;
   void Resume() override;
-
   void SetVolume(float volume) override;
+
+  void SetAudioSystem(AudioSystem* system) { audio_system_ = system; }
+
+  AudioSystem* audio_system() const { return audio_system_; }
+
+  double GetLatencyMs() const;
 
  private:
   static OSStatus RenderCallback(void* inRefCon,
@@ -35,19 +38,11 @@ class CoreAudioDriver : public AudioDriver {
                                  UInt32 inBusNumber, UInt32 inNumberFrames,
                                  AudioBufferList* ioData);
 
-  void MixFrame(float* input, float* output);
-
  private:
-  Memory* memory_;
-  xe::threading::Semaphore* semaphore_;
-
+  Memory* memory_ = nullptr;
   AudioUnit audio_unit_ = nullptr;
-
-  RingBuffer ring_buffer_{48000 * 2};
-
-  std::atomic<float> volume_{1.0f};
-
-  std::atomic<int> starvation_count_{0};
+  AudioSystem* audio_system_ = nullptr;
+  AudioTimingController timing_;
 };
 
 }  // namespace coreaudio

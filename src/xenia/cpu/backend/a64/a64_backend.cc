@@ -376,6 +376,13 @@ bool A64Backend::Initialize(Processor* processor) {
 void A64Backend::CommitExecutableRange(uint32_t guest_low,
                                        uint32_t guest_high) {
   code_cache_->CommitExecutableRange(guest_low, guest_high);
+// Add: Check for iOS-specific issues
+#if XE_PLATFORM_IOS
+  if (!code_cache_->ContainsRange(guest_low, guest_high)) {
+    XELOGE("A64Backend: Failed to commit range 0x%08X-0x%08X", guest_low,
+           guest_high);
+  }
+#endif
 }
 
 std::unique_ptr<Assembler> A64Backend::CreateAssembler() {

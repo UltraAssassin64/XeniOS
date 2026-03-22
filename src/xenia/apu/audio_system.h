@@ -31,11 +31,19 @@ class XmaDecoder;
 
 class AudioSystem {
  public:
+  explicit AudioSystem(cpu::Processor* processor);
+  virtual ~AudioSystem();
+
+  // Add: Store kernel state reference
+  void SetKernelState(kernel::KernelState* kernel_state) {
+    kernel_state_ = kernel_state;
+  }
+
+  kernel::KernelState* kernel_state() const { return kernel_state_; }
+
   // TODO(gibbed): respect XAUDIO2_MAX_QUEUED_BUFFERS somehow (ie min(64,
   // XAUDIO2_MAX_QUEUED_BUFFERS))
   static constexpr size_t kMaximumQueuedFrames = 64;
-
-  virtual ~AudioSystem();
 
   virtual std::string name() const = 0;
 
@@ -72,7 +80,7 @@ class AudioSystem {
   void Resume();
 
  protected:
-  explicit AudioSystem(cpu::Processor* processor);
+  kernel::KernelState* kernel_state_ = nullptr;
 
   virtual void Initialize();
 

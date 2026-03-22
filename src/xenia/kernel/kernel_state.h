@@ -395,7 +395,17 @@ class KernelState {
   std::unordered_map<XObject::Type, uint32_t>
       host_object_type_enum_to_guest_object_type_ptr_;
   uint32_t GetKernelGuestGlobals() const { return kernel_guest_globals_; }
-};
+  apu::AudioSystem* audio_system() const { return audio_system_; }
+
+  void set_audio_system(apu::AudioSystem* system) {
+    audio_system_ = system;
+    if (audio_system_) {
+      audio_system_->SetKernelState(this);
+    }
+  }
+
+ private:
+  apu::AudioSystem* audio_system_ = nullptr;
 
 }  // namespace kernel
 }  // namespace xe

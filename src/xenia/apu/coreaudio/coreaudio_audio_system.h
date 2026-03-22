@@ -9,11 +9,9 @@ namespace coreaudio {
 class CoreAudioAudioSystem : public AudioSystem {
  public:
   explicit CoreAudioAudioSystem(cpu::Processor* processor);
+  ~CoreAudioAudioSystem() override;
 
-  static std::unique_ptr<AudioSystem> Create(cpu::Processor* processor);
-
-  std::string name() const override { return "CoreAudio"; }
-
+  // Ensure kernel state is set before operations
   void Initialize() override;
 
   AudioDriver* CreateDriver(xe::threading::Semaphore* semaphore,

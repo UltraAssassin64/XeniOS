@@ -8,6 +8,8 @@
  */
 
 #include "xenia/apu/xma_decoder.h"
+#include "xenia/apu/audio_system.h"
+#include "xenia/kernel/kernel_state.h"
 
 #include "xenia/apu/xma_context.h"
 #include "xenia/apu/xma_context_fake.h"
@@ -94,10 +96,23 @@ UPDATE_from_string(xma_decoder, 2026, 2, 16, 12, "old");
 namespace xe {
 namespace apu {
 
-XmaDecoder::XmaDecoder(cpu::Processor* processor)
-    : memory_(processor->memory()), processor_(processor) {}
+XmaDecoder::XmaDecoder(cpu::Processor* processor,
+                       kernel::KernelState* kernel_state)
+    : processor_(processor),
+      kernel_state_(kernel_state),
+      audio_system_(nullptr) {
+  if (!processor_) {
+    XELOGE("XmaDecoder constructed with null processor");
+  }
+  if (!kernel_state_) {
+    XELOGE("XmaDecoder constructed with null kernel_state");
+  }
+}
 
-XmaDecoder::~XmaDecoder() = default;
+XmaDecoder::~XmaDecoder() {
+  kernel_state_ = nullptr;
+  audio_system_ = nullptr;
+}
 
 void av_log_callback(void* avcl, int level, const char* fmt, va_list va) {
   if (!cvars::ffmpeg_verbose && level > AV_LOG_WARNING) {
@@ -146,6 +161,27 @@ void av_log_callback(void* avcl, int level, const char* fmt, va_list va) {
 }
 
 X_STATUS XmaDecoder::Setup(kernel::KernelState* kernel_state) {
+  // Validate input
+  if (!kernel_state) {
+    XELOGE("XmaDecoder::Setup: kernel_state is null");
+    return;
+  }
+
+  // Update stored kernel state
+  kernel_state_ = kernel_state;
+
+  // Get audio system from kernel state
+  audio_system_ = kernel_state_->audio_system();
+  if (!audio_system_) {
+    XELOGE("XmaDecoder::Setup: audio_system is null from kernel_state");
+    return;
+  }
+
+  // Ensure audio system has kernel state reference
+  audio_system_->SetKernelState(kernel_state_);
+
+  XELOGI("XmaDecoder::Setup completed successfully");
+
   // Setup ffmpeg logging callback
   av_log_set_callback(av_log_callback);
 
