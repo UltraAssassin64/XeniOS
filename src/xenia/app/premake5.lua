@@ -463,7 +463,7 @@ project("xenia-app")
       ["MACOSX_DEPLOYMENT_TARGET"] = "15.0",
       ["PRODUCT_NAME"] = "XeniOS",
       ["EXECUTABLE_NAME"] = "xenios",
-      ["PRODUCT_BUNDLE_IDENTIFIER"] = "com.UltraAssassin64.xenios.ios",
+      ["PRODUCT_BUNDLE_IDENTIFIER"] = "com.UltraAssassin64.xenios.macos",
       ["ASSETCATALOG_COMPILER_APPICON_NAME"] = "AppIcon",
       ["CODE_SIGN_STYLE"] = "Automatic",
       ["CODE_SIGN_ENTITLEMENTS"] = entitlements_path,
