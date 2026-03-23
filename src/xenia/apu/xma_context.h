@@ -221,12 +221,8 @@ class XmaContext {
 
   uint32_t id() { return id_; }
   uint32_t guest_ptr() { return guest_ptr_; }
-  bool is_allocated() const {
-    return is_allocated_.load(std::memory_order_acquire);
-  }
-  bool is_enabled() const {
-    return is_enabled_.load(std::memory_order_acquire);
-  }
+  bool is_allocated() { return is_allocated_.load(std::memory_order_acquire); }
+  bool is_enabled() { return is_enabled_.load(std::memory_order_acquire); }
 
   void set_is_allocated(bool is_allocated) {
     is_allocated_.store(is_allocated, std::memory_order_release);

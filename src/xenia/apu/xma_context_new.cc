@@ -142,9 +142,17 @@ bool XmaContextNew::Work() {
     return true;
   }
 
+  // Minimum free blocks needed before attempting a decode.
+  // Use the number of subframes Consume() will actually write per iteration
+  // (= subframe_decode_count, clamped to 1) plus any headroom requested by
+  // output_buffer_padding.  Using a full-frame worth of space (the old
+  // formula) was far too restrictive: games like TGM Ace use
+  // subframe_decode_count=2 on a small ring buffer and never had 8 free
+  // blocks available, causing the decoder to permanently stall.
+  const uint32_t effective_sdc =
+      std::max(static_cast<uint32_t>(1), data.subframe_decode_count);
   const int32_t minimum_subframe_decode_count =
-      ((kBytesPerFrameChannel / kOutputBytesPerBlock) << data.is_stereo) +
-      data.output_buffer_padding;
+      static_cast<int32_t>(effective_sdc) + data.output_buffer_padding;
 
   // We don't have enough space to even make one pass
   // Waiting for decoder to return more space.
@@ -854,8 +862,6 @@ bool XmaContextNew::DecodePacket(AVCodecContext* av_context,
 
   if (ret == AVERROR(EAGAIN)) {
     // Codec needs more input before producing output (e.g. first frame warmup).
-    XELOGAPU("XmaContext {}: EAGAIN - codec needs more input (warmup frame)",
-             id());
     return false;
   }
   if (ret < 0) {

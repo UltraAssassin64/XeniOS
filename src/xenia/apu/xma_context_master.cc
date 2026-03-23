@@ -148,7 +148,7 @@ void XmaContextMaster::Disable() {
 void XmaContextMaster::Release() {
   // Lock it in case the decoder thread is working on it now.
   std::lock_guard<xe_mutex> lock(lock_);
-  assert_true(is_allocated());
+  assert_true(is_allocated_ == true);
 
   set_is_allocated(false);
   auto context_ptr = memory()->TranslateVirtual(guest_ptr());

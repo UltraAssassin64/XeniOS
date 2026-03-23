@@ -35,27 +35,17 @@ static void _generic_sequential_6_BE_to_interleaved_6_LE(
     }
   }
 }
-#if XE_PLATFORM_WIN32 && XE_COMPILER_CLANG_CL != 1
+#if XE_COMPILER_CLANG_CL != 1 && !XE_PLATFORM_LINUX
 // load_be_u32 unavailable on clang-cl
 XE_NOINLINE
 static void _movbe_sequential_6_BE_to_interleaved_6_LE(
     float* XE_RESTRICT output, const float* XE_RESTRICT input,
     unsigned ch_sample_count) {
-  auto load_be_u32 = [](const void* ptr) -> uint32_t {
-#if XE_PLATFORM_MAC
-#if defined(__MOVBE__)
-    return static_cast<uint32_t>(_loadbe_i32(ptr));
-#else
-    return xe::byte_swap(*reinterpret_cast<const uint32_t*>(ptr));
-#endif
-#else
-    return _load_be_u32(reinterpret_cast<const unsigned int*>(ptr));
-#endif
-  };
   for (unsigned sample = 0; sample < ch_sample_count; sample++) {
     for (unsigned channel = 0; channel < 6; channel++) {
       *reinterpret_cast<unsigned int*>(&output[sample * 6 + channel]) =
-          load_be_u32(&input[channel * ch_sample_count + sample]);
+          _load_be_u32(reinterpret_cast<const unsigned int*>(
+              &input[channel * ch_sample_count + sample]));
     }
   }
 }
@@ -135,8 +125,8 @@ inline void sequential_6_BE_to_interleaved_2_LE(float* output,
     float fl = xe::byte_swap(input[0 * ch_sample_count + sample]);
     float fr = xe::byte_swap(input[1 * ch_sample_count + sample]);
     float fc = xe::byte_swap(input[2 * ch_sample_count + sample]);
-    float bl = xe::byte_swap(input[4 * ch_sample_count + sample]);
-    float br = xe::byte_swap(input[5 * ch_sample_count + sample]);
+    float br = xe::byte_swap(input[4 * ch_sample_count + sample]);
+    float bl = xe::byte_swap(input[5 * ch_sample_count + sample]);
     float center_halved = fc * 0.5f;
     output[sample * 2] = (fl + bl + center_halved) * (1.0f / 2.5f);
     output[sample * 2 + 1] = (fr + br + center_halved) * (1.0f / 2.5f);

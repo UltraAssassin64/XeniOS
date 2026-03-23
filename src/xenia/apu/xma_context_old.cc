@@ -155,7 +155,7 @@ void XmaContextOld::Disable() {
 void XmaContextOld::Release() {
   // Lock it in case the decoder thread is working on it now.
   std::lock_guard<xe_mutex> lock(lock_);
-  assert_true(is_allocated());
+  assert_true(is_allocated_ == true);
 
   set_is_allocated(false);
   auto context_ptr = memory()->TranslateVirtual(guest_ptr());
@@ -505,8 +505,9 @@ void XmaContextOld::Decode(XMA_CONTEXT_DATA* data) {
         if (offset == -1) {
           // No more frames.
           SwapInputBuffer(data);
-          XELOGE("XmaContext {}: no more frames in packet stream", id());
-          data->parser_error_status = 4;
+          // TODO partial frames? end?
+          XELOGE("XmaContext {}: TODO partial frames? end?", id());
+          assert_always("TODO");
           return;
         } else {
           data->input_buffer_read_offset = offset;
@@ -620,9 +621,8 @@ void XmaContextOld::Decode(XMA_CONTEXT_DATA* data) {
     auto ret = avcodec_send_packet(av_context_, av_packet_);
     if (ret < 0) {
       XELOGE("XmaContext {}: Error - Sending packet for decoding failed", id());
-      data->parser_error_status = 4;
-      SwapInputBuffer(data);
-      return;
+      // TODO bail out
+      assert_always();
     }
     ret = avcodec_receive_frame(av_context_, av_frame_);
     if (ret == AVERROR(EAGAIN)) {
@@ -726,23 +726,8 @@ void XmaContextOld::Decode(XMA_CONTEXT_DATA* data) {
         offset =
             xma::GetPacketFrameOffset(packet) + packet_idx * kBitsPerPacket;
       }
-      // Some streams can report a non-advancing or out-of-range next frame
-      // offset. Treat this as a parser error and recover instead of aborting.
-      if (offset <= data->input_buffer_read_offset ||
-          offset > current_input_size * 8) {
-        XELOGAPU(
-            "XmaContext {}: invalid next frame offset {} (current={}, "
-            "buffer_bits={})",
-            id(), offset, data->input_buffer_read_offset,
-            current_input_size * 8);
-        data->parser_error_status = 4;
-        if (is_streaming) {
-          SwapInputBuffer(data);
-        } else {
-          is_stream_done_ = true;
-        }
-        break;
-      }
+      // TODO buffer bounds check
+      assert_true(data->input_buffer_read_offset < offset);
       data->input_buffer_read_offset = offset;
     }
   }
