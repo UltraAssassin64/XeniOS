@@ -1530,7 +1530,7 @@ class BaseBuildCommand(Command):
             else:
                 schemes = args["target"] or ["xenia-app"]
             result = 0
-            extra_arch_args = []
+            extra_arch_args = [$(inherited)]
             if arch and "-arch" not in pass_args:
                 extra_arch_args = ["-arch", arch]
             # iOS cross-compilation flags
