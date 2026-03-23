@@ -10377,7 +10377,8 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
                     }
                  });
   return YES;
-
+}
+    
 - (void)evaluateAutomaticStikDebugJITHandoffIfNeeded {
   [self requestAutomaticStikDebugJITHandoffForPendingLaunchPath:nullptr];
   }
