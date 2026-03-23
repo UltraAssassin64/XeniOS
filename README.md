@@ -20,6 +20,7 @@ Please understand that this particular fork and its branches are NOT the officia
 with the official release, and at any point in time, could be archived, deprecated, or abandoned,
 with no prior warning. If you have any messages or concerns, please find me at my [GitHub](https://github.com/UltraAssassin64).
 <p align="center">
+  <a>Official XeniOS Links:</a>
   <a href="https://xenios.jp">Website</a> ◦
   <a href="https://github.com/xenios-jp/XeniOS/releases">Releases</a> ◦
   <a href="https://xenios.jp/docs">Docs</a> ◦
