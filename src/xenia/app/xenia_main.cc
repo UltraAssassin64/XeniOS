@@ -40,9 +40,6 @@
 #if XE_PLATFORM_LINUX
 #include "xenia/apu/alsa/alsa_audio_system.h"
 #endif  // XE_PLATFORM_LINUX
-#if XE_PLATFORM_IOS
-#include "xenia/apu/coreaudio/coreaudio_audio_system.h"
-#endif  // XE_PLATFORM_IOS
 #if !XE_PLATFORM_ANDROID
 #include "xenia/apu/sdl/sdl_audio_system.h"
 #endif  // !XE_PLATFORM_ANDROID
@@ -87,13 +84,9 @@ DEFINE_string(apu, "alsa", "Audio system. Use: " APU_OPTIONS, "APU");
 DEFINE_string(gpu, "vulkan", "Graphics system. Use: " GPU_OPTIONS, "GPU");
 DEFINE_string(hid, "sdl", "Input system. Use: " HID_OPTIONS, "HID");
 #else
-#define APU_OPTIONS "[coreaudio, sdl, nop]"
+#define APU_OPTIONS "[sdl, nop]"
 #define HID_OPTIONS "[sdl, nop]"
-#if XE_PLATFORM_APPLE
-DEFINE_string(apu, "coreaudio", "Audio system. Use: " APU_OPTIONS, "APU");
-#else
-DEFINE_string(apu, "coreaudio", "Audio system. Use: " APU_OPTIONS, "APU");
-#endif
+DEFINE_string(apu, "sdl", "Audio system. Use: " APU_OPTIONS, "APU");
 #if XE_PLATFORM_APPLE
 DEFINE_string(gpu, "metal", "Graphics system. Use: [metal, null]", "GPU");
 #else
@@ -392,8 +385,6 @@ std::unique_ptr<apu::AudioSystem> EmulatorApp::CreateAudioSystem(
 #if XE_PLATFORM_WIN32
   factory.Add<apu::xaudio2::XAudio2AudioSystem>("xaudio2");
 #endif  // XE_PLATFORM_WIN32
-#if XE_PLATFORM_IOS
-  factory.Add<apu::CoreAudioAudioSystem>("coreaudio");
 #if XE_PLATFORM_LINUX
   factory.Add<apu::alsa::ALSAAudioSystem>("alsa");
 #endif  // XE_PLATFORM_LINUX
@@ -554,32 +545,6 @@ std::vector<std::unique_ptr<hid::InputDriver>> EmulatorApp::CreateInputDrivers(
 bool EmulatorApp::OnInitialize() {
   Profiler::Initialize();
   Profiler::ThreadEnter("Main");
-
-#if XE_PLATFORM_IOS
-  @autoreleasepool {
-    NSError* error = nil;
-    AVAudioSession* session = [AVAudioSession sharedInstance];
-
-    [session setCategory:AVAudioSessionCategoryPlayback error:&error];
-    if (error) {
-      XELOGW("iOS: Failed to set AVAudioSession category");
-    }
-
-    error = nil;
-    [session setPreferredSampleRate:48000 error:&error];
-    if (error) {
-      XELOGW("iOS: Failed to set preferred sample rate");
-    }
-
-    error = nil;
-    [session setActive:YES error:&error];
-    if (error) {
-      XELOGW("iOS: Failed to activate AVAudioSession");
-    }
-
-    XELOGI("iOS: AVAudioSession initialized");
-  }
-#endif
 
   // Figure out where internal files and content should go.
   std::filesystem::path storage_root = cvars::storage_root;

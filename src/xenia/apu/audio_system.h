@@ -13,7 +13,6 @@
 #include <atomic>
 #include <queue>
 
-#include "xenia/base/byte_stream.h"
 #include "xenia/base/mutex.h"
 #include "xenia/base/threading.h"
 #include "xenia/cpu/processor.h"
@@ -31,19 +30,11 @@ class XmaDecoder;
 
 class AudioSystem {
  public:
-  explicit AudioSystem(cpu::Processor* processor);
-  virtual ~AudioSystem();
-
-  // Add: Store kernel state reference
-  void SetKernelState(kernel::KernelState* kernel_state) {
-    kernel_state_ = kernel_state;
-  }
-
-  kernel::KernelState* kernel_state() const { return kernel_state_; }
-
   // TODO(gibbed): respect XAUDIO2_MAX_QUEUED_BUFFERS somehow (ie min(64,
   // XAUDIO2_MAX_QUEUED_BUFFERS))
   static constexpr size_t kMaximumQueuedFrames = 64;
+
+  virtual ~AudioSystem();
 
   virtual std::string name() const = 0;
 
@@ -80,7 +71,7 @@ class AudioSystem {
   void Resume();
 
  protected:
-  kernel::KernelState* kernel_state_ = nullptr;
+  explicit AudioSystem(cpu::Processor* processor);
 
   virtual void Initialize();
 
@@ -121,8 +112,8 @@ class AudioSystem {
   xe::threading::WaitHandle* wait_handles_[kMaximumClientCount + 1];
 
   std::atomic<bool> paused_ = false;
-  xe::threading::Fence pause_fence_;
-  std::unique_ptr<xe::threading::Event> resume_event_;
+  threading::Fence pause_fence_;
+  std::unique_ptr<threading::Event> resume_event_;
 };
 
 }  // namespace apu

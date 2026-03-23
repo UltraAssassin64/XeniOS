@@ -46,13 +46,32 @@ namespace xe {
 namespace apu {
 
 AudioSystem::AudioSystem(cpu::Processor* processor)
-    : processor_(processor), kernel_state_(nullptr) {
-  XELOGI("AudioSystem created");
+    : memory_(processor->memory()),
+      processor_(processor),
+      worker_running_(false) {
+  std::memset(clients_, 0, sizeof(clients_));
+  queued_frames_ = std::min(
+      static_cast<uint32_t>(kMaximumQueuedFrames),
+      std::max(cvars::apu_max_queued_frames, static_cast<uint32_t>(4)));
+
+  for (size_t i = 0; i < kMaximumClientCount; ++i) {
+    client_semaphores_[i] = xe::threading::Semaphore::Create(0, queued_frames_);
+    wait_handles_[i] = client_semaphores_[i].get();
+  }
+  shutdown_event_ = xe::threading::Event::CreateAutoResetEvent(false);
+  assert_not_null(shutdown_event_);
+  wait_handles_[kMaximumClientCount] = shutdown_event_.get();
+
+  xma_decoder_ = std::make_unique<xe::apu::XmaDecoder>(processor_);
+
+  resume_event_ = xe::threading::Event::CreateAutoResetEvent(false);
+  assert_not_null(resume_event_);
 }
 
 AudioSystem::~AudioSystem() {
-  kernel_state_ = nullptr;
-  XELOGI("AudioSystem destroyed");
+  if (xma_decoder_) {
+    xma_decoder_->Shutdown();
+  }
 }
 
 X_STATUS AudioSystem::Setup(kernel::KernelState* kernel_state) {

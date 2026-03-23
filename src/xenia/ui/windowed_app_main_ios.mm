@@ -10,50 +10,8 @@
 #import <GameController/GameController.h>
 #import <MetalKit/MetalKit.h>
 #import <PhotosUI/PhotosUI.h>
-#import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
-
-// ---------------------------------------------------------------------------
-// Configure iOS audio session for emulator playback.
-// ---------------------------------------------------------------------------
-static void SetupIOSAudioSession() {
-  AVAudioSession* session = [AVAudioSession sharedInstance];
-
-  NSError* error = nil;
-
-  // Playback category allows sound even with silent switch enabled
-  [session setCategory:AVAudioSessionCategoryPlayback
-           withOptions:AVAudioSessionCategoryOptionMixWithOthers
-                 error:&error];
-
-  if (error) {
-    NSLog(@"Xenia iOS: Failed to set AVAudioSession category: %@", error);
-  }
-
-  // Match emulator sample rate
-  [session setPreferredSampleRate:48000 error:&error];
-
-  if (error) {
-    NSLog(@"Xenia iOS: Failed to set preferred sample rate: %@", error);
-  }
-
-  // Lower latency for emulation audio
-  [session setPreferredIOBufferDuration:0.005 error:&error];
-
-  if (error) {
-    NSLog(@"Xenia iOS: Failed to set IO buffer duration: %@", error);
-  }
-
-  // Activate audio session
-  [session setActive:YES error:&error];
-
-  if (error) {
-    NSLog(@"Xenia iOS: Failed to activate AVAudioSession: %@", error);
-  }
-
-  NSLog(@"Xenia iOS: AVAudioSession initialized");
-}
 
 #include <TargetConditionals.h>
 #include <sys/mman.h>
@@ -11569,7 +11527,6 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 int main(int argc, char* argv[]) {
   NSLog(@"iOS: skipping ptrace/debugger JIT setup; using normal W^X app flow.");
   @autoreleasepool {
-    SetupIOSAudioSession();
     return UIApplicationMain(argc, argv, nil,
                              NSStringFromClass([XeniaAppDelegate class]));
   }

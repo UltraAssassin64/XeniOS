@@ -79,7 +79,7 @@ trim_string() {
 }
 
 default_marketing_version() {
-  printf '%s' "1.2.1"
+  printf '%s' "0.9.3"
 }
 
 validate_marketing_version() {
