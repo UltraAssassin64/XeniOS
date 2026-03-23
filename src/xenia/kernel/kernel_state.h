@@ -24,6 +24,7 @@
 #include "xenia/kernel/util/kernel_fwd.h"
 #include "xenia/kernel/util/native_list.h"
 #include "xenia/kernel/util/object_table.h"
+#include "xenia/kernel/util/xmp_volume_patch.h"
 #include "xenia/kernel/xam/achievement_manager.h"
 #include "xenia/kernel/xam/app_manager.h"
 #include "xenia/kernel/xam/content_manager.h"
@@ -79,7 +80,7 @@ struct X_KPROCESS {
   uint8_t is_terminating;
   // one of X_PROCTYPE_
   uint8_t process_type;
-  xe::be<uint32_t> tls_slot_bitmap[8];
+  xe::be<uint32_t> bitmap[8];
   xe::be<uint32_t> unk_50;
   X_LIST_ENTRY unk_54;
   xe::be<uint32_t> unk_5C;
@@ -139,7 +140,6 @@ struct KernelGuestGlobals {
   // this lock is only used in some Ob functions. It's odd that it is used at
   // all, as each table already has its own spinlock.
   X_KSPINLOCK ob_lock;
-  X_KSPINLOCK tls_lock;  // protects per-process TLS bitmap allocations
 
   // if LLE emulating Xam, this is needed or you get an immediate freeze
   X_KEVENT UsbdBootEnumerationDoneEvent;
@@ -197,6 +197,9 @@ class KernelState {
     return xam_state()->content_manager();
   }
 
+  XmpVolumePatch* xmp_volume_patch() const { return xmp_volume_patch_.get(); }
+  void InitXmpVolumePatch();
+
   std::bitset<4> GetConnectedUsers() const;
 
   // Access must be guarded by the global critical region.
@@ -216,8 +219,8 @@ class KernelState {
     return kernel_guest_globals_ + offsetof(KernelGuestGlobals, idle_process);
   }
 
-  uint32_t AllocateTLS(cpu::ppc::PPCContext* context);
-  void FreeTLS(cpu::ppc::PPCContext* context, uint32_t slot);
+  uint32_t AllocateTLS();
+  void FreeTLS(uint32_t slot);
 
   void RegisterTitleTerminateNotification(uint32_t routine, uint32_t priority);
   void RemoveTitleTerminateNotification(uint32_t routine);
@@ -261,10 +264,6 @@ class KernelState {
   // Terminates a title: Unloads all modules, and kills all guest threads.
   // This DOES NOT RETURN if called from a guest thread!
   void TerminateTitle();
-
-  // Gracefully stops the dispatch thread. Call before force-terminating
-  // threads to avoid corrupting the CV it's blocked on.
-  void ShutdownDispatchThread();
 
   void RegisterThread(XThread* thread);
   void UnregisterThread(XThread* thread);
@@ -356,6 +355,7 @@ class KernelState {
   vfs::VirtualFileSystem* file_system_;
   std::unique_ptr<xam::XamState> xam_state_;
   std::unique_ptr<SystemManagementController> smc_;
+  std::unique_ptr<XmpVolumePatch> xmp_volume_patch_;
 
   KernelVersion kernel_version_;
 
@@ -381,6 +381,7 @@ class KernelState {
   std::condition_variable_any dispatch_cond_;
   std::list<std::function<void()>> dispatch_queue_;
 
+  BitMap tls_bitmap_;
   uint32_t ke_timestamp_bundle_ptr_ = 0;
   std::unique_ptr<xe::threading::HighResolutionTimer> timestamp_timer_;
   cpu::backend::GuestTrampolineGroup kernel_trampoline_group_;

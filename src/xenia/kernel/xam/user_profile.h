@@ -20,7 +20,6 @@
 #include "xenia/kernel/xam/xam.h"
 #include "xenia/kernel/xam/xdbf/gpd_info_profile.h"
 #include "xenia/kernel/xam/xdbf/gpd_info_title.h"
-#include "xenia/kernel/xam/xdbf/xdbf_io.h"
 
 namespace xe {
 namespace kernel {
@@ -124,22 +123,17 @@ class UserProfile {
   bool IsLiveEnabled() const { return account_info_.IsLiveEnabled(); }
 
   std::span<const uint8_t> GetProfileIcon(XTileType icon_type) {
-    // First check if the requested type exists
-    if (profile_images_.find(icon_type) != profile_images_.cend()) {
-      return {profile_images_[icon_type].data(),
-              profile_images_[icon_type].size()};
-    }
-
-    // If personal/local tile requested but not found, fall back to regular tile
+    // Overwrite same types?
     if (icon_type == XTileType::kPersonalGamerTile ||
         icon_type == XTileType::kLocalGamerTile) {
       icon_type = XTileType::kGamerTile;
-    } else if (icon_type == XTileType::kPersonalGamerTileSmall ||
-               icon_type == XTileType::kLocalGamerTileSmall) {
+    }
+
+    if (icon_type == XTileType::kPersonalGamerTileSmall ||
+        icon_type == XTileType::kLocalGamerTileSmall) {
       icon_type = XTileType::kGamerTileSmall;
     }
 
-    // Try again with the fallback type
     if (profile_images_.find(icon_type) == profile_images_.cend()) {
       return {};
     }
@@ -153,65 +147,8 @@ class UserProfile {
                 sizeof(account_info_.passcode));
   };
 
-  // Public accessor for dashboard GPD (for getting title paths)
-  const GpdInfoProfile& dashboard_gpd() const { return dashboard_gpd_; }
-
-  // Helper for setting disc labels
-  void SetDiscLabel(uint32_t title_id, const std::filesystem::path& path,
-                    const std::string& label) {
-    dashboard_gpd_.SetDiscLabel(title_id, path, label);
-    WriteGpd(kDashboardID);
-  }
-
-  // Helper for removing disc paths
-  void RemoveDiscPath(uint32_t title_id, const std::filesystem::path& path) {
-    dashboard_gpd_.RemoveDiscPath(title_id, path);
-    WriteGpd(kDashboardID);
-  }
-
-  // Public accessor for getting title icon from title GPD
-  std::vector<uint8_t> GetTitleIcon(uint32_t title_id) const {
-    const GpdInfo* gpd = GetGpd(title_id);
-    if (!gpd) {
-      return {};
-    }
-    auto icon_data = gpd->GetImage(kXdbfIdTitle);
-    return std::vector<uint8_t>(icon_data.begin(), icon_data.end());
-  }
-
-  // Public accessor for getting achievement stats from title GPD
-  struct TitleAchievementStats {
-    uint32_t achievements_total = 0;
-    uint32_t achievements_unlocked = 0;
-    uint32_t gamerscore_total = 0;
-    uint32_t gamerscore_earned = 0;
-  };
-
-  TitleAchievementStats GetTitleAchievementStats(uint32_t title_id) const {
-    TitleAchievementStats stats;
-
-    // Get the GPD for this title
-    auto it = games_gpd_.find(title_id);
-    if (it == games_gpd_.end()) {
-      return stats;
-    }
-
-    const GpdInfoTitle& title_gpd = it->second;
-    if (!title_gpd.IsValid()) {
-      return stats;
-    }
-
-    stats.achievements_total = title_gpd.GetAchievementCount();
-    stats.achievements_unlocked = title_gpd.GetUnlockedAchievementCount();
-    stats.gamerscore_total = title_gpd.GetTotalGamerscore();
-    stats.gamerscore_earned = title_gpd.GetGamerscore();
-
-    return stats;
-  }
-
   friend class UserTracker;
   friend class GpdAchievementBackend;
-  friend class ProfileManager;
 
  private:
   uint64_t xuid_;

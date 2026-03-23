@@ -20,12 +20,8 @@
 
 #include "third_party/stb/stb_image.h"
 
-#include "xenia/kernel/xboxkrnl/xboxkrnl_xconfig.h"
-
-DECLARE_string(user_language);
-DECLARE_string(user_country);
-
-enum X_USER_AGE_GROUP : uint32_t { CHILD, TEEN, ADULT };
+DECLARE_int32(user_language);
+DECLARE_int32(user_country);
 
 namespace xe {
 namespace kernel {
@@ -411,15 +407,30 @@ DECLARE_XAM_EXPORT1(XamUserWriteProfileSettings, kUserProfiles, kImplemented);
 
 dword_result_t XamUserCheckPrivilege_entry(dword_t user_index, dword_t mask,
                                            lpdword_t out_value) {
-  // checking all users?
-  if (user_index != XUserIndexAny) {
-    if (user_index >= XUserMaxUserCount) {
-      return X_ERROR_INVALID_PARAMETER;
+  if (user_index == XUserIndexAny) {
+    for (uint8_t i = 0; i < XUserMaxUserCount; ++i) {
+      const auto result = XamUserCheckPrivilege_entry(i, mask, out_value);
+      if (result != X_ERROR_NO_SUCH_USER) {
+        *out_value = 0;
+        return result;
+      }
     }
+    *out_value = 0;
+    return X_ERROR_NO_SUCH_USER;
+  }
 
-    if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-      return X_ERROR_NO_SUCH_USER;
-    }
+  if (user_index >= XUserMaxUserCount) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
+    return X_ERROR_NO_SUCH_USER;
+  }
+
+  if (kernel_state()->xam_state()->GetUserProfile(user_index)->signin_state() !=
+      static_cast<uint32_t>(SignInState::SignedInToLive)) {
+    *out_value = 0;
+    return X_ERROR_NOT_LOGGED_ON;
   }
 
   // If we deny everything, games should hopefully not try to do stuff.
@@ -566,39 +577,6 @@ dword_result_t XamUserAreUsersFriends_entry(
 }
 DECLARE_XAM_EXPORT1(XamUserAreUsersFriends, kUserProfiles, kSketchy);
 
-dword_result_t XamUserGetAgeGroup_entry(
-    dword_t user_index, lpdword_t age_ptr,
-    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
-  if (!age_ptr) {
-    return X_ERROR_INVALID_PARAMETER;
-  }
-
-  if (!kernel_state()->xam_state()->IsUserSignedIn(user_index)) {
-    return X_ERROR_NO_SUCH_USER;
-  }
-
-  auto run = [user_index, age_ptr, overlapped_ptr](
-                 uint32_t& extended_error, uint32_t& length) -> X_RESULT {
-    X_RESULT result = X_ERROR_SUCCESS;
-
-    *age_ptr = X_USER_AGE_GROUP::ADULT;
-
-    extended_error = X_HRESULT_FROM_WIN32(result);
-    length = 0;
-
-    return result;
-  };
-
-  if (!overlapped_ptr) {
-    uint32_t extended_error, length;
-    return run(extended_error, length);
-  } else {
-    kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
-    return X_ERROR_IO_PENDING;
-  }
-}
-DECLARE_XAM_EXPORT1(XamUserGetAgeGroup, kUserProfiles, kImplemented);
-
 dword_result_t XamUserCreateAchievementEnumerator_entry(
     dword_t title_id, dword_t user_index, qword_t xuid, dword_t flags,
     dword_t offset, dword_t count, lpdword_t buffer_size_ptr,
@@ -617,11 +595,11 @@ dword_result_t XamUserCreateAchievementEnumerator_entry(
   }
 
   if (buffer_size_ptr) {
-    *buffer_size_ptr = static_cast<uint32_t>(entry_size) * count;
+    *buffer_size_ptr = static_cast<uint32_t>(entry_size * count);
   }
 
   auto e = object_ref<XAchievementEnumerator>(
-      new XAchievementEnumerator(kernel_state(), count, flags));
+      new XAchievementEnumerator(kernel_state(), count, offset, flags));
   auto result = e->Initialize(user_index, 0xFB, 0xB000A, 0xB000B, 0);
   if (XFAILED(result)) {
     return result;
@@ -644,15 +622,11 @@ dword_result_t XamUserCreateAchievementEnumerator_entry(
       kernel_state()->achievement_manager()->GetTitleAchievements(
           requester_xuid, title_id_);
 
-  const auto requested_achievements = user_title_achievements |
-                                      std::views::drop(offset) |
-                                      std::views::take(count);
-
-  if (requested_achievements.empty()) {
+  if (user_title_achievements.empty()) {
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  for (const auto& entry : requested_achievements) {
+  for (const auto& entry : user_title_achievements) {
     auto unlock_time = X_FILETIME();
     if (entry.IsUnlocked() && entry.unlock_time.is_valid()) {
       unlock_time = entry.unlock_time;
@@ -1017,7 +991,7 @@ DECLARE_XAM_EXPORT1(XamUserGetUserFlagsFromXUID, kUserProfiles, kImplemented);
 dword_result_t XamUserGetOnlineLanguageFromXUID_entry(qword_t xuid) {
   const auto& user = kernel_state()->xam_state()->GetUserProfile(xuid);
   if (!user) {
-    return xboxkrnl::GetUserLanguageValue();
+    return cvars::user_language;
   }
   return user->GetLanguage();
 }
@@ -1027,7 +1001,7 @@ DECLARE_XAM_EXPORT1(XamUserGetOnlineLanguageFromXUID, kUserProfiles,
 dword_result_t XamUserGetOnlineCountryFromXUID_entry(qword_t xuid) {
   const auto& user = kernel_state()->xam_state()->GetUserProfile(xuid);
   if (!user) {
-    return xboxkrnl::GetUserCountryValue();
+    return cvars::user_country;
   }
   return user->GetCountry();
 }

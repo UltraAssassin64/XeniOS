@@ -7,13 +7,9 @@
  ******************************************************************************
  */
 
-#include <thread>
-
 #include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/string_util.h"
-#include "xenia/base/utf8.h"
-#include "xenia/emulator.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/title_id_utils.h"
 #include "xenia/kernel/user_module.h"
@@ -24,9 +20,11 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_memory.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_modules.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_threading.h"
-#include "xenia/kernel/xboxkrnl/xboxkrnl_xconfig.h"
 #include "xenia/kernel/xenumerator.h"
 #include "xenia/kernel/xthread.h"
+#include "xenia/ui/imgui_dialog.h"
+#include "xenia/ui/imgui_drawer.h"
+#include "xenia/ui/window.h"
 #include "xenia/ui/windowed_app_context.h"
 #include "xenia/xbox.h"
 
@@ -45,17 +43,12 @@ DEFINE_int32(avpack, 8,
              " 7 = TV PAL-60\n"
              " 8 = HDMI (default)",
              "Video");
-DECLARE_string(user_country);
-DECLARE_string(user_language);
+DECLARE_int32(user_country);
+DECLARE_int32(user_language);
 DECLARE_uint32(audio_flag);
 
 DEFINE_bool(staging_mode, 0,
             "Enables preview mode in dashboards to render debug information.",
-            "Kernel");
-
-DEFINE_bool(in_process_title_relaunch, true,
-            "Handle title-to-title launches in-process via full "
-            "Shutdown/Setup cycle instead of spawning a new emulator process.",
             "Kernel");
 
 namespace xe {
@@ -275,7 +268,7 @@ uint32_t xeXGetGameRegion() {
       0x02FEu, 0x03FFu, 0x02FEu, 0x03FFu, 0x02FEu, 0x02FEu, 0xFFFFu, 0x03FFu,
       0x03FFu, 0x03FFu, 0x03FFu, 0x02FEu, 0x03FFu, 0x03FFu, 0x02FEu, 0x00FFu,
       0x03FFu, 0x03FFu, 0x03FFu, 0x03FFu, 0x03FFu, 0x03FFu, 0x03FFu};
-  auto country = static_cast<uint8_t>(xboxkrnl::GetUserCountryValue());
+  auto country = static_cast<uint8_t>(cvars::user_country);
   return country < xe::countof(table) ? table[country] : 0xFFFFu;
 }
 
@@ -283,8 +276,7 @@ dword_result_t XGetGameRegion_entry() { return xeXGetGameRegion(); }
 DECLARE_XAM_EXPORT1(XGetGameRegion, kNone, kStub);
 
 XLanguage xeGetLanguage(bool extended_languages_support) {
-  auto desired_language =
-      static_cast<XLanguage>(xboxkrnl::GetUserLanguageValue());
+  auto desired_language = static_cast<XLanguage>(cvars::user_language);
   uint32_t region = xeXGetGameRegion();
   auto max_languages = extended_languages_support ? XLanguage::kMaxLanguages
                                                   : XLanguage::kSChinese;
@@ -391,99 +383,27 @@ void XamLoaderLaunchTitle_entry(lpstring_t raw_name_ptr, dword_t flags) {
   loader_data.launch_flags = flags;
 
   // Translate the launch path to a full path.
-  if (raw_name_ptr) {
-    auto path = raw_name_ptr.value();
-    if (path.empty()) {
-      // Empty path means exit to dashboard
-      loader_data.launch_path = "game:\\default.xex";
-    } else {
-      // Non-empty path means launching another title
-      loader_data.launch_data_present = true;
+  if (raw_name_ptr && !raw_name_ptr.value().empty()) {
+    loader_data.launch_path = xe::path_to_utf8(raw_name_ptr.value());
+    loader_data.launch_data_present = true;
+    xam->SaveLoaderData();
 
-      // Normalize the paths
-      std::filesystem::path host_path = loader_data.host_path;
-      std::string launch_path = xe::path_to_utf8(path);
+    auto display_window = kernel_state()->emulator()->display_window();
+    auto imgui_drawer = kernel_state()->emulator()->imgui_drawer();
 
-      XELOGI("XamLoaderLaunchTitle: original host_path={}, launch_path={}",
-             loader_data.host_path, launch_path);
-
-      // Remove common guest path prefixes (case-insensitive since Xbox
-      // paths are case-insensitive, games may pass e.g. "GAME:\")
-      auto remove_prefix = [&launch_path](std::string_view prefix) {
-        if (xe::utf8::starts_with_case(launch_path, prefix)) {
-          launch_path = launch_path.substr(prefix.length());
-        }
-      };
-      remove_prefix("game:\\");
-      remove_prefix("d:\\");
-
-      // If host_path points to a .xex, combine with launch_path
-      if (host_path.extension() == ".xex") {
-        host_path.remove_filename();
-        host_path = host_path / launch_path;
-        launch_path = "";
-      }
-
-      XELOGI("XamLoaderLaunchTitle: normalized host_path={}, launch_path={}",
-             xe::path_to_utf8(host_path), launch_path);
-
-      // Handle title launch in-process via full Shutdown/Setup cycle.
-      // Disabled on Linux — pthread_cancel corrupts global mutex state and
-      // cooperative shutdown is not yet reliable. Windows uses TerminateThread.
-#if XE_PLATFORM_WIN32
-      if (cvars::in_process_title_relaunch) {
-        auto emulator = kernel_state()->emulator();
-
-        XELOGI("XamLoaderLaunchTitle: in-process relaunch to '{}'",
-               xe::path_to_utf8(host_path));
-
-        auto new_host_path = xe::path_to_utf8(host_path);
-        auto new_launch_module = launch_path;
-        auto new_flags = loader_data.launch_flags;
-        auto new_data = loader_data.launch_data;
-        auto current_thread = XThread::GetCurrentThread();
-
-        // Must dispatch from a non-guest thread — RelaunchTitle terminates
-        // all guest threads including the caller.
-        std::thread([emulator, new_host_path = std::move(new_host_path),
-                     new_launch_module = std::move(new_launch_module),
-                     new_flags, new_data = std::move(new_data)]() mutable {
-          emulator->RelaunchTitle(new_host_path, new_launch_module, new_flags,
-                                  std::move(new_data));
-        }).detach();
-
-        current_thread->Suspend(nullptr);
-
-        // Unreachable — thread is terminated during relaunch.
-        assert_always();
-      }
-#endif  // XE_PLATFORM_WIN32
-      // Convert launch_data to hex string
-      std::string launch_data_hex;
-      for (uint8_t byte : loader_data.launch_data) {
-        launch_data_hex += fmt::format("{:02X}", byte);
-      }
-
-      // Call the callback to spawn the new process directly
-      auto on_launch_new_title =
-          kernel_state()->emulator()->on_launch_new_title();
-      if (on_launch_new_title) {
-        XELOGI("XamLoaderLaunchTitle: spawning new title process");
-        on_launch_new_title(xe::path_to_utf8(host_path), launch_path,
-                            loader_data.launch_flags, launch_data_hex);
-        // Callback calls quick_exit, so we don't reach here
-      }
-
-      // Terminate if callback wasn't set
-      XELOGI("XamLoaderLaunchTitle: terminating to launch new title");
-      kernel_state()->TerminateTitle();
-      // This function does not return
+    if (display_window && imgui_drawer) {
+      display_window->app_context().CallInUIThreadSynchronous([imgui_drawer]() {
+        xe::ui::ImGuiDialog::ShowMessageBox(
+            imgui_drawer, "Title was restarted",
+            "Title closed with new launch data. \nPlease restart Xenia. "
+            "Game will be loaded automatically.");
+      });
     }
   } else {
     assert_always("Game requested exit to dashboard via XamLoaderLaunchTitle");
   }
 
-  // Exit to dashboard - this function does not return.
+  // This function does not return.
   kernel_state()->TerminateTitle();
 }
 DECLARE_XAM_EXPORT1(XamLoaderLaunchTitle, kNone, kSketchy);

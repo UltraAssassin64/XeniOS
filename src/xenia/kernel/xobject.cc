@@ -428,8 +428,7 @@ object_ref<XObject> XObject::GetNativeObject(KernelState* kernel_state,
       case 23:  // ProfileObject
       case 24:  // ThreadedDpcObject
       default:
-        // Unimplemented object type - just log and return nullptr
-        XELOGW("GetNativeObject: Unimplemented object type {}", as_type);
+        assert_always();
         result = nullptr;
     }
     // Stash pointer in struct.

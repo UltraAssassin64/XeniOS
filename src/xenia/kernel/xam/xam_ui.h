@@ -13,13 +13,6 @@
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/ui/imgui_dialog.h"
 #include "xenia/ui/imgui_drawer.h"
-#include "xenia/ui/imgui_gamepad_dialog.h"
-
-namespace xe {
-namespace hid {
-class InputSystem;
-}  // namespace hid
-}  // namespace xe
 
 namespace xe {
 namespace kernel {
@@ -47,37 +40,12 @@ class XamDialog : public xe::ui::ImGuiDialog {
   std::function<void()> close_callback_ = nullptr;
 };
 
-// XamDialog with gamepad support for game-triggered dialogs
-class XamGamepadDialog : public xe::ui::ImGuiGamepadDialog {
+class MessageBoxDialog : public XamDialog {
  public:
-  void set_close_callback(std::function<void()> close_callback) {
-    close_callback_ = close_callback;
-  }
-
- protected:
-  XamGamepadDialog(xe::ui::ImGuiDrawer* imgui_drawer,
-                   xe::hid::InputSystem* input_system)
-      : xe::ui::ImGuiGamepadDialog(imgui_drawer, input_system, true) {}
-
-  virtual ~XamGamepadDialog() {};
-
-  void OnClose() override {
-    if (close_callback_) {
-      close_callback_();
-    }
-  }
-
- private:
-  std::function<void()> close_callback_ = nullptr;
-};
-
-class MessageBoxDialog : public XamGamepadDialog {
- public:
-  MessageBoxDialog(xe::ui::ImGuiDrawer* imgui_drawer,
-                   xe::hid::InputSystem* input_system, std::string& title,
+  MessageBoxDialog(xe::ui::ImGuiDrawer* imgui_drawer, std::string& title,
                    std::string& description, std::vector<std::string> buttons,
                    uint32_t default_button)
-      : XamGamepadDialog(imgui_drawer, input_system),
+      : XamDialog(imgui_drawer),
         title_(title),
         description_(description),
         buttons_(std::move(buttons)),
@@ -102,13 +70,12 @@ class MessageBoxDialog : public XamGamepadDialog {
   uint32_t chosen_button_ = 0;
 };
 
-class KeyboardInputDialog : public XamGamepadDialog {
+class KeyboardInputDialog : public XamDialog {
  public:
-  KeyboardInputDialog(xe::ui::ImGuiDrawer* imgui_drawer,
-                      xe::hid::InputSystem* input_system, std::string& title,
+  KeyboardInputDialog(xe::ui::ImGuiDrawer* imgui_drawer, std::string& title,
                       std::string& description, std::string& default_text,
                       size_t max_length)
-      : XamGamepadDialog(imgui_drawer, input_system),
+      : XamDialog(imgui_drawer),
         title_(title),
         description_(description),
         default_text_(default_text),
@@ -136,7 +103,6 @@ class KeyboardInputDialog : public XamGamepadDialog {
 
  private:
   bool has_opened_ = false;
-  bool focus_set_ = false;
   std::string title_;
   std::string description_;
   std::string default_text_;

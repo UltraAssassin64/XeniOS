@@ -10,11 +10,7 @@
 #ifndef XENIA_KERNEL_XSOCKET_H_
 #define XENIA_KERNEL_XSOCKET_H_
 
-// Asio must be included before Windows headers to avoid macro conflicts
-#include <asio.hpp>
-
 #include <cstring>
-#include <optional>
 #include <queue>
 
 #include "xenia/base/byte_order.h"
@@ -84,33 +80,29 @@ class XSocket : public XObject {
  public:
   static const XObject::Type kObjectType = XObject::Type::Socket;
 
-  // Note: These enum values use X_ prefix to avoid conflicts with Windows
-  // macros
   enum AddressFamily {
-    X_AF_INET = 2,
+    AF_INET = 2,
   };
 
   enum Type {
-    X_SOCK_STREAM = 1,
-    X_SOCK_DGRAM = 2,
+    SOCK_STREAM = 1,
+    SOCK_DGRAM = 2,
   };
 
   enum Protocol {
-    X_IPPROTO_TCP = 6,
-    X_IPPROTO_UDP = 17,
+    IPPROTO_TCP = 6,
+    IPPROTO_UDP = 17,
 
     // LIVE Voice and Data Protocol
     // https://blog.csdn.net/baozi3026/article/details/4277227
     // Format: [cbGameData][GameData(encrypted)][VoiceData(unencrypted)]
-    X_IPPROTO_VDP = 254,
+    IPPROTO_VDP = 254,
   };
 
   XSocket(KernelState* kernel_state);
   ~XSocket();
 
-  // Returns the native socket handle for use with select() etc.
-  // Returns -1 if socket is not initialized.
-  uint64_t native_handle();
+  uint64_t native_handle() const { return native_handle_; }
   uint16_t bound_port() const { return bound_port_; }
 
   X_STATUS Initialize(AddressFamily af, Type type, Protocol proto);
@@ -126,7 +118,6 @@ class XSocket : public XObject {
   X_STATUS Bind(N_XSOCKADDR_IN* name, int name_len);
   X_STATUS Listen(int backlog);
   X_STATUS GetSockName(uint8_t* buf, int* buf_len);
-  X_STATUS GetPeerName(uint8_t* buf, int* buf_len);
   object_ref<XSocket> Accept(N_XSOCKADDR* name, int* name_len);
   int Shutdown(int how);
 
@@ -154,15 +145,8 @@ class XSocket : public XObject {
                    size_t len);
 
  private:
-  // Private constructor for accepted sockets
-  XSocket(KernelState* kernel_state, asio::ip::tcp::socket socket);
-
-  // Socket storage - either TCP or UDP
-  std::optional<asio::ip::tcp::socket> tcp_socket_;
-  std::optional<asio::ip::udp::socket> udp_socket_;
-
-  // Acceptor for listening TCP sockets (created when Listen() is called)
-  std::optional<asio::ip::tcp::acceptor> acceptor_;
+  XSocket(KernelState* kernel_state, uint64_t native_handle);
+  uint64_t native_handle_ = -1;
 
   AddressFamily af_;    // Address family
   Type type_;           // Type (DGRAM/Stream/etc)
@@ -173,9 +157,6 @@ class XSocket : public XObject {
   uint16_t bound_port_ = 0;
 
   bool broadcast_socket_ = false;
-
-  // Last error code for this socket
-  mutable uint32_t last_error_ = 0;
 
   std::unique_ptr<xe::threading::Event> event_;
   std::mutex incoming_packet_mutex_;

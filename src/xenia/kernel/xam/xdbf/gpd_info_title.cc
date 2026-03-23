@@ -153,38 +153,37 @@ void GpdInfoTitle::AddAchievement(const AchievementDetails* header) {
   UpsertEntry(&new_entry);
 }
 
-uint32_t GpdInfoTitle::GetTotalGamerscore() const {
+uint32_t GpdInfoTitle::GetTotalGamerscore() {
   const auto ids = GetAchievementsIds();
 
   uint32_t gamerscore = 0;
   for (const auto id : ids) {
-    gamerscore +=
-        const_cast<GpdInfoTitle*>(this)->GetAchievementEntry(id)->gamerscore;
+    gamerscore += GetAchievementEntry(id)->gamerscore;
   }
 
   return gamerscore;
 }
-uint32_t GpdInfoTitle::GetGamerscore() const {
+uint32_t GpdInfoTitle::GetGamerscore() {
   const auto ids = GetAchievementsIds();
   uint32_t gamerscore = 0;
   for (const auto id : ids) {
-    const auto entry = const_cast<GpdInfoTitle*>(this)->GetAchievementEntry(id);
+    const auto entry = GetAchievementEntry(id);
     if (entry->is_achievement_unlocked()) {
-      gamerscore += entry->gamerscore;
+      gamerscore += GetAchievementEntry(id)->gamerscore;
     }
   }
   return gamerscore;
 }
 
-uint32_t GpdInfoTitle::GetAchievementCount() const {
+uint32_t GpdInfoTitle::GetAchievementCount() {
   return static_cast<uint32_t>(GetAchievementsIds().size());
 }
 
-uint32_t GpdInfoTitle::GetUnlockedAchievementCount() const {
+uint32_t GpdInfoTitle::GetUnlockedAchievementCount() {
   const auto ids = GetAchievementsIds();
   uint32_t count = 0;
   for (const auto id : ids) {
-    const auto entry = const_cast<GpdInfoTitle*>(this)->GetAchievementEntry(id);
+    const auto entry = GetAchievementEntry(id);
     if (entry->is_achievement_unlocked()) {
       count += 1;
     }

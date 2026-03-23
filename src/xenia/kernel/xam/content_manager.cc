@@ -58,27 +58,12 @@ ContentPackage::~ContentPackage() {
 
 void ContentPackage::LoadPackageLicenseMask(
     const std::filesystem::path header_path) {
-  std::error_code ec;
-  if (!std::filesystem::exists(header_path, ec)) {
-    if (ec) {
-      XELOGW("LoadPackageLicenseMask: failed to check {}: {}", header_path,
-             ec.message());
-    }
+  if (!std::filesystem::exists(header_path)) {
     return;
   }
 
   auto file = xe::filesystem::OpenFile(header_path, "rb");
-  if (!file) {
-    return;
-  }
-  ec.clear();
-  auto file_size = std::filesystem::file_size(header_path, ec);
-  if (ec) {
-    XELOGW("LoadPackageLicenseMask: failed to get size for {}: {}", header_path,
-           ec.message());
-    fclose(file);
-    return;
-  }
+  auto file_size = std::filesystem::file_size(header_path);
   if (file_size < sizeof(XCONTENT_AGGREGATE_DATA) + sizeof(license_)) {
     fclose(file);
     return;
@@ -266,8 +251,8 @@ std::vector<XCONTENT_AGGREGATE_DATA> ContentManager::ListContentODD(
       fmt::format("{:08X}", static_cast<uint32_t>(content_type));
 
   const std::filesystem::path game_content_path =
-      std::filesystem::path("GAME:") / "content" / xuid_str / title_id_str /
-      content_type_str;
+      std::filesystem::path(kDefaultGameSymbolicLink) / "content" / xuid_str /
+      title_id_str / content_type_str;
 
   auto entry = kernel_state_->file_system()->ResolvePath(
       xe::path_to_utf8(game_content_path));
@@ -352,28 +337,12 @@ X_RESULT ContentManager::ReadContentHeaderFile(
       ResolvePackageHeaderPath(file_name, xuid, title_id, content_type);
   constexpr uint32_t header_size = sizeof(XCONTENT_AGGREGATE_DATA);
 
-  std::error_code ec;
-  if (std::filesystem::exists(header_file_path, ec)) {
-    if (ec) {
-      XELOGW("ReadContentHeaderFile: failed to check {}: {}", header_file_path,
-             ec.message());
-      return X_STATUS_ACCESS_DENIED;
-    }
+  if (std::filesystem::exists(header_file_path)) {
     auto file = xe::filesystem::OpenFile(header_file_path, "rb");
-    if (!file) {
-      return X_STATUS_ACCESS_DENIED;
-    }
 
     std::array<uint8_t, header_size> buffer;
 
-    ec.clear();
-    auto file_size = std::filesystem::file_size(header_file_path, ec);
-    if (ec) {
-      XELOGW("ReadContentHeaderFile: failed to get size for {}: {}",
-             header_file_path, ec.message());
-      fclose(file);
-      return X_STATUS_ACCESS_DENIED;
-    }
+    auto file_size = std::filesystem::file_size(header_file_path);
     if (file_size < header_size) {
       fclose(file);
       return X_STATUS_END_OF_FILE;
@@ -491,25 +460,9 @@ X_RESULT ContentManager::GetContentThumbnail(
 
   auto package_path = ResolvePackagePath(xuid, data);
   auto thumb_path = package_path / kThumbnailFileName;
-  std::error_code ec;
-  if (std::filesystem::exists(thumb_path, ec)) {
-    if (ec) {
-      XELOGW("GetContentThumbnail: failed to check {}: {}", thumb_path,
-             ec.message());
-      return X_ERROR_ACCESS_DENIED;
-    }
+  if (std::filesystem::exists(thumb_path)) {
     auto file = xe::filesystem::OpenFile(thumb_path, "rb");
-    if (!file) {
-      return X_ERROR_ACCESS_DENIED;
-    }
-    ec.clear();
-    size_t file_len = std::filesystem::file_size(thumb_path, ec);
-    if (ec) {
-      XELOGW("GetContentThumbnail: failed to get size for {}: {}", thumb_path,
-             ec.message());
-      fclose(file);
-      return X_ERROR_ACCESS_DENIED;
-    }
+    size_t file_len = std::filesystem::file_size(thumb_path);
     buffer->resize(file_len);
     fread(const_cast<uint8_t*>(buffer->data()), 1, buffer->size(), file);
     fclose(file);

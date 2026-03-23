@@ -244,7 +244,7 @@ dword_result_t NtSuspendThread_entry(dword_t handle,
       } else {
         return X_STATUS_THREAD_IS_TERMINATING;
       }
-#elif XE_PLATFORM_LINUX || XE_PLATFORM_APPLE
+#elif XE_PLATFORM_LINUX
       // Handle self-suspension specially to avoid deadlock.
       if (!thread->guest_object<X_KTHREAD>()->terminated) {
         bool is_self_suspend =
@@ -333,13 +333,12 @@ dword_result_t KeSetAffinityThread_entry(lpvoid_t thread_ptr, dword_t affinity,
     return X_STATUS_INVALID_PARAMETER;
   }
   auto thread = XObject::GetNativeObject<XThread>(kernel_state(), thread_ptr);
-  if (!thread) {
-    return X_STATUS_INVALID_HANDLE;
+  if (thread) {
+    if (previous_affinity_ptr) {
+      *previous_affinity_ptr = uint32_t(1) << thread->active_cpu();
+    }
+    thread->SetAffinity(affinity);
   }
-  if (previous_affinity_ptr) {
-    *previous_affinity_ptr = uint32_t(1) << thread->active_cpu();
-  }
-  thread->SetAffinity(affinity);
   return X_STATUS_SUCCESS;
 }
 DECLARE_XBOXKRNL_EXPORT1(KeSetAffinityThread, kThreading, kImplemented);
@@ -449,7 +448,7 @@ DECLARE_XBOXKRNL_EXPORT3(KeDelayExecutionThread, kThreading, kImplemented,
 
 dword_result_t NtYieldExecution_entry() {
   xe::threading::MaybeYield();
-  return X_STATUS_SUCCESS;
+  return 0;
 }
 DECLARE_XBOXKRNL_EXPORT2(NtYieldExecution, kThreading, kImplemented,
                          kHighFrequency);
@@ -472,8 +471,8 @@ void KeQuerySystemTime_entry(lpqword_t time_ptr, const ppc_context_t& ctx) {
 DECLARE_XBOXKRNL_EXPORT1(KeQuerySystemTime, kThreading, kImplemented);
 
 // https://msdn.microsoft.com/en-us/library/ms686801
-dword_result_t KeTlsAlloc_entry(const ppc_context_t& context) {
-  uint32_t slot = kernel_state()->AllocateTLS(context);
+dword_result_t KeTlsAlloc_entry() {
+  uint32_t slot = kernel_state()->AllocateTLS();
   XThread::GetCurrentThread()->SetTLSValue(slot, 0);
 
   return slot;
@@ -481,13 +480,12 @@ dword_result_t KeTlsAlloc_entry(const ppc_context_t& context) {
 DECLARE_XBOXKRNL_EXPORT1(KeTlsAlloc, kThreading, kImplemented);
 
 // https://msdn.microsoft.com/en-us/library/ms686804
-dword_result_t KeTlsFree_entry(dword_t tls_index,
-                               const ppc_context_t& context) {
+dword_result_t KeTlsFree_entry(dword_t tls_index) {
   if (tls_index == X_TLS_OUT_OF_INDEXES) {
     return 0;
   }
 
-  kernel_state()->FreeTLS(context, tls_index);
+  kernel_state()->FreeTLS(tls_index);
   return 1;
 }
 DECLARE_XBOXKRNL_EXPORT1(KeTlsFree, kThreading, kImplemented);
@@ -780,11 +778,12 @@ dword_result_t NtReleaseSemaphore_entry(dword_t sem_handle,
         sem->ReleaseSemaphore((int32_t)release_count, &previous_count);
     if (!success) {
       // Releasing would exceed the semaphore's maximum count
+      // Windows returns STATUS_SEMAPHORE_LIMIT_EXCEEDED (0x0000012B)
       XELOGW(
           "NtReleaseSemaphore: release_count={} would exceed maximum (current "
           "count={})",
           uint32_t(release_count), previous_count);
-      result = X_STATUS_SEMAPHORE_LIMIT_EXCEEDED;
+      result = 0x0000012B;
     }
   } else {
     result = X_STATUS_INVALID_HANDLE;
@@ -849,7 +848,7 @@ dword_result_t NtReleaseMutant_entry(dword_t mutant_handle,
   auto mutant =
       kernel_state()->object_table()->LookupObject<XMutant>(mutant_handle);
   if (mutant) {
-    result = mutant->ReleaseMutant(priority_increment, abandon, wait);
+    mutant->ReleaseMutant(priority_increment, abandon, wait);
   } else {
     result = X_STATUS_INVALID_HANDLE;
   }
@@ -1837,6 +1836,27 @@ dword_result_t KeSetPriorityThread_entry(pointer_t<X_KTHREAD> thread_ptr,
   return old_priority;
 }
 DECLARE_XBOXKRNL_EXPORT1(KeSetPriorityThread, kThreading, kImplemented);
+
+void xeKeInitializeTimerEx(X_KTIMER* timer, uint32_t type, uint32_t proctype,
+                           PPCContext* context) {
+  xenia_assert(proctype < 3);
+  xenia_assert(type == 0 || type == 1);
+  // other fields are unmodified, they must carry through multiple calls of
+  // initialize
+  timer->header.process_type = proctype;
+  timer->header.inserted = 0;
+  timer->header.type = type + 8;
+  timer->header.signal_state = 0;
+  util::XeInitializeListHead(&timer->header.wait_list, context);
+  timer->due_time = 0;
+  timer->period = 0;
+}
+
+void KeInitializeTimerEx_entry(pointer_t<X_KTIMER> timer, dword_t type,
+                               dword_t proctype, const ppc_context_t& context) {
+  xeKeInitializeTimerEx(timer, type, proctype & 0xFF, context);
+}
+DECLARE_XBOXKRNL_EXPORT1(KeInitializeTimerEx, kThreading, kImplemented);
 
 }  // namespace xboxkrnl
 }  // namespace kernel

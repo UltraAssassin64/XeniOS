@@ -33,9 +33,9 @@ class CreateProfileUI final : public XamDialog {
   void OnDraw(ImGuiIO& io) override;
 
   bool has_opened_ = false;
-  bool focus_set_ = false;
   bool migration_ = false;
   char gamertag_[16] = "";
+  bool valid_gamertag_ = false;
   Emulator* emulator_;
 };
 
