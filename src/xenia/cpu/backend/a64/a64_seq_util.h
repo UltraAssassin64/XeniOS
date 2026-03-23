@@ -17,7 +17,7 @@
 #include "xenia/cpu/backend/a64/a64_op.h"
 #include "xenia/cpu/backend/a64/a64_stack_layout.h"
 
-#include "xbyak_aarch64.h"
+#include "third_party/xbyak_aarch64/xbyak_aarch64/xbyak_aarch64.h"
 
 namespace xe {
 namespace cpu {

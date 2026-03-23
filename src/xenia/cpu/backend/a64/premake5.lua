@@ -15,6 +15,7 @@ project("xenia-cpu-backend-a64")
     "fmt",
     "xenia-base",
     "xenia-cpu",
+    "xbyak_aarch64",
   })
   sysincludedirs({
     project_root.."/third_party/oaknut/include",
