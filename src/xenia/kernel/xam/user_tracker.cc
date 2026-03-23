@@ -10,17 +10,22 @@
 #include "xenia/emulator.h"
 #include "xenia/kernel/xam/user_profile.h"
 
+#include <algorithm>
 #include "third_party/fmt/include/fmt/format.h"
 #include "third_party/stb/stb_image.h"
 #include "xenia/kernel/kernel_state.h"
+#include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/util/xex2_info.h"
 #include "xenia/kernel/xam/user_data.h"
 #include "xenia/kernel/xam/user_property.h"
 #include "xenia/kernel/xam/user_settings.h"
 #include "xenia/kernel/xam/user_tracker.h"
 #include "xenia/kernel/xam/xdbf/gpd_info.h"
+#include "xenia/kernel/xboxkrnl/xboxkrnl_xconfig.h"
+#include "xenia/vfs/devices/xcontent_container_device.h"
 
-DECLARE_int32(user_language);
+DECLARE_string(user_language);
 
 namespace xe {
 namespace kernel {
@@ -35,7 +40,7 @@ bool UserTracker::AddUser(uint64_t xuid) {
   tracked_xuids_.insert(xuid);
 
   if (spa_data_) {
-    AddTitleToPlayedList(xuid);
+    AddTitleToPlayedList(xuid, current_title_path_);
   }
   return true;
 }
@@ -140,11 +145,12 @@ void UserTracker::AddTitleToPlayedList() {
   }
 
   for (const uint64_t xuid : tracked_xuids_) {
-    AddTitleToPlayedList(xuid);
+    AddTitleToPlayedList(xuid, current_title_path_);
   }
 }
 
-void UserTracker::AddTitleToPlayedList(uint64_t xuid) {
+void UserTracker::AddTitleToPlayedList(uint64_t xuid,
+                                       const std::filesystem::path& path) {
   auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
   if (!user) {
     return;
@@ -182,7 +188,98 @@ void UserTracker::AddTitleToPlayedList(uint64_t xuid) {
   // during creation time OR SPA UPDATE TIME!
   title_info->last_played = current_time;
 
+  // Store the file path in the GPD
+  if (!path.empty()) {
+    AddDiscPathToUserProfile(user, title_id, path);
+  }
+
   UpdateProfileGpd();
+}
+
+void UserTracker::AddDiscPathToUserProfile(UserProfile* user, uint32_t title_id,
+                                           const std::filesystem::path& path) {
+  if (!user || path.empty()) {
+    return;
+  }
+
+  // Get disc info by reading the disc file's metadata
+  uint8_t disc_number = 0;
+  uint8_t disc_count = 0;
+
+  // Try to read the disc information from the file itself
+  auto container_header =
+      vfs::XContentContainerDevice::ReadContainerHeader(path);
+  if (container_header) {
+    const auto& exec_info = container_header->content_metadata.execution_info;
+    disc_number = exec_info.disc_number;
+    disc_count = exec_info.disc_count;
+    XELOGI("Read disc info from file: Disc {} of {}", disc_number, disc_count);
+  } else {
+    // Fall back to current module if we can't read the file
+    auto module = kernel_state()->GetExecutableModule();
+    if (module) {
+      xex2_opt_execution_info* exec_info = nullptr;
+      module->GetOptHeader(XEX_HEADER_EXECUTION_INFO, &exec_info);
+      if (exec_info) {
+        disc_number = exec_info->disc_number;
+        disc_count = exec_info->disc_count;
+      }
+    }
+  }
+
+  // Check if we already have a path for this title
+  auto existing_path = user->dashboard_gpd_.GetTitlePath(title_id);
+  if (existing_path.has_value()) {
+    // Check if this is a different path (different disc)
+    if (existing_path.value() != path) {
+      // Check if this path is already in the list
+      auto all_paths = user->dashboard_gpd_.GetTitlePaths(title_id);
+      bool path_exists = std::find(all_paths.begin(), all_paths.end(), path) !=
+                         all_paths.end();
+
+      if (!path_exists) {
+        XELOGI("Adding additional disc path for title {:08X}: {}", title_id,
+               xe::path_to_utf8(path));
+        user->dashboard_gpd_.AddTitlePath(title_id, path);
+
+        // Auto-label if this is a multi-disc game and no custom label exists
+        if (disc_count > 1 && disc_number > 0) {
+          auto existing_label =
+              user->dashboard_gpd_.GetDiscLabel(title_id, path);
+          if (existing_label.empty()) {
+            std::string auto_label = fmt::format("Disc {}", disc_number);
+            user->dashboard_gpd_.SetDiscLabel(title_id, path, auto_label);
+            XELOGI("Auto-labeled disc as: {}", auto_label);
+          }
+        }
+      }
+    }
+  } else {
+    // First time seeing this title, set the primary path
+    user->dashboard_gpd_.SetTitlePath(title_id, path);
+
+    // Auto-label if this is a multi-disc game
+    if (disc_count > 1 && disc_number > 0) {
+      std::string auto_label = fmt::format("Disc {}", disc_number);
+      user->dashboard_gpd_.SetDiscLabel(title_id, path, auto_label);
+      XELOGI("Auto-labeled initial disc as: {}", auto_label);
+    }
+  }
+}
+
+void UserTracker::AddDiscPathToAllTrackedUsers(
+    uint32_t title_id, const std::filesystem::path& path) {
+  if (path.empty()) {
+    return;
+  }
+
+  for (uint64_t xuid : tracked_xuids_) {
+    auto user = kernel_state()->xam_state()->GetUserProfile(xuid);
+    if (user) {
+      AddDiscPathToUserProfile(user, title_id, path);
+      user->WriteGpd(kDashboardID);
+    }
+  }
 }
 
 void UserTracker::RemoveTitleFromPlayedList(uint64_t xuid, uint32_t title_id) {
@@ -324,13 +421,22 @@ void UserTracker::UpdateMissingAchievemntsIcons() {
   }
 }
 
-void UserTracker::UpdateSpaInfo(SpaInfo* spa_info) {
+void UserTracker::UpdateSpaInfo(SpaInfo* spa_info,
+                                const std::filesystem::path& title_path) {
   spa_data_ = spa_info;
+  current_title_path_ = title_path;
 
   if (!spa_data_) {
     return;
   }
 
+  // First, ensure the title is added to all tracked users' played lists
+  // This creates the necessary GPD entries before we try to update them
+  for (const uint64_t xuid : tracked_xuids_) {
+    AddTitleToPlayedList(xuid, current_title_path_);
+  }
+
+  // Now update existing GPD files with latest SPA data
   UpdateProfileGpd();
   UpdateTitleGpdFile();
   UpdateMissingAchievemntsIcons();
@@ -349,7 +455,7 @@ void UserTracker::UpdateTitleGpdFile() {
     }
 
     auto user_language = spa_data_->GetExistingLanguage(
-        static_cast<XLanguage>(cvars::user_language));
+        static_cast<XLanguage>(xboxkrnl::GetUserLanguageValue()));
 
     // First add achievements because of lowest ID
     for (const auto& entry : spa_data_->GetAchievements()) {
@@ -763,10 +869,10 @@ bool UserTracker::UpdateUserIcon(uint64_t xuid,
   XTileType icon_type = XTileType::kGameIcon;
 
   if (std::pair<uint16_t, uint16_t>(width, height) == kProfileIconSize) {
-    icon_type = XTileType::kGamerTile;
+    icon_type = XTileType::kPersonalGamerTile;
   } else if (std::pair<uint16_t, uint16_t>(width, height) ==
              kProfileIconSizeSmall) {
-    icon_type = XTileType::kGamerTileSmall;
+    icon_type = XTileType::kPersonalGamerTileSmall;
   } else {
     return false;
   }

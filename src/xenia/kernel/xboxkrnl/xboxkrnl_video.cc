@@ -24,7 +24,8 @@ DEFINE_int32(
     "2=NTSC-J\n   3=PAL\n",
     "Video");
 
-DEFINE_bool(use_50Hz_mode, false, "Enables usage of PAL-50 mode.", "Video");
+// Defined in gpu_flags.cc
+DECLARE_bool(use_50Hz_mode);
 DEFINE_bool(interlaced, false, "Toggles interlaced mode.", "Video");
 
 // TODO: This is stored in XConfig somewhere, probably in video flags.
@@ -521,6 +522,17 @@ void VdSwap_entry(
 }
 DECLARE_XBOXKRNL_EXPORT3(VdSwap, kVideo, kImplemented, kHighFrequency,
                          kImportant);
+
+dword_result_t PsCamDeviceRequest_entry(dword_t request_type,
+                                        lpvoid_t param_ptr) {
+  // Quietly return X_E_FAIL to keep from log spamming due to
+  // lack of proper implemenation. There might be a way to signal
+  // to the game not to do this, maybe in XamXStudioRequest return
+  // value?
+  // Seen in Forza Horizon 2
+  return X_E_FAIL;
+}
+DECLARE_XBOXKRNL_EXPORT1(PsCamDeviceRequest, kVideo, kStub);
 
 void RegisterVideoExports(xe::cpu::ExportResolver* export_resolver,
                           KernelState* kernel_state) {

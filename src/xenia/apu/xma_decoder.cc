@@ -26,6 +26,7 @@
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/xthread.h"
 extern "C" {
+#include "third_party/FFmpeg/libavutil/cpu.h"
 #include "third_party/FFmpeg/libavutil/log.h"
 }  // extern "C"
 
@@ -56,7 +57,22 @@ extern "C" {
 DEFINE_bool(ffmpeg_verbose, false, "Verbose FFmpeg output (debug and above)",
             "APU");
 
-DEFINE_bool(use_dedicated_xma_thread, true,
+#if XE_ARCH_ARM64
+constexpr bool kDisableFfmpegNeonDefault = true;
+#else
+constexpr bool kDisableFfmpegNeonDefault = false;
+#endif
+DEFINE_bool(ffmpeg_disable_neon_on_arm64, kDisableFfmpegNeonDefault,
+            "Disable FFmpeg NEON runtime paths on ARM64 for decode parity.",
+            "APU");
+
+#if XE_ARCH_ARM64
+constexpr bool kUseDedicatedXmaThreadDefault = false;
+#else
+constexpr bool kUseDedicatedXmaThreadDefault = true;
+#endif
+
+DEFINE_bool(use_dedicated_xma_thread, kUseDedicatedXmaThreadDefault,
             "Enables XMA decoding on separate thread. Disabled should produce "
             "better results, but decrease performance a bit.",
             "APU");
@@ -72,6 +88,8 @@ DEFINE_string(
     " new: \n  New version of decoder. Provides highest stability, but isn't "
     "yet finished.\n",
     "APU");
+
+UPDATE_from_string(xma_decoder, 2026, 2, 16, 12, "old");
 
 namespace xe {
 namespace apu {
@@ -131,6 +149,13 @@ X_STATUS XmaDecoder::Setup(kernel::KernelState* kernel_state) {
   // Setup ffmpeg logging callback
   av_log_set_callback(av_log_callback);
 
+#if XE_ARCH_ARM64
+  if (cvars::ffmpeg_disable_neon_on_arm64) {
+    const int cpu_flags = av_get_cpu_flags();
+    av_force_cpu_flags(cpu_flags & ~AV_CPU_FLAG_NEON);
+  }
+#endif
+
   // Let the processor know we want register access callbacks.
   memory_->AddVirtualMappedRange(
       0x7FEA0000, 0xFFFF0000, 0x0000FFFF, this,
@@ -158,6 +183,8 @@ X_STATUS XmaDecoder::Setup(kernel::KernelState* kernel_state) {
       contexts_[i] = new XmaContextOld();
     } else if (cvars::xma_decoder == "new") {
       contexts_[i] = new XmaContextNew();
+    } else if (cvars::xma_decoder == "fake") {
+      contexts_[i] = new XmaContextFake();
     } else {
       contexts_[i] = new XmaContextNew();
     }
@@ -204,7 +231,7 @@ void XmaDecoder::WorkerThreadMain() {
       did_work = did_work || worked;
     }
 
-    if (paused_) {
+    if (paused_.load(std::memory_order_acquire)) {
       pause_fence_.Signal();
       resume_fence_.Wait();
     }
@@ -223,7 +250,7 @@ void XmaDecoder::Shutdown() {
     work_event_->Set();
   }
 
-  if (paused_) {
+  if (paused_.load(std::memory_order_acquire)) {
     Resume();
   }
 
@@ -404,19 +431,17 @@ void XmaDecoder::WriteRegister(uint32_t addr, uint32_t value) {
 }
 
 void XmaDecoder::Pause() {
-  if (paused_) {
+  if (paused_.exchange(true, std::memory_order_acq_rel)) {
     return;
   }
-  paused_ = true;
 
   pause_fence_.Wait();
 }
 
 void XmaDecoder::Resume() {
-  if (!paused_) {
+  if (!paused_.exchange(false, std::memory_order_acq_rel)) {
     return;
   }
-  paused_ = false;
 
   resume_fence_.Signal();
 }

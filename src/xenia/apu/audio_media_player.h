@@ -99,7 +99,7 @@ class AudioMediaPlayer {
 
   void Play();
   void WorkerThreadMain();
-  std::span<uint8_t> LoadSongToMemory();
+  bool LoadSongToMemory(std::vector<uint8_t>* buffer);
 
   XmpApp::State state_ = XmpApp::State::kIdle;
   XmpApp::PlaybackClient playback_client_ = XmpApp::PlaybackClient::kSystem;

@@ -54,7 +54,8 @@ class XamState {
   bool IsUserSignedIn(uint32_t user_index) const;
   bool IsUserSignedIn(uint64_t xuid) const;
 
-  void LoadSpaInfo(const SpaInfo* info);
+  void LoadSpaInfo(const SpaInfo* info,
+                   const std::filesystem::path& title_path = {});
 
   void SetContentRegisterCallback(uint32_t callback);
 

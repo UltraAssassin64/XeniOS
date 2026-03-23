@@ -11,6 +11,23 @@
 
 #include "xenia/base/logging.h"
 
+#ifdef XE_PLATFORM_WIN32
+// NOTE: must be included last as it expects windows.h to already be included.
+#ifndef _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS  // inet_addr
+#endif
+#include <winsock2.h>  // NOLINT(build/include_order)
+#elif XE_PLATFORM_LINUX || XE_PLATFORM_APPLE
+#include <netinet/in.h>
+#endif
+
+struct XONLINE_SERVICE_INFO {
+  xe::be<uint32_t> id;
+  in_addr ip;
+  xe::be<uint16_t> port;
+  xe::be<uint16_t> reserved;
+};
+
 namespace xe {
 namespace kernel {
 namespace xam {
@@ -96,6 +113,28 @@ X_HRESULT XLiveBaseApp::DispatchMessageSync(uint32_t message,
       // Doesn't seem to set anything in the given buffer, probably only takes
       // input
       XELOGD("XLiveBaseUnk58046({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00058017: {
+      XELOGD("UserFindUsers({:08X}, {:08X})", buffer_ptr, buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00058035: {
+      // Fixes Xbox Live error for 513107D9
+      // Required for 534507D4
+      XELOGD("XLiveBaseUnk58035({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050036: {
+      XELOGD("XOnlineQuerySearch({:08X}, {:08X}) unimplemented", buffer_ptr,
+             buffer_length);
+      return X_E_SUCCESS;
+    }
+    case 0x00050009: {
+      // Fixes Xbox Live error for 513107D9
+      XELOGD("XLiveBaseUnk50009({:08X}, {:08X}) unimplemented", buffer_ptr,
              buffer_length);
       return X_E_SUCCESS;
     }

@@ -39,6 +39,14 @@ namespace xe {
 namespace kernel {
 namespace xam {
 
+struct ScannedTitleInfo {
+  uint32_t title_id;
+  std::string title_name;
+  std::filesystem::path path_to_file;
+  std::vector<GpdInfoProfile::DiscInfo> all_discs;
+  time_t last_run_time;
+};
+
 inline const std::string kDashboardStringID =
     fmt::format("{:08X}", kDashboardID);
 
@@ -87,6 +95,8 @@ class ProfileManager {
 
   void ReloadProfiles();
   void ReloadProfile(const uint64_t xuid);
+  void ReloadProfileGpds();
+  void SyncProfilesWithConfig();
 
   UserProfile* GetProfile(const uint64_t xuid) const;
   UserProfile* GetProfile(const uint8_t user_index) const;
@@ -107,6 +117,13 @@ class ProfileManager {
       const XContentType content_type = XContentType::kInvalid) const;
 
   bool UpdateAccount(const uint64_t xuid, const X_XAMACCOUNTINFO* account);
+
+  // Clears the title path from all profiles' dashboard GPDs
+  bool ClearTitlePath(uint32_t title_id);
+
+  bool RemoveTitleFromAllProfiles(uint32_t title_id);
+  std::vector<ScannedTitleInfo> ScanAllProfilesForTitles() const;
+  std::filesystem::path GetMostRecentlyPlayedTitlePath() const;
 
   static bool IsGamertagValid(const std::string gamertag);
 

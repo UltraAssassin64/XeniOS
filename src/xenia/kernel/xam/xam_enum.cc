@@ -165,8 +165,7 @@ dword_result_t XamProfileCreateEnumerator_entry(dword_t device_id,
     return X_ERROR_INVALID_PARAMETER;
   }
 
-  auto e =
-      object_ref<ProfileEnumerator>(new ProfileEnumerator(kernel_state(), 1));
+  auto e = new XStaticEnumerator<X_PROFILEENUMRESULT>(kernel_state(), 1);
 
   auto result =
       e->Initialize(XUserIndexAny, 0xFE, 0x23001, 0x23003, 0, 0x28, nullptr);
@@ -179,7 +178,11 @@ dword_result_t XamProfileCreateEnumerator_entry(dword_t device_id,
       kernel_state()->xam_state()->profile_manager()->GetAccounts();
 
   for (const auto& [xuid, account] : *accounts) {
-    e->AppendItem({xuid, account, 1});
+    X_PROFILEENUMRESULT* profile = e->AppendItem();
+
+    profile->xuid_offline = xuid;
+    profile->device_id = 1;
+    memcpy(&profile->account, &account, sizeof(X_XAMACCOUNTINFO));
   }
 
   *handle_ptr = e->handle();

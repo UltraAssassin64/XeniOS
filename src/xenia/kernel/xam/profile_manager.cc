@@ -7,11 +7,12 @@
  ******************************************************************************
  */
 
-#include <regex>
-
 #include "xenia/kernel/xam/profile_manager.h"
 
+#include <map>
+
 #include "xenia/base/logging.h"
+#include "xenia/config.h"
 #include "xenia/emulator.h"
 #include "xenia/hid/input_system.h"
 #include "xenia/kernel/kernel_state.h"
@@ -142,6 +143,70 @@ void ProfileManager::ReloadProfiles() {
   for (const auto account_xuid : FindProfiles()) {
     LoadAccount(account_xuid);
   }
+}
+
+void ProfileManager::ReloadProfileGpds() {
+  // Reload GPD files from disk for all logged-in profiles
+  // This is needed when the game process exits and the UI process
+  // needs to pick up changes made by the game process
+  for (const auto& [user_index, profile] : logged_profiles_) {
+    if (profile) {
+      XELOGI("Reloading GPDs for profile {:016X}", profile->xuid());
+      profile->LoadProfileGpds();
+    }
+  }
+}
+
+void ProfileManager::SyncProfilesWithConfig() {
+  // First reload all accounts from disk to pick up any new/deleted profiles
+  accounts_.clear();
+  for (const auto account_xuid : FindProfiles()) {
+    LoadAccount(account_xuid);
+  }
+
+  // Build desired login state from current cvar values
+  const std::string* profile_cvars[4] = {
+      &cvars::logged_profile_slot_0_xuid, &cvars::logged_profile_slot_1_xuid,
+      &cvars::logged_profile_slot_2_xuid, &cvars::logged_profile_slot_3_xuid};
+
+  std::map<uint8_t, uint64_t> desired_profiles;
+  for (uint8_t slot = 0; slot < 4; slot++) {
+    if (!profile_cvars[slot]->empty()) {
+      uint64_t xuid =
+          xe::string_util::from_string<uint64_t>(*profile_cvars[slot], true);
+      if (xuid != 0) {
+        desired_profiles[slot] = xuid;
+      }
+    }
+  }
+
+  // Logout profiles that shouldn't be logged in anymore
+  std::vector<uint8_t> slots_to_logout;
+  for (const auto& [slot, profile] : logged_profiles_) {
+    auto desired_it = desired_profiles.find(slot);
+    if (desired_it == desired_profiles.end() ||
+        desired_it->second != profile->xuid()) {
+      // This slot should be logged out (either empty or different profile)
+      slots_to_logout.push_back(slot);
+    }
+  }
+  for (uint8_t slot : slots_to_logout) {
+    Logout(slot, false);
+  }
+
+  // Login profiles that aren't already logged in
+  for (const auto& [slot, xuid] : desired_profiles) {
+    auto current_profile = logged_profiles_.find(slot);
+    if (current_profile == logged_profiles_.end() ||
+        current_profile->second->xuid() != xuid) {
+      // This slot needs to be logged in (either empty or different profile)
+      Login(xuid, slot, false);
+    }
+  }
+
+  // Send a single notification after all changes
+  kernel_state_->BroadcastNotification(kXNotificationSystemSignInChanged,
+                                       GetUsedUserSlots().to_ulong());
 }
 
 UserProfile* ProfileManager::GetProfile(const uint64_t xuid) const {
@@ -278,11 +343,10 @@ void ProfileManager::Login(const uint64_t xuid, const uint8_t user_index,
   }
 
   // Find if xuid is already logged in. We might want to logout.
-  auto it = std::find_if(
-      logged_profiles_.begin(), logged_profiles_.end(),
-      [xuid](const auto& entry) { return entry.second->xuid() == xuid; });
-  if (it != logged_profiles_.end()) {
-    Logout(it->first);
+  for (auto& logged_profile : logged_profiles_) {
+    if (logged_profile.second->xuid() == xuid) {
+      Logout(logged_profile.first);
+    }
   }
 
   if (!accounts_.count(xuid)) {
@@ -573,6 +637,9 @@ void ProfileManager::UpdateConfig(const uint64_t xuid, const uint8_t slot) {
     default:
       break;
   }
+
+  // Save config immediately to persist login/logout changes
+  config::SaveConfig();
   return;
 }
 
@@ -598,14 +665,257 @@ bool ProfileManager::DeleteProfile(const uint64_t xuid) {
   return true;
 }
 
-bool ProfileManager::IsGamertagValid(const std::string gamertag) {
-  std::regex pattern(R"(^[A-Za-z][A-Za-z0-9]*( [A-Za-z0-9]+)*$)");
-
-  if (gamertag.length() < 1 || gamertag.length() > 15) {
+bool ProfileManager::ClearTitlePath(uint32_t title_id) {
+  if (title_id == 0) {
     return false;
   }
 
-  return std::regex_match(gamertag, pattern);
+  auto content_root = kernel_state_->emulator()->content_root();
+  auto profiles_directory = xe::filesystem::FilterByName(
+      xe::filesystem::ListDirectories(content_root),
+      std::regex("[0-9A-F]{16}"));
+
+  bool modified_any = false;
+
+  for (const auto& profile_dir : profiles_directory) {
+    const std::string profile_xuid = xe::path_to_utf8(profile_dir.name);
+    if (profile_xuid == fmt::format("{:016X}", 0)) {
+      continue;  // Skip shared content directory
+    }
+
+    // Construct path to dashboard GPD
+    std::filesystem::path dashboard_gpd_path =
+        profile_dir.path / profile_dir.name / kDashboardStringID /
+        fmt::format("{:08X}", static_cast<uint32_t>(XContentType::kProfile)) /
+        profile_dir.name / fmt::format("{:08X}.gpd", kDashboardID);
+
+    if (!std::filesystem::exists(dashboard_gpd_path)) {
+      continue;
+    }
+
+    // Read dashboard GPD file
+    std::ifstream file(dashboard_gpd_path, std::ios::binary);
+    if (!file.is_open()) {
+      continue;
+    }
+
+    file.seekg(0, std::ios::end);
+    size_t file_size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::vector<uint8_t> gpd_data(file_size);
+    file.read(reinterpret_cast<char*>(gpd_data.data()), file_size);
+    file.close();
+
+    // Parse dashboard GPD
+    GpdInfoProfile dashboard_gpd(gpd_data);
+    if (!dashboard_gpd.IsValid()) {
+      continue;
+    }
+
+    // Clear the path for this title
+    dashboard_gpd.SetTitlePath(title_id, std::filesystem::path());
+
+    // Write back the modified GPD
+    std::vector<uint8_t> serialized_gpd = dashboard_gpd.Serialize();
+
+    std::ofstream out_file(dashboard_gpd_path, std::ios::binary);
+    if (out_file.is_open()) {
+      out_file.write(reinterpret_cast<const char*>(serialized_gpd.data()),
+                     serialized_gpd.size());
+      out_file.close();
+      modified_any = true;
+    }
+  }
+
+  return modified_any;
+}
+
+bool ProfileManager::RemoveTitleFromAllProfiles(uint32_t title_id) {
+  if (title_id == 0) {
+    return false;
+  }
+
+  auto content_root = kernel_state_->emulator()->content_root();
+  auto profiles_directory = xe::filesystem::FilterByName(
+      xe::filesystem::ListDirectories(content_root),
+      std::regex("[0-9A-F]{16}"));
+
+  bool removed_from_any = false;
+
+  for (const auto& profile_dir : profiles_directory) {
+    const std::string profile_xuid = xe::path_to_utf8(profile_dir.name);
+    if (profile_xuid == fmt::format("{:016X}", 0)) {
+      continue;  // Skip shared content directory
+    }
+
+    std::filesystem::path dashboard_gpd_path =
+        profile_dir.path / profile_dir.name / kDashboardStringID /
+        fmt::format("{:08X}", static_cast<uint32_t>(XContentType::kProfile)) /
+        profile_dir.name / fmt::format("{:08X}.gpd", kDashboardID);
+
+    if (!std::filesystem::exists(dashboard_gpd_path)) {
+      continue;
+    }
+
+    std::ifstream file(dashboard_gpd_path, std::ios::binary);
+    if (!file.is_open()) {
+      continue;
+    }
+
+    file.seekg(0, std::ios::end);
+    size_t file_size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::vector<uint8_t> gpd_data(file_size);
+    file.read(reinterpret_cast<char*>(gpd_data.data()), file_size);
+    file.close();
+
+    GpdInfoProfile dashboard_gpd(gpd_data);
+    if (!dashboard_gpd.IsValid()) {
+      continue;
+    }
+
+    if (dashboard_gpd.RemoveTitle(title_id)) {
+      std::vector<uint8_t> serialized_gpd = dashboard_gpd.Serialize();
+
+      std::ofstream out_file(dashboard_gpd_path, std::ios::binary);
+      if (out_file.is_open()) {
+        out_file.write(reinterpret_cast<const char*>(serialized_gpd.data()),
+                       serialized_gpd.size());
+        out_file.close();
+        removed_from_any = true;
+      }
+    }
+  }
+
+  return removed_from_any;
+}
+
+std::vector<ScannedTitleInfo> ProfileManager::ScanAllProfilesForTitles() const {
+  std::map<uint32_t, ScannedTitleInfo> titles_by_id;
+
+  auto content_root = kernel_state_->emulator()->content_root();
+  auto profiles_directory = xe::filesystem::FilterByName(
+      xe::filesystem::ListDirectories(content_root),
+      std::regex("[0-9A-F]{16}"));
+
+  for (const auto& profile_dir : profiles_directory) {
+    const std::string profile_xuid = xe::path_to_utf8(profile_dir.name);
+    if (profile_xuid == fmt::format("{:016X}", 0)) {
+      continue;  // Skip shared content directory
+    }
+
+    std::filesystem::path dashboard_gpd_path =
+        profile_dir.path / profile_dir.name / kDashboardStringID /
+        fmt::format("{:08X}", static_cast<uint32_t>(XContentType::kProfile)) /
+        profile_dir.name / fmt::format("{:08X}.gpd", kDashboardID);
+
+    if (!std::filesystem::exists(dashboard_gpd_path)) {
+      continue;
+    }
+
+    std::ifstream file(dashboard_gpd_path, std::ios::binary);
+    if (!file.is_open()) {
+      continue;
+    }
+
+    file.seekg(0, std::ios::end);
+    size_t file_size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::vector<uint8_t> gpd_data(file_size);
+    file.read(reinterpret_cast<char*>(gpd_data.data()), file_size);
+    file.close();
+
+    GpdInfoProfile dashboard_gpd(gpd_data);
+    if (!dashboard_gpd.IsValid()) {
+      continue;
+    }
+
+    auto titles_info = dashboard_gpd.GetTitlesInfo();
+    for (const auto& title_info : titles_info) {
+      uint32_t title_id = title_info->title_id;
+
+      time_t last_played = 0;
+      if (title_info->last_played.is_valid()) {
+        auto last_played_tp = chrono::WinSystemClock::to_sys(
+            title_info->last_played.to_time_point());
+        last_played = std::chrono::system_clock::to_time_t(last_played_tp);
+      }
+
+      if (titles_by_id.find(title_id) != titles_by_id.end()) {
+        // Keep most recent timestamp across profiles
+        if (last_played > titles_by_id[title_id].last_run_time) {
+          titles_by_id[title_id].last_run_time = last_played;
+        }
+        continue;
+      }
+
+      std::string title_name =
+          xe::to_utf8(dashboard_gpd.GetTitleName(title_id));
+      if (!title_name.empty() && title_name.back() == '\0') {
+        title_name.pop_back();
+      }
+
+      std::filesystem::path path_to_file;
+      auto gpd_path = dashboard_gpd.GetTitlePath(title_id);
+      if (gpd_path.has_value()) {
+        path_to_file = *gpd_path;
+      }
+
+      auto all_discs = dashboard_gpd.GetTitleDiscs(title_id);
+      if (all_discs.size() > 1) {
+        std::sort(all_discs.begin(), all_discs.end(),
+                  [](const GpdInfoProfile::DiscInfo& a,
+                     const GpdInfoProfile::DiscInfo& b) {
+                    return a.label < b.label;
+                  });
+      }
+
+      titles_by_id[title_id] = {title_id, title_name, path_to_file, all_discs,
+                                last_played};
+    }
+  }
+
+  std::vector<ScannedTitleInfo> result;
+  for (auto& [title_id, title] : titles_by_id) {
+    result.push_back(std::move(title));
+  }
+
+  std::sort(result.begin(), result.end(),
+            [](const ScannedTitleInfo& a, const ScannedTitleInfo& b) {
+              return a.last_run_time > b.last_run_time;
+            });
+
+  return result;
+}
+
+std::filesystem::path ProfileManager::GetMostRecentlyPlayedTitlePath() const {
+  auto titles = ScanAllProfilesForTitles();
+  if (!titles.empty() && !titles[0].path_to_file.empty()) {
+    return titles[0].path_to_file;
+  }
+  return {};
+}
+
+bool ProfileManager::IsGamertagValid(const std::string gamertag) {
+  if (gamertag.empty()) {
+    return false;
+  }
+
+  if (gamertag.length() > 15) {
+    return false;
+  }
+
+  // Gamertag cannot start with a number.
+  if (std::isdigit(gamertag.at(0))) {
+    return false;
+  }
+
+  return std::find_if(gamertag.cbegin(), gamertag.cend(), [](char c) {
+           return !(std::isalnum(c) || (c == ' '));
+         }) == gamertag.cend();
 }
 
 }  // namespace xam

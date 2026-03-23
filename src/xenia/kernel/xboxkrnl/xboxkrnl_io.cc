@@ -171,15 +171,6 @@ dword_result_t NtReadFile_entry(dword_t file_handle, dword_t event_handle,
       // Mark that we should signal the event now. We do this after
       // we have written the info out.
       signal_event = true;
-
-      if (XSUCCEEDED(result)) {
-        if (auto patch = kernel_state()->xmp_volume_patch()) {
-          auto host_buf =
-              kernel_memory()->TranslateVirtual(buffer.guest_address());
-          patch->OnFileRead(file->entry()->name(), host_buf, buffer_length,
-                            buffer.guest_address());
-        }
-      }
     } else {
       // TODO(benvanik): async.
 
@@ -355,15 +346,6 @@ dword_result_t NtWriteFile_entry(dword_t file_handle, dword_t event_handle,
       // Mark that we should signal the event now. We do this after
       // we have written the info out.
       signal_event = true;
-
-      if (XSUCCEEDED(result)) {
-        if (auto patch = kernel_state()->xmp_volume_patch()) {
-          auto host_buf =
-              kernel_memory()->TranslateVirtual(buffer.guest_address());
-          patch->OnFileWrite(file->entry()->name(), host_buf, buffer_length,
-                             buffer.guest_address());
-        }
-      }
     } else {
       // X_STATUS_PENDING if not returning immediately.
       result = X_STATUS_PENDING;
@@ -460,16 +442,6 @@ dword_result_t NtRemoveIoCompletion_entry(
 }
 DECLARE_XBOXKRNL_EXPORT2(NtRemoveIoCompletion, kFileSystem, kImplemented,
                          kHighFrequency);
-
-dword_result_t NtCancelIoFile_entry(dword_t handle) {
-  auto file = kernel_state()->object_table()->LookupObject<XFile>(handle);
-  if (!file) {
-    return X_STATUS_INVALID_HANDLE;
-  }
-
-  return X_STATUS_SUCCESS;
-}
-DECLARE_XBOXKRNL_EXPORT1(NtCancelIoFile, kFileSystem, kStub);
 
 dword_result_t NtQueryFullAttributesFile_entry(
     pointer_t<X_OBJECT_ATTRIBUTES> obj_attribs,

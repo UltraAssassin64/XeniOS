@@ -9,10 +9,6 @@
 
 #include "xenia/kernel/xthread.h"
 
-#if XE_PLATFORM_LINUX
-#include <signal.h>
-#endif
-
 #include "xenia/base/byte_stream.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/platform.h"
@@ -44,6 +40,18 @@ const uint32_t XAPC::kDummyKernelRoutine;
 const uint32_t XAPC::kDummyRundownRoutine;
 
 using namespace xe::literals;
+
+namespace {
+size_t GuestHostThreadStackSize() {
+#if XE_PLATFORM_IOS
+  // iOS is memory-constrained; a 16 MiB host pthread stack per guest thread
+  // can cause in-game thread creation failures under load.
+  return 4_MiB;
+#else
+  return 16_MiB;
+#endif
+}
+}  // namespace
 
 uint32_t next_xthread_id_ = 0;
 
@@ -100,6 +108,12 @@ XThread::~XThread() {
 
 thread_local XThread* current_xthread_tls_ = nullptr;
 
+namespace {
+void HostThreadExitCleanupThunk(void* argument) {
+  static_cast<XThread*>(argument)->OnHostThreadExitCleanup();
+}
+}  // namespace
+
 bool XThread::IsInThread() { return Thread::IsInThread(); }
 
 bool XThread::IsInThread(XThread* other) {
@@ -122,6 +136,14 @@ uint32_t XThread::GetCurrentThreadHandle() {
 uint32_t XThread::GetCurrentThreadId() {
   XThread* thread = XThread::GetCurrentThread();
   return thread->guest_object<X_KTHREAD>()->thread_id;
+}
+
+void XThread::OnHostThreadExitCleanup() {
+  running_ = false;
+  current_thread_ = nullptr;
+  current_xthread_tls_ = nullptr;
+  xe::Profiler::ThreadExit();
+  ReleaseHandle();
 }
 
 uint32_t XThread::GetLastError() {
@@ -360,7 +382,7 @@ X_STATUS XThread::Create() {
   // This is thread safe.
   thread_state_ = new cpu::ThreadState(kernel_state()->processor(), thread_id_,
                                        stack_base_, pcr_address_);
-  XELOGI("XThread{:08X} ({:X}) Stack: {:08X}-{:08X}", handle(), thread_id_,
+  XELOGD("XThread{:08X} ({:X}) Stack: {:08X}-{:08X}", handle(), thread_id_,
          stack_limit_, stack_base_);
 
   // Exports use this to get the kernel.
@@ -390,8 +412,7 @@ X_STATUS XThread::Create() {
   xe::threading::Thread::CreationParameters params;
 
   params.create_suspended = true;
-
-  params.stack_size = 16_MiB;  // Allocate a big host stack.
+  params.stack_size = GuestHostThreadStackSize();
   thread_ = xe::threading::Thread::Create(params, [this]() {
     // Set thread ID override. This is used by logging.
     xe::threading::set_current_thread_id(handle());
@@ -407,20 +428,24 @@ X_STATUS XThread::Create() {
     current_thread_ = this;
     cpu::ThreadState::Bind(this->thread_state());
     running_ = true;
+
+#if XE_PLATFORM_LINUX || XE_PLATFORM_ANDROID || XE_PLATFORM_APPLE
+    pthread_cleanup_push(HostThreadExitCleanupThunk, this);
     Execute();
-    running_ = false;
-    current_thread_ = nullptr;
-    current_xthread_tls_ = nullptr;
-
-    xe::Profiler::ThreadExit();
-
-    // Release the self-reference to the thread.
-    ReleaseHandle();
+    pthread_cleanup_pop(1);
+#else
+    Execute();
+    OnHostThreadExitCleanup();
+#endif
   });
 
   if (!thread_) {
     // TODO(benvanik): translate error?
-    XELOGE("CreateThread failed");
+    XELOGE(
+        "CreateThread failed (guest_stack=0x{:X}, host_stack=0x{:X}, "
+        "creation_flags=0x{:X}, start=0x{:X})",
+        creation_params_.stack_size, static_cast<uint32_t>(params.stack_size),
+        creation_params_.creation_flags, creation_params_.start_address);
     return X_STATUS_NO_MEMORY;
   }
 
@@ -482,12 +507,7 @@ X_STATUS XThread::Exit(int exit_code) {
   emulator()->processor()->OnThreadExit(thread_id_);
 
   // NOTE: unless PlatformExit fails, expect it to never return!
-  current_xthread_tls_ = nullptr;
-  current_thread_ = nullptr;
-  xe::Profiler::ThreadExit();
-
   running_ = false;
-  ReleaseHandle();
 
   // NOTE: this does not return!
   xe::threading::Thread::Exit(exit_code);
@@ -507,19 +527,17 @@ X_STATUS XThread::Terminate(int exit_code) {
 
   running_ = false;
   if (XThread::IsInThread(this)) {
-    ReleaseHandle();
     xe::threading::Thread::Exit(exit_code);
   } else {
     thread_->Terminate(exit_code);
-    ReleaseHandle();
   }
 
   return X_STATUS_SUCCESS;
 }
 
 void XThread::Execute() {
-  XELOGKERNEL("XThread::Execute thid {} (handle={:08X}, '{}', native={:08X})",
-              thread_id_, handle(), thread_name_, thread_->system_id());
+  XELOGD("XThread::Execute thid {} (handle={:08X}, '{}', native={:08X})",
+         thread_id_, handle(), thread_name_, thread_->system_id());
   // Let the kernel know we are starting.
   kernel_state()->OnThreadExecute(this);
 
@@ -545,59 +563,29 @@ void XThread::Execute() {
     want_exit_code = true;
   }
 
-  // Set up reentry mechanism for fiber-based stack switching.
-  // When Reenter() is called (e.g., by KeSetCurrentStackPointers), it
-  // unwinds back here to re-enter at a new guest address.
-  //
-  // On Linux, C++ exceptions are used so that DWARF unwind info (registered
-  // for JIT code via __register_frame) allows proper destructor/RAII cleanup
-  // through both JIT and host C++ frames.
-  //
-  // On Windows, setjmp/longjmp is used because MSVC's longjmp performs SEH
-  // stack unwinding which already calls destructors.
+  // Set up reentry jump buffer for fiber-based stack switching.
+  // When Reenter() is called (e.g., by KeSetCurrentStackPointers), it will
+  // longjmp back here instead of throwing an exception through JIT code.
   uint32_t next_address;
-#if XE_PLATFORM_LINUX
-  try {
-    exit_code = static_cast<int>(kernel_state()->processor()->Execute(
-        thread_state_, address, args.data(), args.size()));
-    next_address = 0;
-  } catch (const FiberReentryException& e) {
-    // Ensure SIGRTMIN (used for thread suspend) is not left blocked.
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGRTMIN);
-    pthread_sigmask(SIG_UNBLOCK, &set, nullptr);
-    next_address = e.address;
-  }
-
-  while (next_address != 0) {
-    try {
-      kernel_state()->processor()->ExecuteRaw(thread_state_, next_address);
-      next_address = 0;
-      if (want_exit_code) {
-        exit_code = static_cast<int>(thread_state_->context()->r[3]);
-      }
-    } catch (const FiberReentryException& e) {
-      sigset_t set;
-      sigemptyset(&set);
-      sigaddset(&set, SIGRTMIN);
-      pthread_sigmask(SIG_UNBLOCK, &set, nullptr);
-      next_address = e.address;
-    }
-  }
-#else
   if (setjmp(reentry_jmp_buf_) != 0) {
+    // Longjmp returned here - reentry requested
     next_address = reentry_address_;
   } else {
+    // Initial execution
     exit_code = static_cast<int>(kernel_state()->processor()->Execute(
         thread_state_, address, args.data(), args.size()));
     next_address = 0;
   }
 
+  // Handle reentry loop for fiber switching.
+  // See XThread::Reenter comments.
   while (next_address != 0) {
+    // Set up jump buffer for potential reentries during this execution
     if (setjmp(reentry_jmp_buf_) != 0) {
+      // Nested reentry occurred
       next_address = reentry_address_;
     } else {
+      // Execute at the reentry address
       kernel_state()->processor()->ExecuteRaw(thread_state_, next_address);
       next_address = 0;
       if (want_exit_code) {
@@ -605,7 +593,6 @@ void XThread::Execute() {
       }
     }
   }
-#endif
 
   // If we got here it means the execute completed without an exit being called.
   // Treat the return code as an implicit exit code (if desired).
@@ -613,18 +600,12 @@ void XThread::Execute() {
 }
 
 void XThread::Reenter(uint32_t address) {
-  // Called when the game switches fiber stacks (e.g., via
+  // Use setjmp/longjmp instead of exceptions to avoid issues with unwinding
+  // through JIT-compiled code, which lacks exception handling metadata.
+  // This is called when the game switches fiber stacks (e.g., via
   // KeSetCurrentStackPointers in games like Forza Horizon 2).
-  // Must unwind through all frames between here and Execute().
-#if XE_PLATFORM_LINUX
-  // Throw a C++ exception that unwinds through JIT frames (using DWARF
-  // .eh_frame info) and host frames (using compiler-generated DWARF),
-  // calling destructors properly along the way.
-  throw FiberReentryException{address};
-#else
   reentry_address_ = address;
   std::longjmp(reentry_jmp_buf_, 1);
-#endif
 }
 
 void XThread::EnterCriticalRegion() {
@@ -767,7 +748,7 @@ X_STATUS XThread::Resume(uint32_t* out_suspend_count) {
   } else {
     return X_STATUS_UNSUCCESSFUL;
   }
-#elif XE_PLATFORM_LINUX
+#elif XE_PLATFORM_LINUX || XE_PLATFORM_APPLE
   // Use mutex to protect suspend_count access and coordinate with SelfSuspend.
   bool should_resume_host = false;
   {
@@ -821,7 +802,7 @@ X_STATUS XThread::Suspend(uint32_t* out_suspend_count) {
   }
 }
 
-#if XE_PLATFORM_LINUX
+#if XE_PLATFORM_LINUX || XE_PLATFORM_APPLE
 uint32_t XThread::SelfSuspend() {
   auto guest_thread = guest_object<X_KTHREAD>();
   std::unique_lock<std::mutex> lock(suspend_mutex_);
@@ -1042,7 +1023,7 @@ object_ref<XThread> XThread::Restore(KernelState* kernel_state,
 
     xe::threading::Thread::CreationParameters params;
     params.create_suspended = true;  // Not done restoring yet.
-    params.stack_size = 16_MiB;
+    params.stack_size = GuestHostThreadStackSize();
     thread->thread_ = xe::threading::Thread::Create(params, [thread, state]() {
       // Set thread ID override. This is used by logging.
       xe::threading::set_current_thread_id(thread->handle());
@@ -1067,17 +1048,22 @@ object_ref<XThread> XThread::Restore(KernelState* kernel_state,
       // Execute user code.
       thread->running_ = true;
 
+#if XE_PLATFORM_LINUX || XE_PLATFORM_ANDROID || XE_PLATFORM_APPLE
+      pthread_cleanup_push(HostThreadExitCleanupThunk, thread);
       uint32_t pc = state.context.pc;
       thread->kernel_state_->processor()->ExecuteRaw(thread->thread_state_, pc);
-
-      current_thread_ = nullptr;
-      current_xthread_tls_ = nullptr;
-
-      xe::Profiler::ThreadExit();
-
-      // Release the self-reference to the thread.
-      thread->ReleaseHandle();
+      pthread_cleanup_pop(1);
+#else
+      uint32_t pc = state.context.pc;
+      thread->kernel_state_->processor()->ExecuteRaw(thread->thread_state_, pc);
+      thread->OnHostThreadExitCleanup();
+#endif
     });
+    if (!thread->thread_) {
+      XELOGE(
+          "Restore thread create failed (host_stack=0x{:X}, state_pc=0x{:X})",
+          static_cast<uint32_t>(params.stack_size), state.context.pc);
+    }
     assert_not_null(thread->thread_);
 
     // Notify processor we were recreated.
@@ -1100,7 +1086,7 @@ XHostThread::XHostThread(KernelState* kernel_state, uint32_t stack_size,
 }
 
 void XHostThread::Execute() {
-  XELOGKERNEL(
+  XELOGD(
       "XThread::Execute thid {} (handle={:08X}, '{}', native={:08X}, <host>)",
       thread_id_, handle(), thread_name_, thread_->system_id());
   // Let the kernel know we are starting.
