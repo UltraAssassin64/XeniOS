@@ -3,9 +3,15 @@ project("xbyak_aarch64")
   uuid("40d4ce21-5448-4399-9f98-589b7e1c24c3")
   kind("StaticLib")
   language("C++")
+  links({
+    "xbyak",
+  })
   includedirs({
-    "xbyak_aarch64“
+    "xbyak_aarch64",
+  })
+  sysincludedirs({
+    "xbyak_aarch64/xbyak_aarch64",
   })
   files({
-    "xbyak_aarch64/xbyak_aarch64.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64.h",
   })
