@@ -14,7 +14,3 @@ project("xenia-core")
     "*.h",
     "*.cc",
   })
-  filter("system:ios")
-    files({
-      "jit_helper.mm",
-    })

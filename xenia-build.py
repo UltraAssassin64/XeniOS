@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+xenia-build.py python3
 
 # Copyright 2025 Ben Vanik. All Rights Reserved.
 
@@ -94,7 +94,7 @@ def import_subprocess_environment(args):
         "CC",
         "CXX",
         )
-    #fixing something
+
     # Extract and parse environment variables from stdout
     for line in variables.splitlines():
         if line.find("=") != -1:

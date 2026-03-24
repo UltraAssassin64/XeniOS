@@ -28,7 +28,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <filesystem>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -150,11 +149,11 @@ static BOOL xe_ios_requires_debugger_broker(void) {
 }
 
 static NSString* xe_jit_waiting_status_message(void) {
-  return @"JIT is not active. In StikDebug, assign Amethyst-MeloNX.js or universal.js. \r\nIf using TrollStore, please mention @ultraassassin64";
+  return @"JIT is not active. In StikDebug, assign Amethyst-MeloNX.js or universal.js.";
 }
 
 static NSString* xe_jit_not_detected_guidance_message(void) {
-  return @"JIT is not active. In StikDebug, assign Amethyst-MeloNX.js or universal.js.\r\nIf using TrollStore, please mention @ultraassassin64";
+  return @"JIT is not active. In StikDebug, assign Amethyst-MeloNX.js or universal.js.";
 }
 
 static void xe_add_jit_ring_pulse(CALayer* layer, NSString* key, CGFloat end_scale,
@@ -1444,17 +1443,6 @@ static NSURL* xe_stikdebug_enable_jit_url_for_bundle_identifier(NSString* bundle
   }
   NSURLComponents* components = [[[NSURLComponents alloc] init] autorelease];
   components.scheme = @"stikjit";
-  components.host = @"enable-jit";
-  components.queryItems = @[ [NSURLQueryItem queryItemWithName:@"bundle-id"
-                                                         value:bundle_identifier] ];
-  return components.URL;
-}
-static NSURL* xe_trollstore_enable_jit_url_for_bundle_identifier(NSString* bundle_identifier) {
-  if (!bundle_identifier || bundle_identifier.length == 0) {
-    return nil;
-  }
-  NSURLComponents* components = [[[NSURLComponents alloc] init] autorelease];
-  components.scheme = @"apple-magnifier";
   components.host = @"enable-jit";
   components.queryItems = @[ [NSURLQueryItem queryItemWithName:@"bundle-id"
                                                          value:bundle_identifier] ];
@@ -3572,10 +3560,10 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
       "These options are stored locally in the iOS frontend rather than xenios.config.toml.";
   AddUserDefaultBoolSetting(
       automation.items, kXeniaAutoOpenStikDebugOnLaunchPreferenceKey,
-      "Auto-Enable JIT via StikDebug or TrollStore",
-      "On app open, jump into StikDebug or TrollStore with XeniOS's bundle ID so it can enable JIT and "
+      "Auto-Enable JIT via StikDebug",
+      "On app open, jump into StikDebug with XeniOS's bundle ID so it can enable JIT and "
       "relaunch XeniOS. Requires StikDebug, a valid pairing file, and your normal VPN / loopback "
-      "setup; or TrollStore installed.",
+      "setup.",
       false);
   if (!automation.items.empty()) {
     sections.push_back(std::move(automation));
@@ -10327,24 +10315,18 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
     XELOGI("iOS: Skipping automatic StikDebug handoff (cooldown active)");
     return NO;
   }
+
   NSString* bundle_identifier = NSBundle.mainBundle.bundleIdentifier;
   NSURL* stikdebug_url = xe_stikdebug_enable_jit_url_for_bundle_identifier(bundle_identifier);
-  NSURL* trollstore_url = xe_trollstore_enable_jit_url_for_bundle_identifier(bundle_identifier);
   if (!stikdebug_url) {
     XELOGW("iOS: Unable to build StikDebug JIT handoff URL");
     return NO;
   }
-  if(!trollstore_url){
-    XELOGW("iOS: Unable to build TrollStore JIT handoff URL");
-  }
 
   UIApplication* application = [UIApplication sharedApplication];
   if (![application canOpenURL:stikdebug_url]) {
-    if(![application canOpenURL:trollstore_url]){
-      XELOGW("iOS: TrollStore URL scheme unavailable");
-    }
     XELOGW("iOS: StikDebug URL scheme unavailable");
-    self.statusLabel.text = @"StikDebug or TrollStore is not installed, or unavailable.";
+    self.statusLabel.text = @"StikDebug is not installed or unavailable.";
     if (launch_path && !launch_path->empty()) {
       ClearPendingExternalLaunchPathPreference();
     }
@@ -10358,30 +10340,29 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
   const BOOL has_pending_launch = launch_path && !launch_path->empty();
   SetUserDefaultDouble(kXeniaLastAutoStikDebugAttemptTimestampPreferenceKey, now);
   self.statusLabel.text =
-      has_pending_launch ? @"Opening StikDebug or TrollStore to enable JIT..." : @"Opening StikDebug for JIT...";
+      has_pending_launch ? @"Opening StikDebug to enable JIT..." : @"Opening StikDebug for JIT...";
   XELOGI("iOS: Opening StikDebug handoff URL {}", stikdebug_url.absoluteString.UTF8String);
+
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                  dispatch_get_main_queue(), ^{
-                   if (stikdebug_url && [application canOpenURL:stikdebug_url]) {
-                      [application openURL:stikdebug_url options:@{} completionHandler:nil];
-                    }
-                    else if (trollstore_url && [application canOpenURL:trollstore_url]) {
-                      [application openURL:trollstore_url options:@{} completionHandler:nil];
-                    }
-                    else{
-                      XELOGW("iOS: Failed to open StikDebug or TrollStore handoff URL");
-                      self.statusLabel.text = @"Failed to open StikDebug or TrollStore.";
-                       if (has_pending_launch) {
-                          ClearPendingExternalLaunchPathPreference();
-                       }
-                    }
+                   [application openURL:stikdebug_url
+                       options:@{}
+                       completionHandler:^(BOOL success) {
+                         if (!success) {
+                           XELOGW("iOS: Failed to open StikDebug handoff URL");
+                           self.statusLabel.text = @"Failed to open StikDebug.";
+                           if (has_pending_launch) {
+                             ClearPendingExternalLaunchPathPreference();
+                           }
+                         }
+                       }];
                  });
   return YES;
 }
-    
+
 - (void)evaluateAutomaticStikDebugJITHandoffIfNeeded {
   [self requestAutomaticStikDebugJITHandoffForPendingLaunchPath:nullptr];
-  }
+}
 
 - (void)copyLaunchURLForGameAtIndex:(size_t)game_index {
   if (game_index >= discovered_games_.size()) {

@@ -2,21 +2,22 @@
  ******************************************************************************
  * Xenia : Xbox 360 Emulator Research Project                                 *
  ******************************************************************************
- * Copyright 2026 Ben Vanik. All rights reserved.                             *
+ * Copyright 2025 Xenia Developers. All rights reserved.                      *
  * Released under the BSD license - see LICENSE in the root for more details. *
  ******************************************************************************
  */
-
 #include "xenia/cpu/backend/a64/a64_sequences.h"
 
+#include <arm_neon.h>
+#include <algorithm>
+#include <cstddef>
 #include <cstring>
 
-#include "xenia/base/math.h"
-#include "xenia/cpu/backend/a64/a64_emitter.h"
+#include "xenia/cpu/backend/a64/a64_backend.h"
 #include "xenia/cpu/backend/a64/a64_op.h"
-#include "xenia/cpu/backend/a64/a64_seq_util.h"
-#include "xenia/cpu/backend/a64/a64_stack_layout.h"
-#include "xenia/cpu/hir/instr.h"
+
+// For OPCODE_PACK/OPCODE_UNPACK
+#include "third_party/half/include/half.hpp"
 
 namespace xe {
 namespace cpu {
@@ -25,196 +26,35 @@ namespace a64 {
 
 volatile int anchor_vector = 0;
 
-// ============================================================================
-// OPCODE_SPLAT
-// ============================================================================
-struct SPLAT_I8 : Sequence<SPLAT_I8, I<OPCODE_SPLAT, V128Op, I8Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant) {
-      e.movi(VReg(i.dest.reg().getIdx()).b16,
-             static_cast<uint8_t>(i.src1.constant()));
-    } else {
-      e.dup(VReg(i.dest.reg().getIdx()).b16, i.src1);
-    }
-  }
-};
-struct SPLAT_I16 : Sequence<SPLAT_I16, I<OPCODE_SPLAT, V128Op, I16Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant) {
-      e.mov(e.w0, static_cast<uint64_t>(i.src1.constant() & 0xFFFF));
-      e.dup(VReg(i.dest.reg().getIdx()).h8, e.w0);
-    } else {
-      e.dup(VReg(i.dest.reg().getIdx()).h8, i.src1);
-    }
-  }
-};
-struct SPLAT_I32 : Sequence<SPLAT_I32, I<OPCODE_SPLAT, V128Op, I32Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant) {
-      uint32_t val = static_cast<uint32_t>(i.src1.constant());
-      // Use movz/movn via mov(xreg, uint64) for full 32-bit range.
-      e.mov(e.x0, static_cast<uint64_t>(val));
-      e.dup(VReg(i.dest.reg().getIdx()).s4, e.w0);
-    } else {
-      e.dup(VReg(i.dest.reg().getIdx()).s4, i.src1);
-    }
-  }
-};
-struct SPLAT_F32 : Sequence<SPLAT_F32, I<OPCODE_SPLAT, V128Op, F32Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant) {
-      union {
-        float f;
-        uint32_t u;
-      } c;
-      c.f = i.src1.constant();
-      e.mov(e.w0, static_cast<uint64_t>(c.u));
-      e.dup(VReg(i.dest.reg().getIdx()).s4, e.w0);
-    } else {
-      int src_idx = i.src1.reg().getIdx();
-      e.dup(VReg(i.dest.reg().getIdx()).s4, VReg(src_idx).s4[0]);
-    }
-  }
-};
-EMITTER_OPCODE_TABLE(OPCODE_SPLAT, SPLAT_I8, SPLAT_I16, SPLAT_I32, SPLAT_F32);
+template <typename Fn>
+void EmitWithVmxFpcr(A64Emitter& e, Fn&& emit_op) {
+  // Altivec vector FP runs with non-IEEE flush-to-zero and round-to-nearest.
+  e.MRS(X13, SystemReg::FPCR);
+  e.MOV(X14, X13);
+  e.BFI(X14, XZR, 22, 2);
+  e.ORR(X14, X14, uint64_t(1) << 24);
+  e.MSR(SystemReg::FPCR, X14);
+  emit_op();
+  e.MSR(SystemReg::FPCR, X13);
+}
 
-// ============================================================================
-// OPCODE_INSERT
-// ============================================================================
-struct INSERT_I8
-    : Sequence<INSERT_I8, I<OPCODE_INSERT, V128Op, V128Op, I8Op, I8Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    assert_true(i.src2.is_constant);
-    int dest_idx = i.dest.reg().getIdx();
-    if (!i.src1.is_constant && i.src1.reg().getIdx() != dest_idx) {
-      e.orr(VReg(dest_idx).b16, VReg(i.src1.reg().getIdx()).b16,
-            VReg(i.src1.reg().getIdx()).b16);
-    } else if (i.src1.is_constant) {
-      LoadV128Const(e, dest_idx, i.src1.constant());
-    }
-    uint8_t idx = VEC128_B(i.src2.constant());
-    if (i.src3.is_constant) {
-      e.mov(e.w0, static_cast<uint64_t>(i.src3.constant() & 0xFF));
-      e.ins(VReg(dest_idx).b16[idx], e.w0);
-    } else {
-      e.ins(VReg(dest_idx).b16[idx], i.src3);
-    }
-  }
-};
-struct INSERT_I16
-    : Sequence<INSERT_I16, I<OPCODE_INSERT, V128Op, V128Op, I8Op, I16Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    assert_true(i.src2.is_constant);
-    int dest_idx = i.dest.reg().getIdx();
-    if (!i.src1.is_constant && i.src1.reg().getIdx() != dest_idx) {
-      e.orr(VReg(dest_idx).b16, VReg(i.src1.reg().getIdx()).b16,
-            VReg(i.src1.reg().getIdx()).b16);
-    } else if (i.src1.is_constant) {
-      LoadV128Const(e, dest_idx, i.src1.constant());
-    }
-    uint8_t idx = VEC128_W(i.src2.constant());
-    if (i.src3.is_constant) {
-      e.mov(e.w0, static_cast<uint64_t>(i.src3.constant() & 0xFFFF));
-      e.ins(VReg(dest_idx).h8[idx], e.w0);
-    } else {
-      e.ins(VReg(dest_idx).h8[idx], i.src3);
-    }
-  }
-};
-struct INSERT_I32
-    : Sequence<INSERT_I32, I<OPCODE_INSERT, V128Op, V128Op, I8Op, I32Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    assert_true(i.src2.is_constant);
-    int dest_idx = i.dest.reg().getIdx();
-    if (!i.src1.is_constant && i.src1.reg().getIdx() != dest_idx) {
-      e.orr(VReg(dest_idx).b16, VReg(i.src1.reg().getIdx()).b16,
-            VReg(i.src1.reg().getIdx()).b16);
-    } else if (i.src1.is_constant) {
-      LoadV128Const(e, dest_idx, i.src1.constant());
-    }
-    uint8_t idx = VEC128_D(i.src2.constant());
-    if (i.src3.is_constant) {
-      e.mov(e.w0,
-            static_cast<uint64_t>(static_cast<uint32_t>(i.src3.constant())));
-      e.ins(VReg(dest_idx).s4[idx], e.w0);
-    } else {
-      e.ins(VReg(dest_idx).s4[idx], i.src3);
-    }
-  }
-};
-EMITTER_OPCODE_TABLE(OPCODE_INSERT, INSERT_I8, INSERT_I16, INSERT_I32);
+inline void EmitPreferQNaNLanesF32x4(A64Emitter& e, QReg result, QReg src1,
+                                     QReg src2) {
+  // vaddfp/vsubfp keep the first NaN payload encountered per lane and
+  // quiet signaling NaNs.
+  e.LoadConstantV(Q6, vec128i(0x00400000u));
 
-// ============================================================================
-// OPCODE_EXTRACT
-// ============================================================================
-struct EXTRACT_I8
-    : Sequence<EXTRACT_I8, I<OPCODE_EXTRACT, I8Op, V128Op, I8Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int src_idx = SrcVReg(e, i.src1, 0);
-    if (i.src2.is_constant) {
-      e.umov(i.dest, VReg(src_idx).b16[VEC128_B(i.src2.constant())]);
-    } else {
-      // Dynamic: XOR index with 3, use as TBL index.
-      e.mov(e.w0, static_cast<uint64_t>(0x03));
-      e.eor(e.w0, e.w0, i.src2);
-      e.and_(e.w0, e.w0, 0x0F);
-      e.fmov(e.s1, e.w0);
-      e.tbl(VReg(1).b16, VReg(src_idx).b16, 1, VReg(1).b16);
-      e.umov(i.dest, VReg(1).b16[0]);
-    }
-  }
-};
-struct EXTRACT_I16
-    : Sequence<EXTRACT_I16, I<OPCODE_EXTRACT, I16Op, V128Op, I8Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int src_idx = SrcVReg(e, i.src1, 0);
-    if (i.src2.is_constant) {
-      e.umov(i.dest, VReg(src_idx).h8[VEC128_W(i.src2.constant())]);
-    } else {
-      // Dynamic: XOR with 1, extract.
-      e.mov(e.w0, static_cast<uint64_t>(0x01));
-      e.eor(e.w0, e.w0, i.src2);
-      e.and_(e.w0, e.w0, 0x07);
-      // Compute byte offset = index * 2.
-      e.lsl(e.w1, e.w0, 1);
-      e.add(e.w0, e.w1, 1);
-      // Build 2-byte TBL control: {w1, w0} = {lo_byte_idx, hi_byte_idx}.
-      e.fmov(e.s1, e.w1);
-      e.ins(VReg(1).b16[1], e.w0);
-      e.tbl(VReg(1).b16, VReg(src_idx).b16, 1, VReg(1).b16);
-      e.umov(i.dest, VReg(1).h8[0]);
-    }
-  }
-};
-struct EXTRACT_I32
-    : Sequence<EXTRACT_I32, I<OPCODE_EXTRACT, I32Op, V128Op, I8Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int src_idx = SrcVReg(e, i.src1, 0);
-    if (i.src2.is_constant) {
-      uint8_t idx = VEC128_D(i.src2.constant());
-      if (idx == 0) {
-        e.umov(i.dest, VReg(src_idx).s4[0]);
-      } else {
-        e.umov(i.dest, VReg(src_idx).s4[idx]);
-      }
-    } else {
-      // Dynamic: use TBL with computed control.
-      e.and_(e.w0, i.src2, 0x03);
-      e.lsl(e.w0, e.w0, 2);
-      // Build 4-byte control: {w0, w0+1, w0+2, w0+3}.
-      e.add(e.w1, e.w0, 1);
-      e.add(e.w2, e.w0, 2);
-      e.add(e.w3, e.w0, 3);
-      e.fmov(e.s1, e.w0);
-      e.ins(VReg(1).b16[1], e.w1);
-      e.ins(VReg(1).b16[2], e.w2);
-      e.ins(VReg(1).b16[3], e.w3);
-      e.tbl(VReg(1).b16, VReg(src_idx).b16, 1, VReg(1).b16);
-      e.umov(i.dest, VReg(1).s4[0]);
-    }
-  }
-};
-EMITTER_OPCODE_TABLE(OPCODE_EXTRACT, EXTRACT_I8, EXTRACT_I16, EXTRACT_I32);
+  e.FCMEQ(Q7.S4(), src1.S4(), src1.S4());
+  e.MVN(Q7.B16(), Q7.B16());
+  e.ORR(Q4.B16(), src1.B16(), Q6.B16());
+  e.BIT(result.B16(), Q4.B16(), Q7.B16());
+
+  e.FCMEQ(Q0.S4(), src2.S4(), src2.S4());
+  e.MVN(Q0.B16(), Q0.B16());
+  e.BIC(Q0.B16(), Q0.B16(), Q7.B16());
+  e.ORR(Q4.B16(), src2.B16(), Q6.B16());
+  e.BIT(result.B16(), Q4.B16(), Q0.B16());
+}
 
 // ============================================================================
 // OPCODE_VECTOR_CONVERT_I2F
@@ -223,15 +63,15 @@ struct VECTOR_CONVERT_I2F
     : Sequence<VECTOR_CONVERT_I2F,
                I<OPCODE_VECTOR_CONVERT_I2F, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
+    const QReg src = i.src1.is_constant ? Q0 : i.src1;
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src, i.src1.constant());
+    }
     EmitWithVmxFpcr(e, [&] {
-      int s = SrcVReg(e, i.src1, 0);
-      int d = i.dest.reg().getIdx();
       if (i.instr->flags & ARITHMETIC_UNSIGNED) {
-        // ARM64 ucvtf does a single-step unsigned int->float conversion,
-        // avoiding the double-rounding issue that x64 has to work around.
-        e.ucvtf(VReg(d).s4, VReg(s).s4);
+        e.UCVTF(i.dest.reg().S4(), src.S4());
       } else {
-        e.scvtf(VReg(d).s4, VReg(s).s4);
+        e.SCVTF(i.dest.reg().S4(), src.S4());
       }
     });
   }
@@ -245,15 +85,15 @@ struct VECTOR_CONVERT_F2I
     : Sequence<VECTOR_CONVERT_F2I,
                I<OPCODE_VECTOR_CONVERT_F2I, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
+    const QReg src = i.src1.is_constant ? Q0 : i.src1;
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src, i.src1.constant());
+    }
     EmitWithVmxFpcr(e, [&] {
-      int s = SrcVReg(e, i.src1, 0);
-      int d = i.dest.reg().getIdx();
       if (i.instr->flags & ARITHMETIC_UNSIGNED) {
-        // ARM64 fcvtzu: NaN->0, negative->0, overflow->UINT_MAX.
-        e.fcvtzu(VReg(d).s4, VReg(s).s4);
+        e.FCVTZU(i.dest.reg().S4(), src.S4());
       } else {
-        // ARM64 fcvtzs: NaN->0, overflow saturates to INT_MIN/INT_MAX.
-        e.fcvtzs(VReg(d).s4, VReg(s).s4);
+        e.FCVTZS(i.dest.reg().S4(), src.S4());
       }
     });
   }
@@ -261,118 +101,100 @@ struct VECTOR_CONVERT_F2I
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_CONVERT_F2I, VECTOR_CONVERT_F2I);
 
 // ============================================================================
-// OPCODE_VECTOR_ADD
+// OPCODE_VECTOR_DENORMFLUSH
 // ============================================================================
-struct VECTOR_ADD
-    : Sequence<VECTOR_ADD, I<OPCODE_VECTOR_ADD, V128Op, V128Op, V128Op>> {
+struct VECTOR_DENORMFLUSH
+    : Sequence<VECTOR_DENORMFLUSH,
+               I<OPCODE_VECTOR_DENORMFLUSH, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    const TypeName part_type = static_cast<TypeName>(i.instr->flags & 0xFF);
-    if (part_type == FLOAT32_TYPE) {
-      EmitVmxFpBinOp_V128(e, i.dest.reg().getIdx(), i.src1, i.src2,
-                          VmxFpBinOp::Add);
-      return;
-    }
-    const uint32_t arith = i.instr->flags >> 8;
-    bool is_unsigned = !!(arith & hir::ARITHMETIC_UNSIGNED);
-    bool saturate = !!(arith & hir::ARITHMETIC_SATURATE);
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (part_type) {
-      case INT8_TYPE:
-        if (saturate) {
-          if (is_unsigned)
-            e.uqadd(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-          else
-            e.sqadd(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        } else {
-          e.add(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        }
-        break;
-      case INT16_TYPE:
-        if (saturate) {
-          if (is_unsigned)
-            e.uqadd(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-          else
-            e.sqadd(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        } else {
-          e.add(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        }
-        break;
-      case INT32_TYPE:
-        if (saturate) {
-          if (is_unsigned)
-            e.uqadd(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-          else
-            e.sqadd(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        } else {
-          e.add(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        }
-        break;
-      default:
-        assert_unhandled_case(part_type);
-        break;
-    }
+    // Clear denormals to signed zero, preserving sign bits.
+    e.MOV(X2, e.GetVConstPtr());
+    e.LDR(Q0, X2, e.GetVConstOffset(VSingleDenormalMask));
+    e.AND(Q0.B16(), i.src1.reg().B16(), Q0.B16());
+    e.CMEQ(Q0.S4(), Q0.S4(), 0);
+    e.BIC(Q1.B16(), i.src1.reg().B16(), Q0.B16());
+    e.LDR(Q2, X2, e.GetVConstOffset(VSignMaskF32));
+    e.AND(Q2.B16(), i.src1.reg().B16(), Q2.B16());
+    e.ORR(i.dest.reg().B16(), Q1.B16(), Q2.B16());
   }
 };
-EMITTER_OPCODE_TABLE(OPCODE_VECTOR_ADD, VECTOR_ADD);
+EMITTER_OPCODE_TABLE(OPCODE_VECTOR_DENORMFLUSH, VECTOR_DENORMFLUSH);
 
 // ============================================================================
-// OPCODE_VECTOR_SUB
+// OPCODE_LOAD_VECTOR_SHL
 // ============================================================================
-struct VECTOR_SUB
-    : Sequence<VECTOR_SUB, I<OPCODE_VECTOR_SUB, V128Op, V128Op, V128Op>> {
+static const vec128_t lvsl_table[16] = {
+    vec128b(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
+    vec128b(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),
+    vec128b(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
+    vec128b(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18),
+    vec128b(4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19),
+    vec128b(5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20),
+    vec128b(6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21),
+    vec128b(7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22),
+    vec128b(8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23),
+    vec128b(9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24),
+    vec128b(10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25),
+    vec128b(11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26),
+    vec128b(12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27),
+    vec128b(13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28),
+    vec128b(14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29),
+    vec128b(15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30),
+};
+struct LOAD_VECTOR_SHL_I8
+    : Sequence<LOAD_VECTOR_SHL_I8, I<OPCODE_LOAD_VECTOR_SHL, V128Op, I8Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    const TypeName part_type = static_cast<TypeName>(i.instr->flags & 0xFF);
-    if (part_type == FLOAT32_TYPE) {
-      EmitVmxFpBinOp_V128(e, i.dest.reg().getIdx(), i.src1, i.src2,
-                          VmxFpBinOp::Sub);
-      return;
-    }
-    const uint32_t arith = i.instr->flags >> 8;
-    bool is_unsigned = !!(arith & hir::ARITHMETIC_UNSIGNED);
-    bool saturate = !!(arith & hir::ARITHMETIC_SATURATE);
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (part_type) {
-      case INT8_TYPE:
-        if (saturate) {
-          if (is_unsigned)
-            e.uqsub(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-          else
-            e.sqsub(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        } else {
-          e.sub(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        }
-        break;
-      case INT16_TYPE:
-        if (saturate) {
-          if (is_unsigned)
-            e.uqsub(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-          else
-            e.sqsub(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        } else {
-          e.sub(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        }
-        break;
-      case INT32_TYPE:
-        if (saturate) {
-          if (is_unsigned)
-            e.uqsub(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-          else
-            e.sqsub(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        } else {
-          e.sub(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        }
-        break;
-      default:
-        assert_unhandled_case(part_type);
-        break;
+    if (i.src1.is_constant) {
+      auto sh = i.src1.constant();
+      assert_true(static_cast<size_t>(sh) < xe::countof(lvsl_table));
+      e.MOV(X0, reinterpret_cast<uintptr_t>(&lvsl_table[sh]));
+      e.LDR(i.dest, X0);
+    } else {
+      e.MOV(X0, reinterpret_cast<uintptr_t>(lvsl_table));
+      e.AND(X1, i.src1.reg().toX(), 0xf);
+      e.LDR(i.dest, X0, X1, IndexExt::LSL, 4);
     }
   }
 };
-EMITTER_OPCODE_TABLE(OPCODE_VECTOR_SUB, VECTOR_SUB);
+EMITTER_OPCODE_TABLE(OPCODE_LOAD_VECTOR_SHL, LOAD_VECTOR_SHL_I8);
+
+// ============================================================================
+// OPCODE_LOAD_VECTOR_SHR
+// ============================================================================
+static const vec128_t lvsr_table[16] = {
+    vec128b(16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31),
+    vec128b(15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30),
+    vec128b(14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29),
+    vec128b(13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28),
+    vec128b(12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27),
+    vec128b(11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26),
+    vec128b(10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25),
+    vec128b(9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24),
+    vec128b(8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23),
+    vec128b(7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22),
+    vec128b(6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21),
+    vec128b(5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20),
+    vec128b(4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19),
+    vec128b(3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18),
+    vec128b(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
+    vec128b(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),
+};
+struct LOAD_VECTOR_SHR_I8
+    : Sequence<LOAD_VECTOR_SHR_I8, I<OPCODE_LOAD_VECTOR_SHR, V128Op, I8Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (i.src1.is_constant) {
+      auto sh = i.src1.constant();
+      assert_true(static_cast<size_t>(sh) < xe::countof(lvsr_table));
+      e.MOV(X0, reinterpret_cast<uintptr_t>(&lvsr_table[sh]));
+      e.LDR(i.dest, X0);
+    } else {
+      e.MOV(X0, reinterpret_cast<uintptr_t>(lvsr_table));
+      e.AND(X1, i.src1.reg().toX(), 0xf);
+      e.LDR(i.dest, X0, X1, IndexExt::LSL, 4);
+    }
+  }
+};
+EMITTER_OPCODE_TABLE(OPCODE_LOAD_VECTOR_SHR, LOAD_VECTOR_SHR_I8);
 
 // ============================================================================
 // OPCODE_VECTOR_MAX
@@ -380,54 +202,41 @@ EMITTER_OPCODE_TABLE(OPCODE_VECTOR_SUB, VECTOR_SUB);
 struct VECTOR_MAX
     : Sequence<VECTOR_MAX, I<OPCODE_VECTOR_MAX, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    uint32_t part_type = i.instr->flags >> 8;
-    if (part_type == FLOAT32_TYPE) {
-      EmitVmxFpMaxMin(e, i, /*is_min=*/false);
-      return;
-    }
-    bool is_unsigned = !!(i.instr->flags & hir::ARITHMETIC_UNSIGNED);
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (part_type) {
-      case INT8_TYPE:
-        if (is_unsigned)
-          e.umax(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        else
-          e.smax(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        break;
-      case INT16_TYPE:
-        if (is_unsigned)
-          e.umax(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        else
-          e.smax(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        break;
-      case INT32_TYPE:
-        if (is_unsigned)
-          e.umax(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        else
-          e.smax(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        break;
-      default:
-        assert_unhandled_case(part_type);
-        break;
-    }
-  }
-
-  template <typename T>
-  static void EmitVmxFpMaxMin(A64Emitter& e, const T& i, bool is_min) {
-    EmitWithVmxFpcr(e, [&] {
-      int s1, s2;
-      PrepareVmxFpSources(e, i.src1, i.src2, s1, s2);
-      if (is_min) {
-        e.fmin(VReg(2).s4, VReg(s1).s4, VReg(s2).s4);
-      } else {
-        e.fmax(VReg(2).s4, VReg(s1).s4, VReg(s2).s4);
-      }
-      FixupVmxMaxMinNan(e);
-      FlushDenormals_V128(e, 2, 0, 1);
-      e.mov(VReg(i.dest.reg().getIdx()).b16, VReg(2).b16);
-    });
+    EmitCommutativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, QReg dest, QReg src1, QReg src2) {
+          uint32_t part_type = i.instr->flags >> 8;
+          if (i.instr->flags & ARITHMETIC_UNSIGNED) {
+            switch (part_type) {
+              case INT8_TYPE:
+                e.UMAX(dest.B16(), src1.B16(), src2.B16());
+                break;
+              case INT16_TYPE:
+                e.UMAX(dest.H8(), src1.H8(), src2.H8());
+                break;
+              case INT32_TYPE:
+                e.UMAX(dest.S4(), src1.S4(), src2.S4());
+                break;
+              default:
+                assert_unhandled_case(part_type);
+                break;
+            }
+          } else {
+            switch (part_type) {
+              case INT8_TYPE:
+                e.SMAX(dest.B16(), src1.B16(), src2.B16());
+                break;
+              case INT16_TYPE:
+                e.SMAX(dest.H8(), src1.H8(), src2.H8());
+                break;
+              case INT32_TYPE:
+                e.SMAX(dest.S4(), src1.S4(), src2.S4());
+                break;
+              default:
+                assert_unhandled_case(part_type);
+                break;
+            }
+          }
+        });
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_MAX, VECTOR_MAX);
@@ -438,38 +247,41 @@ EMITTER_OPCODE_TABLE(OPCODE_VECTOR_MAX, VECTOR_MAX);
 struct VECTOR_MIN
     : Sequence<VECTOR_MIN, I<OPCODE_VECTOR_MIN, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    uint32_t part_type = i.instr->flags >> 8;
-    if (part_type == FLOAT32_TYPE) {
-      VECTOR_MAX::EmitVmxFpMaxMin(e, i, /*is_min=*/true);
-      return;
-    }
-    bool is_unsigned = !!(i.instr->flags & hir::ARITHMETIC_UNSIGNED);
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (part_type) {
-      case INT8_TYPE:
-        if (is_unsigned)
-          e.umin(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        else
-          e.smin(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        break;
-      case INT16_TYPE:
-        if (is_unsigned)
-          e.umin(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        else
-          e.smin(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        break;
-      case INT32_TYPE:
-        if (is_unsigned)
-          e.umin(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        else
-          e.smin(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        break;
-      default:
-        assert_unhandled_case(part_type);
-        break;
-    }
+    EmitCommutativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, QReg dest, QReg src1, QReg src2) {
+          uint32_t part_type = i.instr->flags >> 8;
+          if (i.instr->flags & ARITHMETIC_UNSIGNED) {
+            switch (part_type) {
+              case INT8_TYPE:
+                e.UMIN(dest.B16(), src1.B16(), src2.B16());
+                break;
+              case INT16_TYPE:
+                e.UMIN(dest.H8(), src1.H8(), src2.H8());
+                break;
+              case INT32_TYPE:
+                e.UMIN(dest.S4(), src1.S4(), src2.S4());
+                break;
+              default:
+                assert_unhandled_case(part_type);
+                break;
+            }
+          } else {
+            switch (part_type) {
+              case INT8_TYPE:
+                e.SMIN(dest.B16(), src1.B16(), src2.B16());
+                break;
+              case INT16_TYPE:
+                e.SMIN(dest.H8(), src1.H8(), src2.H8());
+                break;
+              case INT32_TYPE:
+                e.SMIN(dest.S4(), src1.S4(), src2.S4());
+                break;
+              default:
+                assert_unhandled_case(part_type);
+                break;
+            }
+          }
+        });
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_MIN, VECTOR_MIN);
@@ -481,27 +293,24 @@ struct VECTOR_COMPARE_EQ_V128
     : Sequence<VECTOR_COMPARE_EQ_V128,
                I<OPCODE_VECTOR_COMPARE_EQ, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (i.instr->flags) {
-      case INT8_TYPE:
-        e.cmeq(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        break;
-      case INT16_TYPE:
-        e.cmeq(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        break;
-      case INT32_TYPE:
-        e.cmeq(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        break;
-      case FLOAT32_TYPE:
-        EmitWithVmxFpcr(e,
-                        [&] { e.fcmeq(VReg(d).s4, VReg(s1).s4, VReg(s2).s4); });
-        break;
-      default:
-        assert_unhandled_case(i.instr->flags);
-        break;
-    }
+    EmitAssociativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, QReg dest, QReg src1, QReg src2) {
+          switch (i.instr->flags) {
+            case INT8_TYPE:
+              e.CMEQ(dest.B16(), src1.B16(), src2.B16());
+              break;
+            case INT16_TYPE:
+              e.CMEQ(dest.H8(), src1.H8(), src2.H8());
+              break;
+            case INT32_TYPE:
+              e.CMEQ(dest.S4(), src1.S4(), src2.S4());
+              break;
+            case FLOAT32_TYPE:
+              EmitWithVmxFpcr(
+                  e, [&] { e.FCMEQ(dest.S4(), src1.S4(), src2.S4()); });
+              break;
+          }
+        });
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_COMPARE_EQ, VECTOR_COMPARE_EQ_V128);
@@ -513,27 +322,24 @@ struct VECTOR_COMPARE_SGT_V128
     : Sequence<VECTOR_COMPARE_SGT_V128,
                I<OPCODE_VECTOR_COMPARE_SGT, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (i.instr->flags) {
-      case INT8_TYPE:
-        e.cmgt(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        break;
-      case INT16_TYPE:
-        e.cmgt(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        break;
-      case INT32_TYPE:
-        e.cmgt(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        break;
-      case FLOAT32_TYPE:
-        EmitWithVmxFpcr(e,
-                        [&] { e.fcmgt(VReg(d).s4, VReg(s1).s4, VReg(s2).s4); });
-        break;
-      default:
-        assert_unhandled_case(i.instr->flags);
-        break;
-    }
+    EmitAssociativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, QReg dest, QReg src1, QReg src2) {
+          switch (i.instr->flags) {
+            case INT8_TYPE:
+              e.CMGT(dest.B16(), src1.B16(), src2.B16());
+              break;
+            case INT16_TYPE:
+              e.CMGT(dest.H8(), src1.H8(), src2.H8());
+              break;
+            case INT32_TYPE:
+              e.CMGT(dest.S4(), src1.S4(), src2.S4());
+              break;
+            case FLOAT32_TYPE:
+              EmitWithVmxFpcr(
+                  e, [&] { e.FCMGT(dest.S4(), src1.S4(), src2.S4()); });
+              break;
+          }
+        });
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_COMPARE_SGT, VECTOR_COMPARE_SGT_V128);
@@ -545,27 +351,24 @@ struct VECTOR_COMPARE_SGE_V128
     : Sequence<VECTOR_COMPARE_SGE_V128,
                I<OPCODE_VECTOR_COMPARE_SGE, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (i.instr->flags) {
-      case INT8_TYPE:
-        e.cmge(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        break;
-      case INT16_TYPE:
-        e.cmge(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        break;
-      case INT32_TYPE:
-        e.cmge(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        break;
-      case FLOAT32_TYPE:
-        EmitWithVmxFpcr(e,
-                        [&] { e.fcmge(VReg(d).s4, VReg(s1).s4, VReg(s2).s4); });
-        break;
-      default:
-        assert_unhandled_case(i.instr->flags);
-        break;
-    }
+    EmitAssociativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, QReg dest, QReg src1, QReg src2) {
+          switch (i.instr->flags) {
+            case INT8_TYPE:
+              e.CMGE(dest.B16(), src1.B16(), src2.B16());
+              break;
+            case INT16_TYPE:
+              e.CMGE(dest.H8(), src1.H8(), src2.H8());
+              break;
+            case INT32_TYPE:
+              e.CMGE(dest.S4(), src1.S4(), src2.S4());
+              break;
+            case FLOAT32_TYPE:
+              EmitWithVmxFpcr(
+                  e, [&] { e.FCMGE(dest.S4(), src1.S4(), src2.S4()); });
+              break;
+          }
+        });
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_COMPARE_SGE, VECTOR_COMPARE_SGE_V128);
@@ -577,28 +380,27 @@ struct VECTOR_COMPARE_UGT_V128
     : Sequence<VECTOR_COMPARE_UGT_V128,
                I<OPCODE_VECTOR_COMPARE_UGT, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (i.instr->flags) {
-      case INT8_TYPE:
-        e.cmhi(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        break;
-      case INT16_TYPE:
-        e.cmhi(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        break;
-      case INT32_TYPE:
-        e.cmhi(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        break;
-      case FLOAT32_TYPE:
-        // Unsigned FP compare = ordered GT.
-        EmitWithVmxFpcr(e,
-                        [&] { e.fcmgt(VReg(d).s4, VReg(s1).s4, VReg(s2).s4); });
-        break;
-      default:
-        assert_unhandled_case(i.instr->flags);
-        break;
-    }
+    EmitAssociativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, QReg dest, QReg src1, QReg src2) {
+          switch (i.instr->flags) {
+            case INT8_TYPE:
+              e.CMHI(dest.B16(), src1.B16(), src2.B16());
+              break;
+            case INT16_TYPE:
+              e.CMHI(dest.H8(), src1.H8(), src2.H8());
+              break;
+            case INT32_TYPE:
+              e.CMHI(dest.S4(), src1.S4(), src2.S4());
+              break;
+            case FLOAT32_TYPE:
+              EmitWithVmxFpcr(e, [&] {
+                e.FABS(Q0.S4(), src1.S4());
+                e.FABS(Q1.S4(), src2.S4());
+                e.FCMGT(dest.S4(), Q0.S4(), Q1.S4());
+              });
+              break;
+          }
+        });
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_COMPARE_UGT, VECTOR_COMPARE_UGT_V128);
@@ -610,64 +412,286 @@ struct VECTOR_COMPARE_UGE_V128
     : Sequence<VECTOR_COMPARE_UGE_V128,
                I<OPCODE_VECTOR_COMPARE_UGE, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    switch (i.instr->flags) {
-      case INT8_TYPE:
-        e.cmhs(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        break;
-      case INT16_TYPE:
-        e.cmhs(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        break;
-      case INT32_TYPE:
-        e.cmhs(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        break;
-      case FLOAT32_TYPE:
-        EmitWithVmxFpcr(e,
-                        [&] { e.fcmge(VReg(d).s4, VReg(s1).s4, VReg(s2).s4); });
-        break;
-      default:
-        assert_unhandled_case(i.instr->flags);
-        break;
-    }
+    EmitAssociativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, QReg dest, QReg src1, QReg src2) {
+          switch (i.instr->flags) {
+            case INT8_TYPE:
+              e.CMHS(dest.B16(), src1.B16(), src2.B16());
+              break;
+            case INT16_TYPE:
+              e.CMHS(dest.H8(), src1.H8(), src2.H8());
+              break;
+            case INT32_TYPE:
+              e.CMHS(dest.S4(), src1.S4(), src2.S4());
+              break;
+            case FLOAT32_TYPE:
+              EmitWithVmxFpcr(e, [&] {
+                e.FABS(Q0.S4(), src1.S4());
+                e.FABS(Q1.S4(), src2.S4());
+                e.FCMGE(dest.S4(), Q0.S4(), Q1.S4());
+              });
+              break;
+          }
+        });
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_COMPARE_UGE, VECTOR_COMPARE_UGE_V128);
 
 // ============================================================================
+// OPCODE_VECTOR_ADD
+// ============================================================================
+struct VECTOR_ADD
+    : Sequence<VECTOR_ADD, I<OPCODE_VECTOR_ADD, V128Op, V128Op, V128Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    EmitCommutativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, const QReg& dest, QReg src1, QReg src2) {
+          const TypeName part_type =
+              static_cast<TypeName>(i.instr->flags & 0xFF);
+          const uint32_t arithmetic_flags = i.instr->flags >> 8;
+          bool is_unsigned = !!(arithmetic_flags & ARITHMETIC_UNSIGNED);
+          bool saturate = !!(arithmetic_flags & ARITHMETIC_SATURATE);
+          switch (part_type) {
+            case INT8_TYPE:
+              if (saturate) {
+                if (is_unsigned) {
+                  e.UQADD(dest.B16(), src1.B16(), src2.B16());
+                } else {
+                  e.SQADD(dest.B16(), src1.B16(), src2.B16());
+                }
+              } else {
+                e.ADD(dest.B16(), src1.B16(), src2.B16());
+              }
+              break;
+            case INT16_TYPE:
+              if (saturate) {
+                if (is_unsigned) {
+                  e.UQADD(dest.H8(), src1.H8(), src2.H8());
+                } else {
+                  e.SQADD(dest.H8(), src1.H8(), src2.H8());
+                }
+              } else {
+                e.ADD(dest.H8(), src1.H8(), src2.H8());
+              }
+              break;
+            case INT32_TYPE:
+              if (saturate) {
+                if (is_unsigned) {
+                  e.UQADD(dest.S4(), src1.S4(), src2.S4());
+                } else {
+                  e.SQADD(dest.S4(), src1.S4(), src2.S4());
+                }
+              } else {
+                e.ADD(dest.S4(), src1.S4(), src2.S4());
+              }
+              break;
+            case FLOAT32_TYPE:
+              assert_false(is_unsigned);
+              assert_false(saturate);
+              EmitWithVmxFpcr(e, [&] {
+                e.MOV(Q2.B16(), src1.B16());
+                e.MOV(Q3.B16(), src2.B16());
+                e.FADD(dest.S4(), Q2.S4(), Q3.S4());
+                EmitPreferQNaNLanesF32x4(e, dest, Q2, Q3);
+              });
+              break;
+            default:
+              assert_unhandled_case(part_type);
+              break;
+          }
+        });
+  }
+};
+EMITTER_OPCODE_TABLE(OPCODE_VECTOR_ADD, VECTOR_ADD);
+
+// ============================================================================
+// OPCODE_VECTOR_SUB
+// ============================================================================
+struct VECTOR_SUB
+    : Sequence<VECTOR_SUB, I<OPCODE_VECTOR_SUB, V128Op, V128Op, V128Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    EmitCommutativeBinaryVOp(
+        e, i, [&i](A64Emitter& e, const QReg& dest, QReg src1, QReg src2) {
+          const TypeName part_type =
+              static_cast<TypeName>(i.instr->flags & 0xFF);
+          const uint32_t arithmetic_flags = i.instr->flags >> 8;
+          bool is_unsigned = !!(arithmetic_flags & ARITHMETIC_UNSIGNED);
+          bool saturate = !!(arithmetic_flags & ARITHMETIC_SATURATE);
+          switch (part_type) {
+            case INT8_TYPE:
+              if (saturate) {
+                if (is_unsigned) {
+                  e.UQSUB(dest.B16(), src1.B16(), src2.B16());
+                } else {
+                  e.SQSUB(dest.B16(), src1.B16(), src2.B16());
+                }
+              } else {
+                e.SUB(dest.B16(), src1.B16(), src2.B16());
+              }
+              break;
+            case INT16_TYPE:
+              if (saturate) {
+                if (is_unsigned) {
+                  e.UQSUB(dest.H8(), src1.H8(), src2.H8());
+                } else {
+                  e.SQSUB(dest.H8(), src1.H8(), src2.H8());
+                }
+              } else {
+                e.SUB(dest.H8(), src1.H8(), src2.H8());
+              }
+              break;
+            case INT32_TYPE:
+              if (saturate) {
+                if (is_unsigned) {
+                  e.UQSUB(dest.S4(), src1.S4(), src2.S4());
+                } else {
+                  e.SQSUB(dest.S4(), src1.S4(), src2.S4());
+                }
+              } else {
+                e.SUB(dest.S4(), src1.S4(), src2.S4());
+              }
+              break;
+            case FLOAT32_TYPE:
+              assert_false(is_unsigned);
+              assert_false(saturate);
+              EmitWithVmxFpcr(e, [&] {
+                e.MOV(Q2.B16(), src1.B16());
+                e.MOV(Q3.B16(), src2.B16());
+                e.FSUB(dest.S4(), Q2.S4(), Q3.S4());
+                EmitPreferQNaNLanesF32x4(e, dest, Q2, Q3);
+              });
+              break;
+            default:
+              assert_unhandled_case(part_type);
+              break;
+          }
+        });
+  }
+};
+EMITTER_OPCODE_TABLE(OPCODE_VECTOR_SUB, VECTOR_SUB);
+
+// ============================================================================
 // OPCODE_VECTOR_SHL
 // ============================================================================
+template <typename T, std::enable_if_t<std::is_integral<T>::value, int> = 0>
+static uint8x16_t EmulateVectorShl(void*, std::byte src1[16],
+                                   std::byte src2[16]) {
+  alignas(16) T value[16 / sizeof(T)];
+  alignas(16) T shamt[16 / sizeof(T)];
+
+  // Load NEON registers into a C array.
+  vst1q_u8(reinterpret_cast<uint8_t*>(value),
+           vld1q_u8(reinterpret_cast<const uint8_t*>(src1)));
+  vst1q_u8(reinterpret_cast<uint8_t*>(shamt),
+           vld1q_u8(reinterpret_cast<const uint8_t*>(src2)));
+
+  for (size_t i = 0; i < (16 / sizeof(T)); ++i) {
+    value[i] = value[i] << (shamt[i] & ((sizeof(T) * 8) - 1));
+  }
+
+  // Store result and return it.
+  return vld1q_u8(reinterpret_cast<const uint8_t*>(value));
+}
 struct VECTOR_SHL_V128
     : Sequence<VECTOR_SHL_V128, I<OPCODE_VECTOR_SHL, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    // Mask shift amounts to element width, then ushl.
     switch (i.instr->flags) {
-      case INT8_TYPE: {
-        e.movi(VReg(2).b16, 0x07);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.ushl(VReg(d).b16, VReg(s1).b16, VReg(2).b16);
+      case INT8_TYPE:
+        EmitInt8(e, i);
         break;
-      }
-      case INT16_TYPE: {
-        e.movi(VReg(2).h8, 0x0F);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.ushl(VReg(d).h8, VReg(s1).h8, VReg(2).h8);
+      case INT16_TYPE:
+        EmitInt16(e, i);
         break;
-      }
-      case INT32_TYPE: {
-        e.movi(VReg(2).s4, 0x1F);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.ushl(VReg(d).s4, VReg(s1).s4, VReg(2).s4);
+      case INT32_TYPE:
+        EmitInt32(e, i);
         break;
-      }
       default:
-        assert_unhandled_case(i.instr->flags);
+        assert_always();
         break;
     }
+  }
+
+  static void EmitInt8(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 16 - n; ++n) {
+        if (shamt.u8[n] != shamt.u8[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use SHL
+        e.SHL(i.dest.reg().B16(), src1.B16(), shamt.u8[0] & 0x7);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShl<uint8_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+
+  static void EmitInt16(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 16 - n; ++n) {
+        if (shamt.u8[n] != shamt.u8[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use SHL
+        e.SHL(i.dest.reg().H8(), src1.H8(), shamt.u8[0] & 0xF);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShl<uint16_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+
+  static void EmitInt32(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 16 - n; ++n) {
+        if (shamt.u8[n] != shamt.u8[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use SHL
+        e.SHL(i.dest.reg().S4(), src1.S4(), shamt.u8[0] & 0x1F);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShl<uint32_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_SHL, VECTOR_SHL_V128);
@@ -675,79 +699,234 @@ EMITTER_OPCODE_TABLE(OPCODE_VECTOR_SHL, VECTOR_SHL_V128);
 // ============================================================================
 // OPCODE_VECTOR_SHR
 // ============================================================================
+template <typename T, std::enable_if_t<std::is_integral<T>::value, int> = 0>
+static uint8x16_t EmulateVectorShr(void*, std::byte src1[16],
+                                   std::byte src2[16]) {
+  alignas(16) T value[16 / sizeof(T)];
+  alignas(16) T shamt[16 / sizeof(T)];
+
+  // Load NEON registers into a C array by casting to uint8_t*
+  vst1q_u8(reinterpret_cast<uint8_t*>(value),
+           vld1q_u8(reinterpret_cast<const uint8_t*>(src1)));
+  vst1q_u8(reinterpret_cast<uint8_t*>(shamt),
+           vld1q_u8(reinterpret_cast<const uint8_t*>(src2)));
+
+  for (size_t i = 0; i < (16 / sizeof(T)); ++i) {
+    value[i] = value[i] >> (shamt[i] & ((sizeof(T) * 8) - 1));
+  }
+
+  // Store result and return it by casting to uint8_t*
+  return vld1q_u8(reinterpret_cast<const uint8_t*>(value));
+}
 struct VECTOR_SHR_V128
     : Sequence<VECTOR_SHR_V128, I<OPCODE_VECTOR_SHR, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    // Mask, negate, then ushl (negative shift = right shift).
     switch (i.instr->flags) {
-      case INT8_TYPE: {
-        e.movi(VReg(2).b16, 0x07);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.neg(VReg(2).b16, VReg(2).b16);
-        e.ushl(VReg(d).b16, VReg(s1).b16, VReg(2).b16);
+      case INT8_TYPE:
+        EmitInt8(e, i);
         break;
-      }
-      case INT16_TYPE: {
-        e.movi(VReg(2).h8, 0x0F);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.neg(VReg(2).h8, VReg(2).h8);
-        e.ushl(VReg(d).h8, VReg(s1).h8, VReg(2).h8);
+      case INT16_TYPE:
+        EmitInt16(e, i);
         break;
-      }
-      case INT32_TYPE: {
-        e.movi(VReg(2).s4, 0x1F);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.neg(VReg(2).s4, VReg(2).s4);
-        e.ushl(VReg(d).s4, VReg(s1).s4, VReg(2).s4);
+      case INT32_TYPE:
+        EmitInt32(e, i);
         break;
-      }
       default:
-        assert_unhandled_case(i.instr->flags);
+        assert_always();
         break;
     }
+  }
+
+  static void EmitInt8(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 16 - n; ++n) {
+        if (shamt.u8[n] != shamt.u8[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use USHR
+        e.USHR(i.dest.reg().B16(), src1.B16(), shamt.u8[0] & 0x7);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShr<uint8_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+
+  static void EmitInt16(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 8 - n; ++n) {
+        if (shamt.u16[n] != shamt.u16[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use USHR
+        e.USHR(i.dest.reg().H8(), src1.H8(), shamt.u16[0] & 0xF);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShr<uint16_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+
+  static void EmitInt32(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 4 - n; ++n) {
+        if (shamt.u32[n] != shamt.u32[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use USHR
+        e.USHR(i.dest.reg().S4(), src1.S4(), shamt.u32[0] & 0x1F);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShr<uint32_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_SHR, VECTOR_SHR_V128);
 
 // ============================================================================
-// OPCODE_VECTOR_SHA (arithmetic right shift)
+// OPCODE_VECTOR_SHA
 // ============================================================================
 struct VECTOR_SHA_V128
     : Sequence<VECTOR_SHA_V128, I<OPCODE_VECTOR_SHA, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    // Mask, negate, then sshl (signed shift with negative = arith right).
     switch (i.instr->flags) {
-      case INT8_TYPE: {
-        e.movi(VReg(2).b16, 0x07);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.neg(VReg(2).b16, VReg(2).b16);
-        e.sshl(VReg(d).b16, VReg(s1).b16, VReg(2).b16);
+      case INT8_TYPE:
+        EmitInt8(e, i);
         break;
-      }
-      case INT16_TYPE: {
-        e.movi(VReg(2).h8, 0x0F);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.neg(VReg(2).h8, VReg(2).h8);
-        e.sshl(VReg(d).h8, VReg(s1).h8, VReg(2).h8);
+      case INT16_TYPE:
+        EmitInt16(e, i);
         break;
-      }
-      case INT32_TYPE: {
-        e.movi(VReg(2).s4, 0x1F);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.neg(VReg(2).s4, VReg(2).s4);
-        e.sshl(VReg(d).s4, VReg(s1).s4, VReg(2).s4);
+      case INT32_TYPE:
+        EmitInt32(e, i);
         break;
-      }
       default:
-        assert_unhandled_case(i.instr->flags);
+        assert_always();
         break;
     }
+  }
+
+  static void EmitInt8(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 16 - n; ++n) {
+        if (shamt.u8[n] != shamt.u8[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use SSHR
+        e.SSHR(i.dest.reg().B16(), src1.B16(), shamt.u8[0] & 0x7);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShr<int8_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+
+  static void EmitInt16(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 8 - n; ++n) {
+        if (shamt.u16[n] != shamt.u16[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use SSHR
+        e.SSHR(i.dest.reg().H8(), src1.H8(), shamt.u16[0] & 0xF);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShr<int16_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+
+  static void EmitInt32(A64Emitter& e, const EmitArgType& i) {
+    QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src1, i.src1.constant());
+    }
+    if (i.src2.is_constant) {
+      const auto& shamt = i.src2.constant();
+      bool all_same = true;
+      for (size_t n = 0; n < 4 - n; ++n) {
+        if (shamt.u32[n] != shamt.u32[n + 1]) {
+          all_same = false;
+          break;
+        }
+      }
+      if (all_same) {
+        // Every count is the same, so we can use SSHR
+        e.SSHR(i.dest.reg().S4(), src1.S4(), shamt.u32[0] & 0x1F);
+        return;
+      }
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, src1));
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateVectorShr<int32_t>));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_SHA, VECTOR_SHA_V128);
@@ -755,54 +934,53 @@ EMITTER_OPCODE_TABLE(OPCODE_VECTOR_SHA, VECTOR_SHA_V128);
 // ============================================================================
 // OPCODE_VECTOR_ROTATE_LEFT
 // ============================================================================
+template <typename T, std::enable_if_t<std::is_integral<T>::value, int> = 0>
+static uint8x16_t EmulateVectorRotateLeft(void*, std::byte src1[16],
+                                          std::byte src2[16]) {
+  alignas(16) T value[16 / sizeof(T)];
+  alignas(16) T shamt[16 / sizeof(T)];
+
+  // Load NEON registers into a C array by casting to uint8_t*
+  vst1q_u8(reinterpret_cast<uint8_t*>(value),
+           vld1q_u8(reinterpret_cast<const uint8_t*>(src1)));
+  vst1q_u8(reinterpret_cast<uint8_t*>(shamt),
+           vld1q_u8(reinterpret_cast<const uint8_t*>(src2)));
+
+  for (size_t i = 0; i < (16 / sizeof(T)); ++i) {
+    value[i] = xe::rotate_left<T>(value[i], shamt[i] & ((sizeof(T) * 8) - 1));
+  }
+
+  // Store result and return it by casting to uint8_t*
+  return vld1q_u8(reinterpret_cast<const uint8_t*>(value));
+}
 struct VECTOR_ROTATE_LEFT_V128
     : Sequence<VECTOR_ROTATE_LEFT_V128,
                I<OPCODE_VECTOR_ROTATE_LEFT, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    // rotate = (src << amt) | (src >> (width - amt))
+    if (i.src2.is_constant) {
+      e.ADD(e.GetNativeParam(1), SP, e.StashConstantV(1, i.src2.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(1), SP, e.StashV(1, i.src2));
+    }
+    e.ADD(e.GetNativeParam(0), SP, e.StashV(0, i.src1));
     switch (i.instr->flags) {
-      case INT8_TYPE: {
-        e.movi(VReg(2).b16, 0x07);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        // Left shift.
-        e.ushl(VReg(3).b16, VReg(s1).b16, VReg(2).b16);
-        // Right shift = negate amount.
-        e.movi(VReg(0).b16, 8);
-        e.sub(VReg(0).b16, VReg(0).b16, VReg(2).b16);
-        e.neg(VReg(0).b16, VReg(0).b16);
-        e.ushl(VReg(0).b16, VReg(s1).b16, VReg(0).b16);
-        e.orr(VReg(d).b16, VReg(3).b16, VReg(0).b16);
+      case INT8_TYPE:
+        e.CallNativeSafe(
+            reinterpret_cast<void*>(EmulateVectorRotateLeft<uint8_t>));
         break;
-      }
-      case INT16_TYPE: {
-        e.movi(VReg(2).h8, 0x0F);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.ushl(VReg(3).h8, VReg(s1).h8, VReg(2).h8);
-        e.movi(VReg(0).h8, 16);
-        e.sub(VReg(0).h8, VReg(0).h8, VReg(2).h8);
-        e.neg(VReg(0).h8, VReg(0).h8);
-        e.ushl(VReg(0).h8, VReg(s1).h8, VReg(0).h8);
-        e.orr(VReg(d).b16, VReg(3).b16, VReg(0).b16);
+      case INT16_TYPE:
+        e.CallNativeSafe(
+            reinterpret_cast<void*>(EmulateVectorRotateLeft<uint16_t>));
         break;
-      }
-      case INT32_TYPE: {
-        e.movi(VReg(2).s4, 0x1F);
-        e.and_(VReg(2).b16, VReg(s2).b16, VReg(2).b16);
-        e.ushl(VReg(3).s4, VReg(s1).s4, VReg(2).s4);
-        e.movi(VReg(0).s4, 32);
-        e.sub(VReg(0).s4, VReg(0).s4, VReg(2).s4);
-        e.neg(VReg(0).s4, VReg(0).s4);
-        e.ushl(VReg(0).s4, VReg(s1).s4, VReg(0).s4);
-        e.orr(VReg(d).b16, VReg(3).b16, VReg(0).b16);
+      case INT32_TYPE:
+        e.CallNativeSafe(
+            reinterpret_cast<void*>(EmulateVectorRotateLeft<uint32_t>));
         break;
-      }
       default:
-        assert_unhandled_case(i.instr->flags);
+        assert_always();
         break;
     }
+    e.MOV(i.dest.reg().B16(), Q0.B16());
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_ROTATE_LEFT, VECTOR_ROTATE_LEFT_V128);
@@ -814,72 +992,216 @@ struct VECTOR_AVERAGE
     : Sequence<VECTOR_AVERAGE,
                I<OPCODE_VECTOR_AVERAGE, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    const TypeName part_type = static_cast<TypeName>(i.instr->flags & 0xFF);
-    const uint32_t arith = i.instr->flags >> 8;
-    bool is_unsigned = !!(arith & hir::ARITHMETIC_UNSIGNED);
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    // ARM64 has native rounding halving add: (a + b + 1) >> 1.
-    switch (part_type) {
-      case INT8_TYPE:
-        if (is_unsigned)
-          e.urhadd(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        else
-          e.srhadd(VReg(d).b16, VReg(s1).b16, VReg(s2).b16);
-        break;
-      case INT16_TYPE:
-        if (is_unsigned)
-          e.urhadd(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        else
-          e.srhadd(VReg(d).h8, VReg(s1).h8, VReg(s2).h8);
-        break;
-      case INT32_TYPE:
-        if (is_unsigned)
-          e.urhadd(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        else
-          e.srhadd(VReg(d).s4, VReg(s1).s4, VReg(s2).s4);
-        break;
-      default:
-        assert_unhandled_case(part_type);
-        break;
-    }
+    EmitCommutativeBinaryVOp(
+        e, i,
+        [&i](A64Emitter& e, const QReg& dest, const QReg& src1,
+             const QReg& src2) {
+          const TypeName part_type =
+              static_cast<TypeName>(i.instr->flags & 0xFF);
+          const uint32_t arithmetic_flags = i.instr->flags >> 8;
+          bool is_unsigned = !!(arithmetic_flags & ARITHMETIC_UNSIGNED);
+          switch (part_type) {
+            case INT8_TYPE:
+              if (is_unsigned) {
+                e.URHADD(dest.B16(), src1.B16(), src2.B16());
+              } else {
+                e.SRHADD(dest.B16(), src1.B16(), src2.B16());
+              }
+              break;
+            case INT16_TYPE:
+              if (is_unsigned) {
+                e.URHADD(dest.H8(), src1.H8(), src2.H8());
+              } else {
+                e.SRHADD(dest.H8(), src1.H8(), src2.H8());
+              }
+              break;
+            case INT32_TYPE:
+              if (is_unsigned) {
+                e.URHADD(dest.S4(), src1.S4(), src2.S4());
+              } else {
+                e.SRHADD(dest.S4(), src1.S4(), src2.S4());
+              }
+              break;
+            default:
+              assert_unhandled_case(part_type);
+              break;
+          }
+        });
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_VECTOR_AVERAGE, VECTOR_AVERAGE);
 
 // ============================================================================
-// OPCODE_VECTOR_DENORMFLUSH
+// OPCODE_INSERT
 // ============================================================================
-struct VECTOR_DENORMFLUSH
-    : Sequence<VECTOR_DENORMFLUSH,
-               I<OPCODE_VECTOR_DENORMFLUSH, V128Op, V128Op>> {
+struct INSERT_I8
+    : Sequence<INSERT_I8, I<OPCODE_INSERT, V128Op, V128Op, I8Op, I8Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s = SrcVReg(e, i.src1, 0);
-    int d = i.dest.reg().getIdx();
-    // Extract exponent bits; if exponent == 0 and mantissa != 0, it's denormal.
-    // Replace with signed zero (keep sign bit).
-    // Mask: exponent = bits 30:23 of each float.
-    // If (val & 0x7F800000) == 0 then it's zero or denormal.
-    // For denormals (mantissa != 0 but exponent == 0), replace with sign | 0.
-    e.mov(e.w0, static_cast<uint64_t>(0x7F800000u));
-    e.dup(VReg(2).s4, e.w0);
-    e.and_(VReg(0).b16, VReg(s).b16, VReg(2).b16);
-    // v0 = exponent bits. Compare with zero.
-    e.cmeq(VReg(0).s4, VReg(0).s4, 0);
-    // v0 = all-ones where exponent is zero (denormal or zero).
-    // Keep sign bits of denormals.
-    e.movi(VReg(1).s4, 0x80, LSL, 24);
-    e.and_(VReg(1).b16, VReg(s).b16, VReg(1).b16);
-    // v1 = sign bits only.
-    // Select: where exponent is zero -> sign bits, else -> original.
-    e.bsl(VReg(0).b16, VReg(1).b16, VReg(s).b16);
-    if (d != 0) {
-      e.orr(VReg(d).b16, VReg(0).b16, VReg(0).b16);
+    assert_true(i.src2.is_constant);
+    e.MOV(i.dest.reg().Belem()[i.src2.constant() ^ 0x3], i.src3.reg());
+  }
+};
+struct INSERT_I16
+    : Sequence<INSERT_I16, I<OPCODE_INSERT, V128Op, V128Op, I8Op, I16Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    assert_true(i.src2.is_constant);
+    e.MOV(i.dest.reg().Helem()[i.src2.constant() ^ 0x1], i.src3.reg());
+  }
+};
+struct INSERT_I32
+    : Sequence<INSERT_I32, I<OPCODE_INSERT, V128Op, V128Op, I8Op, I32Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    assert_true(i.src2.is_constant);
+    e.MOV(i.dest.reg().Selem()[i.src2.constant()], i.src3.reg());
+  }
+};
+EMITTER_OPCODE_TABLE(OPCODE_INSERT, INSERT_I8, INSERT_I16, INSERT_I32);
+
+// ============================================================================
+// OPCODE_EXTRACT
+// ============================================================================
+// TODO(benvanik): sequence extract/splat:
+//  v0.i32 = extract v0.v128, 0
+//  v0.v128 = splat v0.i32
+// This can be a single broadcast.
+struct EXTRACT_I8
+    : Sequence<EXTRACT_I8, I<OPCODE_EXTRACT, I8Op, V128Op, I8Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (i.src2.is_constant) {
+      e.UMOV(i.dest, i.src1.reg().Belem()[VEC128_B(i.src2.constant())]);
+    } else {
+      // Fixup index
+      e.EOR(W0, i.src2, 0b11);
+      e.AND(W0, W0, 0x1F);
+      e.DUP(Q0.B16(), W0);
+      // Byte-table lookup
+      e.TBL(Q0.B16(), List{i.src1.reg().B16()}, Q0.B16());
+      // Get lowest element
+      e.UMOV(i.dest, Q0.Belem()[0]);
     }
   }
 };
-EMITTER_OPCODE_TABLE(OPCODE_VECTOR_DENORMFLUSH, VECTOR_DENORMFLUSH);
+struct EXTRACT_I16
+    : Sequence<EXTRACT_I16, I<OPCODE_EXTRACT, I16Op, V128Op, I8Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (i.src2.is_constant) {
+      e.UMOV(i.dest, i.src1.reg().Helem()[VEC128_W(i.src2.constant())]);
+    } else {
+      // Fixup index
+      e.EOR(W0, i.src2, 0b01);
+      e.LSL(W0, W0, 1);
+
+      // Replicate index as byte
+      e.MOV(W1, 0x01'01);
+      e.MUL(W0, W0, W1);
+
+      // Byte indices
+      e.ADD(W0, W0, 0x01'00);
+      e.UXTH(W0, W0);
+
+      // Replicate byte indices
+      e.DUP(Q0.H8(), W0);
+      // Byte-table lookup
+      e.TBL(Q0.B16(), List{i.src1.reg().B16()}, Q0.B16());
+      // Get lowest element
+      e.UMOV(i.dest, Q0.Helem()[0]);
+    }
+  }
+};
+struct EXTRACT_I32
+    : Sequence<EXTRACT_I32, I<OPCODE_EXTRACT, I32Op, V128Op, I8Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    static const vec128_t extract_table_32[4] = {
+        vec128b(3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        vec128b(7, 6, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        vec128b(11, 10, 9, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        vec128b(15, 14, 13, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    };
+    if (i.src2.is_constant) {
+      QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+      if (i.src1.is_constant) {
+        e.LoadConstantV(src1, i.src1.constant());
+      }
+      e.UMOV(i.dest, src1.Selem()[VEC128_D(i.src2.constant())]);
+    } else {
+      QReg src1 = i.src1.is_constant ? Q1 : i.src1.reg();
+      if (i.src1.is_constant) {
+        e.LoadConstantV(src1, i.src1.constant());
+      }
+
+      e.AND(X0, i.src2.reg().toX(), 0b11);
+      e.LSL(X0, X0, 4);
+
+      e.MOV(X1, reinterpret_cast<uintptr_t>(extract_table_32));
+      e.LDR(Q0, X1, X0);
+
+      // Byte-table lookup
+      e.TBL(Q0.B16(), List{src1.B16()}, Q0.B16());
+      // Get lowest element
+      e.UMOV(i.dest, Q0.Selem()[0]);
+    }
+  }
+};
+EMITTER_OPCODE_TABLE(OPCODE_EXTRACT, EXTRACT_I8, EXTRACT_I16, EXTRACT_I32);
+
+// ============================================================================
+// OPCODE_SPLAT
+// ============================================================================
+// Copy a value into all elements of a vector
+struct SPLAT_I8 : Sequence<SPLAT_I8, I<OPCODE_SPLAT, V128Op, I8Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (i.src1.is_constant) {
+      // int8_t is always <= 0xFF, so this is always true
+      // Keep the MOVI path for constants
+      e.MOVI(i.dest.reg().B16(), i.src1.constant());
+    } else {
+      e.DUP(i.dest.reg().B16(), i.src1);
+    }
+  }
+};
+struct SPLAT_I16 : Sequence<SPLAT_I16, I<OPCODE_SPLAT, V128Op, I16Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (i.src1.is_constant) {
+      if (i.src1.constant() <= 0xFF) {
+        e.MOVI(i.dest.reg().H8(), i.src1.constant());
+        return;
+      }
+      e.MOV(W0, i.src1.constant());
+      e.DUP(i.dest.reg().H8(), W0);
+    } else {
+      e.DUP(i.dest.reg().H8(), i.src1);
+    }
+  }
+};
+struct SPLAT_I32 : Sequence<SPLAT_I32, I<OPCODE_SPLAT, V128Op, I32Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (i.src1.is_constant) {
+      if (i.src1.constant() <= 0xFF) {
+        e.MOVI(i.dest.reg().S4(), i.src1.constant());
+        return;
+      }
+      e.MOV(W0, i.src1.constant());
+      e.DUP(i.dest.reg().S4(), W0);
+    } else {
+      e.DUP(i.dest.reg().S4(), i.src1);
+    }
+  }
+};
+struct SPLAT_F32 : Sequence<SPLAT_F32, I<OPCODE_SPLAT, V128Op, F32Op>> {
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (i.src1.is_constant) {
+      if (i.src1.value->constant.i32 <= 0xFF) {
+        e.MOVI(i.dest.reg().S4(), i.src1.value->constant.i32);
+        return;
+      }
+      e.MOV(W0, i.src1.value->constant.i32);
+      e.DUP(i.dest.reg().S4(), W0);
+    } else {
+      e.DUP(i.dest.reg().S4(), i.src1.reg().toQ().Selem()[0]);
+    }
+  }
+};
+EMITTER_OPCODE_TABLE(OPCODE_SPLAT, SPLAT_I8, SPLAT_I16, SPLAT_I32, SPLAT_F32);
 
 // ============================================================================
 // OPCODE_PERMUTE
@@ -887,110 +1209,164 @@ EMITTER_OPCODE_TABLE(OPCODE_VECTOR_DENORMFLUSH, VECTOR_DENORMFLUSH);
 struct PERMUTE_I32
     : Sequence<PERMUTE_I32, I<OPCODE_PERMUTE, V128Op, I32Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    assert_true(i.src1.is_constant);
-    uint32_t control = i.src1.constant();
-    int s2 = SrcVReg(e, i.src2, 0);
-    int s3 = SrcVReg(e, i.src3, 1);
-    int d = i.dest.reg().getIdx();
-    // Build TBL control from the I32 permute control word.
-    // Each byte of control selects: bits [1:0] = which dword, bit [2] = src2 vs
-    // src3. PPC word i = vec128_t.u32[i] = NEON element s[i] (direct mapping).
-    uint8_t tbl_ctrl[16];
-    for (int idx = 0; idx < 4; idx++) {
-      uint8_t sel = (control >> (idx * 8)) & 0xFF;
-      uint8_t src_dword = sel & 0x3;
-      bool from_src3 = (sel >> 2) & 1;
-      uint8_t base = from_src3 ? 16 : 0;
-      for (int b = 0; b < 4; b++) {
-        tbl_ctrl[idx * 4 + b] = base + src_dword * 4 + b;
+    assert_true(i.instr->flags == INT32_TYPE);
+    // Permute words between src2 and src3.
+    if (i.src1.is_constant) {
+      // Each byte is a word-index
+      const uint32_t control = i.src1.constant();
+      const QReg indices = Q0;
+
+      // Word to byte index
+      e.MOV(W0, control * 4);
+      e.MOV(indices.Selem()[0], W0);
+
+      // Widen int8 to int16
+      e.ZIP1(indices.B16(), indices.B16(), indices.B16());
+      // Widen int16 to int32
+      e.ZIP1(indices.B16(), indices.B16(), indices.B16());
+
+      // Convert to byte-indices
+      e.MOV(W0, 0x03'02'01'00);
+      e.DUP(Q1.S4(), W0);
+      e.ADD(indices.S4(), indices.S4(), Q1.S4());
+
+      // Table-registers must be sequential indices
+      const QReg table0 = Q2;
+      if (i.src2.is_constant) {
+        e.LoadConstantV(table0, i.src2.constant());
+      } else {
+        e.MOV(table0.B16(), i.src2.reg().B16());
       }
+
+      const QReg table1 = Q3;
+      if (i.src3.is_constant) {
+        e.LoadConstantV(table1, i.src3.constant());
+      } else {
+        e.MOV(table1.B16(), i.src3.reg().B16());
+      }
+
+      e.TBL(i.dest.reg().B16(), List{table0.B16(), table1.B16()},
+            indices.B16());
+    } else {
+      // Permute by non-constant.
+      assert_always();
     }
-    // Ensure src2 in v0, src3 in v1 (consecutive for TBL).
-    if (s2 != 0) {
-      e.orr(VReg(0).b16, VReg(s2).b16, VReg(s2).b16);
-    }
-    if (s3 != 1) {
-      e.orr(VReg(1).b16, VReg(s3).b16, VReg(s3).b16);
-    }
-    // Load TBL control vector.
-    vec128_t ctrl_vec;
-    std::memcpy(&ctrl_vec, tbl_ctrl, 16);
-    LoadV128Const(e, 2, ctrl_vec);
-    e.tbl(VReg(d).b16, VReg(0).b16, 2, VReg(2).b16);
   }
 };
 struct PERMUTE_V128
     : Sequence<PERMUTE_V128,
                I<OPCODE_PERMUTE, V128Op, V128Op, V128Op, V128Op>> {
   static void EmitByInt8(A64Emitter& e, const EmitArgType& i) {
-    int d = i.dest.reg().getIdx();
-    // Copy src2 to v0, src3 to v1 (consecutive for 2-register TBL).
-    if (i.src2.is_constant) {
-      LoadV128Const(e, 0, i.src2.constant());
-    } else if (i.src2.reg().getIdx() != 0) {
-      e.orr(VReg(0).b16, VReg(i.src2.reg().getIdx()).b16,
-            VReg(i.src2.reg().getIdx()).b16);
-    }
-    if (i.src3.is_constant) {
-      LoadV128Const(e, 1, i.src3.constant());
-    } else if (i.src3.reg().getIdx() != 1) {
-      e.orr(VReg(1).b16, VReg(i.src3.reg().getIdx()).b16,
-            VReg(i.src3.reg().getIdx()).b16);
-    }
-    // Load control vector into v2, XOR each byte with 3 for endian swap.
-    int ctrl;
-    if (i.src1.is_constant) {
-      LoadV128Const(e, 2, i.src1.constant());
-      ctrl = 2;
-    } else {
-      ctrl = i.src1.reg().getIdx();
-      if (ctrl == 0 || ctrl == 1) {
-        // Control conflicts with table registers, copy to v2.
-        e.orr(VReg(2).b16, VReg(ctrl).b16, VReg(ctrl).b16);
-        ctrl = 2;
+    // Permute bytes between src2 and src3.
+    // src1 is an array of indices corresponding to positions within src2 and
+    // src3.
+    if (i.src3.value->IsConstantZero()) {
+      if (i.src2.value->IsConstantZero()) {
+        // src2 & src3 are zero, so result will always be zero.
+        e.EOR(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16());
+        return;
       }
     }
-    // XOR control bytes with 0x03 to remap PPC byte indices to LE,
-    // then mask to 5 bits (0-31) so TBL indices stay in range.
-    e.movi(VReg(3).b16, 0x03);
-    e.eor(VReg(3).b16, VReg(ctrl).b16, VReg(3).b16);
-    e.movi(VReg(2).b16, 0x1F);
-    e.and_(VReg(3).b16, VReg(3).b16, VReg(2).b16);
-    // TBL with 2-register table {v0, v1}.
-    e.tbl(VReg(d).b16, VReg(0).b16, 2, VReg(3).b16);
+
+    const QReg indices = Q0;
+    if (i.src1.is_constant) {
+      e.LoadConstantV(indices, i.src1.constant());
+    } else {
+      e.MOV(indices.B16(), i.src1.reg().B16());
+    }
+
+    // Indices must be endian-swapped
+    e.MOVI(Q1.B16(), 0b11);
+    e.EOR(indices.B16(), indices.B16(), Q1.B16());
+
+    // Modulo 32 the indices
+    e.MOVI(Q1.B16(), 0b0001'1111);
+    e.AND(indices.B16(), indices.B16(), Q1.B16());
+
+    // Table-registers must be sequential indices
+    const QReg table_lo = Q2;
+    if (i.src2.is_constant) {
+      e.LoadConstantV(table_lo, i.src2.constant());
+    } else {
+      e.MOV(table_lo.B16(), i.src2.reg().B16());
+    }
+
+    const QReg table_hi = Q3;
+    if (i.src3.is_constant) {
+      e.LoadConstantV(table_hi, i.src3.constant());
+    } else {
+      e.MOV(table_hi.B16(), i.src3.reg().B16());
+    }
+
+    e.TBL(i.dest.reg().B16(), List{table_lo.B16(), table_hi.B16()},
+          indices.B16());
   }
 
   static void EmitByInt16(A64Emitter& e, const EmitArgType& i) {
+    // Permute 16-bit halfwords between src2 and src3.
+    // src1 is an array of 16-bit indices corresponding to positions within src2
+    // and src3.
+    if (i.src3.value->IsConstantZero()) {
+      if (i.src2.value->IsConstantZero()) {
+        // src2 & src3 are zero, so result will always be zero.
+        e.EOR(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16());
+        return;
+      }
+    }
+
+    // This implementation is adapted from the x64 backend
     assert_true(i.src1.is_constant);
-    int d = i.dest.reg().getIdx();
-    // Convert halfword element indices to byte-level TBL control.
-    // PPC halfword index H maps to NEON u16 index (H&7)^1 (halfword swap
-    // within 32-bit words). For src3 (indices >= 8), add 16 byte offset.
-    vec128_t ctrl = i.src1.constant();
-    vec128_t tbl_ctrl = {};
-    for (int k = 0; k < 8; k++) {
-      uint16_t h = ctrl.u16[k] & 0xF;
-      uint32_t base = (h >= 8) ? 16 : 0;
-      uint32_t neon_hw = (h & 7) ^ 1;
-      tbl_ctrl.u8[2 * k] = static_cast<uint8_t>(base + 2 * neon_hw);
-      tbl_ctrl.u8[2 * k + 1] = static_cast<uint8_t>(base + 2 * neon_hw + 1);
+
+    // Process the constant indices to create byte shuffle masks and blend
+    // control
+    vec128_t perm = (i.src1.constant() & vec128s(0xF)) ^ vec128s(0x1);
+    vec128_t perm_bytes = vec128b(0);
+    vec128_t blend_mask = vec128b(0);
+
+    for (int idx = 0; idx < 8; idx++) {
+      bool from_src3 = perm.i16[idx] > 7;
+
+      // Create byte indices for this 16-bit element
+      uint8_t base_byte_idx = uint8_t(perm.u16[idx] & 7) * 2;
+      perm_bytes.u8[idx * 2] = base_byte_idx;
+      perm_bytes.u8[idx * 2 + 1] = base_byte_idx + 1;
+
+      // Create blend mask (0xFF means take from src3, 0x00 means take from
+      // src2)
+      blend_mask.u8[idx * 2] = from_src3 ? 0xFF : 0x00;
+      blend_mask.u8[idx * 2 + 1] = from_src3 ? 0xFF : 0x00;
     }
-    // Copy src2 to v0, src3 to v1 (consecutive for 2-register TBL).
+
+    // Load the byte shuffle mask
+    e.LoadConstantV(Q0, perm_bytes);
+
+    // Load the blend mask
+    e.LoadConstantV(Q1, blend_mask);
+
+    // Load src2 and shuffle it
     if (i.src2.is_constant) {
-      LoadV128Const(e, 0, i.src2.constant());
-    } else if (i.src2.reg().getIdx() != 0) {
-      e.orr(VReg(0).b16, VReg(i.src2.reg().getIdx()).b16,
-            VReg(i.src2.reg().getIdx()).b16);
+      e.LoadConstantV(Q2, i.src2.constant());
+    } else {
+      e.MOV(Q2.B16(), i.src2.reg().B16());
     }
+    e.TBL(Q2.B16(), List{Q2.B16()}, Q0.B16());
+
+    // Load src3 and shuffle it
     if (i.src3.is_constant) {
-      LoadV128Const(e, 1, i.src3.constant());
-    } else if (i.src3.reg().getIdx() != 1) {
-      e.orr(VReg(1).b16, VReg(i.src3.reg().getIdx()).b16,
-            VReg(i.src3.reg().getIdx()).b16);
+      e.LoadConstantV(Q3, i.src3.constant());
+    } else {
+      e.MOV(Q3.B16(), i.src3.reg().B16());
     }
-    // Load precomputed byte-level TBL control.
-    LoadV128Const(e, 2, tbl_ctrl);
-    e.tbl(VReg(d).b16, VReg(0).b16, 2, VReg(2).b16);
+    e.TBL(Q3.B16(), List{Q3.B16()}, Q0.B16());
+
+    // Blend the results: dest = (Q3 & Q1) | (Q2 & ~Q1)
+    e.AND(Q3.B16(), Q3.B16(), Q1.B16());            // Q3 & mask
+    e.BIC(Q2.B16(), Q2.B16(), Q1.B16());            // Q2 & ~mask
+    e.ORR(i.dest.reg().B16(), Q3.B16(), Q2.B16());  // combine
+  }
+
+  static void EmitByInt32(A64Emitter& e, const EmitArgType& i) {
+    assert_always();
   }
 
   static void Emit(A64Emitter& e, const EmitArgType& i) {
@@ -1002,12 +1378,11 @@ struct PERMUTE_V128
         EmitByInt16(e, i);
         break;
       case INT32_TYPE:
-        // INT32 permutes go through PERMUTE_I32 sequence.
-        assert_always();
+        EmitByInt32(e, i);
         break;
       default:
         assert_unhandled_case(i.instr->flags);
-        break;
+        return;
     }
   }
 };
@@ -1020,417 +1395,72 @@ struct SWIZZLE
     : Sequence<SWIZZLE, I<OPCODE_SWIZZLE, V128Op, V128Op, OffsetOp>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
     auto element_type = i.instr->flags;
-    if (element_type == INT32_TYPE || element_type == FLOAT32_TYPE) {
-      uint8_t swizzle_mask = static_cast<uint8_t>(i.src2.value);
-      int s = SrcVReg(e, i.src1, 0);
-      int d = i.dest.reg().getIdx();
-      // Build TBL control for dword swizzle.
-      // swizzle_mask bits [1:0]=X(PPC word 0), [3:2]=Y, [5:4]=Z, [7:6]=W.
-      // PPC word i = NEON element s[i] (direct mapping).
-      uint8_t ctrl[16];
-      for (int idx = 0; idx < 4; idx++) {
-        uint8_t src_dw = (swizzle_mask >> (idx * 2)) & 0x3;
-        for (int b = 0; b < 4; b++) {
-          ctrl[idx * 4 + b] = src_dw * 4 + b;
-        }
+    if (element_type == INT8_TYPE) {
+      assert_always();
+    } else if (element_type == INT16_TYPE) {
+      assert_always();
+    } else if (element_type == INT32_TYPE || element_type == FLOAT32_TYPE) {
+      // Four 2-bit word-indices packed into one 8-bit value
+      const uint8_t swizzle_mask = static_cast<uint8_t>(i.src2.value);
+
+      // Convert to byte-indices
+      const vec128_t indice_vec =
+          vec128i(((swizzle_mask >> 0) & 0b11) * 0x04'04'04'04 + 0x03'02'01'00,
+                  ((swizzle_mask >> 2) & 0b11) * 0x04'04'04'04 + 0x03'02'01'00,
+                  ((swizzle_mask >> 4) & 0b11) * 0x04'04'04'04 + 0x03'02'01'00,
+                  ((swizzle_mask >> 6) & 0b11) * 0x04'04'04'04 + 0x03'02'01'00);
+
+      const QReg indices = Q1;
+      e.LoadConstantV(indices, indice_vec);
+
+      QReg table0 = Q0;
+      if (i.src1.is_constant) {
+        e.LoadConstantV(table0, i.src1.constant());
+      } else {
+        table0 = i.src1;
       }
-      vec128_t ctrl_vec;
-      std::memcpy(&ctrl_vec, ctrl, 16);
-      LoadV128Const(e, 2, ctrl_vec);
-      e.tbl(VReg(d).b16, VReg(s).b16, 1, VReg(2).b16);
+
+      e.TBL(i.dest.reg().B16(), List{table0.B16()}, indices.B16());
+    } else if (element_type == INT64_TYPE || element_type == FLOAT64_TYPE) {
+      assert_always();
     } else {
-      e.DebugBreak();
+      assert_always();
     }
-  }
+  };
 };
 EMITTER_OPCODE_TABLE(OPCODE_SWIZZLE, SWIZZLE);
-
-// ============================================================================
-// OPCODE_LOAD_VECTOR_SHL
-// ============================================================================
-struct LOAD_VECTOR_SHL_I8
-    : Sequence<LOAD_VECTOR_SHL_I8, I<OPCODE_LOAD_VECTOR_SHL, V128Op, I8Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int d = i.dest.reg().getIdx();
-    // Build base pattern in PPC byte order (byte-swapped within 32-bit words):
-    // PPC indices {0,1,2,...,15} stored as vec128b would give:
-    //   {3,2,1,0, 7,6,5,4, 11,10,9,8, 15,14,13,12}
-    e.mov(e.x0, static_cast<uint64_t>(0x0405060700010203ull));
-    e.mov(e.x1, static_cast<uint64_t>(0x0C0D0E0F08090A0Bull));
-    e.stp(e.x0, e.x1,
-          ptr(e.sp, static_cast<int32_t>(StackLayout::GUEST_SCRATCH)));
-    e.ldr(QReg(d), ptr(e.sp, static_cast<int32_t>(StackLayout::GUEST_SCRATCH)));
-    // Add shift amount (splatted).
-    if (i.src1.is_constant) {
-      if (i.src1.constant() != 0) {
-        e.movi(VReg(0).b16, static_cast<uint8_t>(i.src1.constant()));
-        e.add(VReg(d).b16, VReg(d).b16, VReg(0).b16);
-      }
-    } else {
-      e.dup(VReg(0).b16, i.src1);
-      e.add(VReg(d).b16, VReg(d).b16, VReg(0).b16);
-    }
-  }
-};
-EMITTER_OPCODE_TABLE(OPCODE_LOAD_VECTOR_SHL, LOAD_VECTOR_SHL_I8);
-
-// ============================================================================
-// OPCODE_LOAD_VECTOR_SHR
-// ============================================================================
-struct LOAD_VECTOR_SHR_I8
-    : Sequence<LOAD_VECTOR_SHR_I8, I<OPCODE_LOAD_VECTOR_SHR, V128Op, I8Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int d = i.dest.reg().getIdx();
-    // Build base pattern in PPC byte order (byte-swapped within 32-bit words):
-    // PPC indices {16,17,...,31} stored as vec128b would give:
-    //   {19,18,17,16, 23,22,21,20, 27,26,25,24, 31,30,29,28}
-    e.mov(e.x0, static_cast<uint64_t>(0x1415161710111213ull));
-    e.mov(e.x1, static_cast<uint64_t>(0x1C1D1E1F18191A1Bull));
-    e.stp(e.x0, e.x1,
-          ptr(e.sp, static_cast<int32_t>(StackLayout::GUEST_SCRATCH)));
-    e.ldr(QReg(d), ptr(e.sp, static_cast<int32_t>(StackLayout::GUEST_SCRATCH)));
-    // Subtract shift amount (splatted).
-    if (i.src1.is_constant) {
-      if (i.src1.constant() != 0) {
-        e.movi(VReg(0).b16, static_cast<uint8_t>(i.src1.constant()));
-        e.sub(VReg(d).b16, VReg(d).b16, VReg(0).b16);
-      }
-    } else {
-      e.dup(VReg(0).b16, i.src1);
-      e.sub(VReg(d).b16, VReg(d).b16, VReg(0).b16);
-    }
-  }
-};
-EMITTER_OPCODE_TABLE(OPCODE_LOAD_VECTOR_SHR, LOAD_VECTOR_SHR_I8);
-
-// ============================================================================
-// PACK/UNPACK C helper functions (called via CallNativeSafe)
-// ============================================================================
-
-// PACK FLOAT16_2: pack first 2 floats to Xenos half-float format.
-// Args: x0=PPCContext*, x1=pointer to vec128_t (in-place).
-static void EmulatePACK_FLOAT16_2(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  vec128_t result = {};
-  for (int i = 0; i < 2; i++) {
-    result.u16[7 - i] = float_to_xenos_half(data->f32[i]);
-  }
-  *data = result;
-}
-
-// PACK FLOAT16_4: pack all 4 floats to Xenos half-float (round to even).
-static void EmulatePACK_FLOAT16_4(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  vec128_t result = {};
-  for (int idx = 0; idx < 4; ++idx) {
-    result.u16[7 - (idx ^ 2)] =
-        float_to_xenos_half(data->f32[idx], false, true);
-  }
-  *data = result;
-}
-
-// PACK UINT_2101010: XYZ 10-bit signed saturated, W 2-bit unsigned saturated.
-static void EmulatePACK_UINT_2101010(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  // Clamp and extract integer values from magic float encoding.
-  // Input floats are in 3.0+val*2^-22 format.
-  auto clamp_extract = [](uint32_t bits, int32_t min_val, int32_t max_val,
-                          uint32_t mask) -> uint32_t {
-    // Reinterpret as float for clamping.
-    float f;
-    memcpy(&f, &bits, 4);
-    float fmin, fmax;
-    uint32_t umin = 0x40400000u + static_cast<uint32_t>(min_val);
-    uint32_t umax = 0x40400000u + static_cast<uint32_t>(max_val);
-    memcpy(&fmin, &umin, 4);
-    memcpy(&fmax, &umax, 4);
-    if (std::isnan(f) || f < fmin) f = fmin;
-    if (f > fmax) f = fmax;
-    uint32_t fbits;
-    memcpy(&fbits, &f, 4);
-    return fbits & mask;
-  };
-  uint32_t x = clamp_extract(data->u32[0], -511, 511, 0x3FF);
-  uint32_t y = clamp_extract(data->u32[1], -511, 511, 0x3FF);
-  uint32_t z = clamp_extract(data->u32[2], -511, 511, 0x3FF);
-  uint32_t w = clamp_extract(data->u32[3], 0, 3, 0x3);
-  vec128_t result = {};
-  result.u32[3] = x | (y << 10) | (z << 20) | (w << 30);
-  *data = result;
-}
-
-// PACK ULONG_4202020: XYZ 20-bit signed saturated, W 4-bit unsigned saturated.
-static void EmulatePACK_ULONG_4202020(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  auto clamp_extract = [](uint32_t bits, int32_t min_val, int32_t max_val,
-                          uint32_t mask) -> uint32_t {
-    float f;
-    memcpy(&f, &bits, 4);
-    float fmin, fmax;
-    uint32_t umin = 0x40400000u + static_cast<uint32_t>(min_val);
-    uint32_t umax = 0x40400000u + static_cast<uint32_t>(max_val);
-    memcpy(&fmin, &umin, 4);
-    memcpy(&fmax, &umax, 4);
-    if (std::isnan(f) || f < fmin) f = fmin;
-    if (f > fmax) f = fmax;
-    uint32_t fbits;
-    memcpy(&fbits, &f, 4);
-    return fbits & mask;
-  };
-  uint32_t x = clamp_extract(data->u32[0], -524287, 524287, 0xFFFFF);
-  uint32_t y = clamp_extract(data->u32[1], -524287, 524287, 0xFFFFF);
-  uint32_t z = clamp_extract(data->u32[2], -524287, 524287, 0xFFFFF);
-  uint32_t w = clamp_extract(data->u32[3], 0, 15, 0xF);
-  // Pack: 64-bit result in lanes 2-3
-  uint64_t packed =
-      static_cast<uint64_t>(x) | (static_cast<uint64_t>(y) << 20) |
-      (static_cast<uint64_t>(z) << 40) | (static_cast<uint64_t>(w) << 60);
-  vec128_t result = {};
-  result.u32[2] = static_cast<uint32_t>(packed >> 32);
-  result.u32[3] = static_cast<uint32_t>(packed);
-  *data = result;
-}
-
-// UNPACK FLOAT16_2: convert 2 Xenos half-floats to float.
-static void EmulateUNPACK_FLOAT16_2(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  vec128_t src = *data;
-  vec128_t result = {};
-  for (int i = 0; i < 2; i++) {
-    result.f32[i] = xenos_half_to_float(src.u16[VEC128_W(6 + i)]);
-  }
-  result.f32[2] = 0.0f;
-  result.f32[3] = 1.0f;
-  *data = result;
-}
-
-// UNPACK FLOAT16_4: convert 4 Xenos half-floats to float.
-static void EmulateUNPACK_FLOAT16_4(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  vec128_t src = *data;
-  vec128_t result = {};
-  for (int idx = 0; idx < 4; ++idx) {
-    result.f32[idx] = xenos_half_to_float(src.u16[VEC128_W(4 + idx)]);
-  }
-  *data = result;
-}
-
-// UNPACK SHORT_2: unpack 2 signed shorts to magic float format (3.0+val*2^-22).
-static void EmulateUNPACK_SHORT_2(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  // Source: packed value in lane 3.
-  // Upper halfword = X, lower halfword = Y.
-  int16_t x_val = static_cast<int16_t>(data->u16[7]);
-  int16_t y_val = static_cast<int16_t>(data->u16[6]);
-  vec128_t result = {};
-  // Sign-extend to 32-bit and add magic constant.
-  // Magic constant {3.0f, 3.0f, 0.0f, 1.0f} for SHORT2/SHORT4 unpack.
-  result.u32[0] =
-      0x40400000u + static_cast<uint32_t>(static_cast<int32_t>(x_val));
-  result.u32[1] =
-      0x40400000u + static_cast<uint32_t>(static_cast<int32_t>(y_val));
-  result.u32[2] = 0;
-  result.u32[3] = 0x3F800000u;
-  // Overflow check: if result == 0x403F8000, replace with QNaN.
-  for (int j = 0; j < 4; j++) {
-    if (result.u32[j] == 0x403F8000u) {
-      result.u32[j] = 0x7FC00000u;
-    }
-  }
-  *data = result;
-}
-
-// UNPACK SHORT_4: unpack 4 signed shorts to magic float format.
-static void EmulateUNPACK_SHORT_4(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  // Source: lanes 2-3 contain 2 packed values, each with 2 shorts.
-  // Lane 3: upper half = X, lower half = Y
-  // Lane 2: upper half = Z, lower half = W
-  int16_t x_val = static_cast<int16_t>(data->u16[7]);
-  int16_t y_val = static_cast<int16_t>(data->u16[6]);
-  int16_t z_val = static_cast<int16_t>(data->u16[5]);
-  int16_t w_val = static_cast<int16_t>(data->u16[4]);
-  vec128_t result = {};
-  result.u32[0] =
-      0x40400000u + static_cast<uint32_t>(static_cast<int32_t>(x_val));
-  result.u32[1] =
-      0x40400000u + static_cast<uint32_t>(static_cast<int32_t>(y_val));
-  result.u32[2] =
-      0x40400000u + static_cast<uint32_t>(static_cast<int32_t>(z_val));
-  result.u32[3] =
-      0x40400000u + static_cast<uint32_t>(static_cast<int32_t>(w_val));
-  for (int j = 0; j < 4; j++) {
-    if (result.u32[j] == 0x403F8000u) {
-      result.u32[j] = 0x7FC00000u;
-    }
-  }
-  *data = result;
-}
-
-// UNPACK UINT_2101010: unpack 10-10-10-2 to magic float format.
-static void EmulateUNPACK_UINT_2101010(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  uint32_t packed = data->u32[3];
-  // Extract components.
-  int32_t x = static_cast<int32_t>(packed & 0x3FF);
-  int32_t y = static_cast<int32_t>((packed >> 10) & 0x3FF);
-  int32_t z = static_cast<int32_t>((packed >> 20) & 0x3FF);
-  uint32_t w = (packed >> 30) & 0x3;
-  // Sign-extend XYZ (10-bit signed).
-  if (x & 0x200) x |= ~0x3FF;
-  if (y & 0x200) y |= ~0x3FF;
-  if (z & 0x200) z |= ~0x3FF;
-  // Build magic float: 3.0 + val * 2^-22 for XYZ, 1.0 + val for W.
-  vec128_t result = {};
-  result.u32[0] = 0x40400000u + static_cast<uint32_t>(x);
-  result.u32[1] = 0x40400000u + static_cast<uint32_t>(y);
-  result.u32[2] = 0x40400000u + static_cast<uint32_t>(z);
-  result.u32[3] = 0x3F800000u + w;
-  // Overflow check.
-  uint32_t overflow_xyz = 0x403FFE00u;
-  for (int j = 0; j < 3; j++) {
-    if (result.u32[j] == overflow_xyz) {
-      result.u32[j] = 0x7FC00000u;
-    }
-  }
-  *data = result;
-}
-
-// UNPACK ULONG_4202020: unpack 20-20-20-4 to magic float format.
-static void EmulateUNPACK_ULONG_4202020(void* /*ctx*/, void* vdata) {
-  auto* data = reinterpret_cast<vec128_t*>(vdata);
-  // 64-bit packed value in lanes 2-3.
-  uint64_t packed = (static_cast<uint64_t>(data->u32[2]) << 32) |
-                    static_cast<uint64_t>(data->u32[3]);
-  int32_t x = static_cast<int32_t>(packed & 0xFFFFF);
-  int32_t y = static_cast<int32_t>((packed >> 20) & 0xFFFFF);
-  int32_t z = static_cast<int32_t>((packed >> 40) & 0xFFFFF);
-  uint32_t w = static_cast<uint32_t>((packed >> 60) & 0xF);
-  // Sign-extend XYZ (20-bit signed).
-  if (x & 0x80000) x |= ~0xFFFFF;
-  if (y & 0x80000) y |= ~0xFFFFF;
-  if (z & 0x80000) z |= ~0xFFFFF;
-  vec128_t result = {};
-  result.u32[0] = 0x40400000u + static_cast<uint32_t>(x);
-  result.u32[1] = 0x40400000u + static_cast<uint32_t>(y);
-  result.u32[2] = 0x40400000u + static_cast<uint32_t>(z);
-  result.u32[3] = 0x3F800000u + w;
-  uint32_t overflow_xyz = 0x40380000u;
-  for (int j = 0; j < 3; j++) {
-    if (result.u32[j] == overflow_xyz) {
-      result.u32[j] = 0x7FC00000u;
-    }
-  }
-  *data = result;
-}
-
-// LVL/LVR/STVL/STVR C helper functions.
-// Args: x0=PPCContext*, x1=host_addr(uint64_t), x2=data_ptr(void*)
-
-static void EmulateLVL(void* /*ctx*/, uint64_t host_addr, void* result_ptr) {
-  uint32_t offset = static_cast<uint32_t>(host_addr) & 0xF;
-  const uint8_t* aligned =
-      reinterpret_cast<const uint8_t*>(host_addr & ~0xFull);
-  uint8_t mem[16];
-  memcpy(mem, aligned, 16);
-  // Shuffle: base = {3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12} (bswap within
-  // lanes) ctrl[i] = base[i] + offset; if > 15, output 0.
-  static const uint8_t base[16] = {3,  2,  1, 0, 7,  6,  5,  4,
-                                   11, 10, 9, 8, 15, 14, 13, 12};
-  uint8_t result[16] = {};
-  for (int i = 0; i < 16; i++) {
-    int idx = base[i] + offset;
-    if (idx <= 15) {
-      result[i] = mem[idx];
-    }
-  }
-  memcpy(result_ptr, result, 16);
-}
-
-static void EmulateLVR(void* /*ctx*/, uint64_t host_addr, void* result_ptr) {
-  uint32_t offset = static_cast<uint32_t>(host_addr) & 0xF;
-  uint8_t result[16] = {};
-  if (offset == 0) {
-    memcpy(result_ptr, result, 16);
-    return;
-  }
-  const uint8_t* aligned =
-      reinterpret_cast<const uint8_t*>(host_addr & ~0xFull);
-  uint8_t mem[16];
-  memcpy(mem, aligned, 16);
-  // Same base shuffle as LVL, but keep only indices > 15 (using idx & 0xF).
-  static const uint8_t base[16] = {3,  2,  1, 0, 7,  6,  5,  4,
-                                   11, 10, 9, 8, 15, 14, 13, 12};
-  for (int i = 0; i < 16; i++) {
-    int idx = base[i] + offset;
-    if (idx > 15) {
-      result[i] = mem[idx & 0xF];
-    }
-  }
-  memcpy(result_ptr, result, 16);
-}
-
-static void EmulateSTVL(void* /*ctx*/, uint64_t host_addr, void* src_data) {
-  uint32_t offset = static_cast<uint32_t>(host_addr) & 0xF;
-  uint8_t* aligned = reinterpret_cast<uint8_t*>(host_addr & ~0xFull);
-  const uint8_t* src = reinterpret_cast<const uint8_t*>(src_data);
-  uint8_t mem[16];
-  memcpy(mem, aligned, 16);
-  // Write bytes offset..15: mem[i] = src[bswap_lane_idx(i - offset)]
-  for (int i = static_cast<int>(offset); i < 16; i++) {
-    mem[i] = src[bswap_lane_idx(i - static_cast<int>(offset))];
-  }
-  memcpy(aligned, mem, 16);
-}
-
-static void EmulateSTVR(void* /*ctx*/, uint64_t host_addr, void* src_data) {
-  uint32_t offset = static_cast<uint32_t>(host_addr) & 0xF;
-  if (offset == 0) return;
-  uint8_t* aligned = reinterpret_cast<uint8_t*>(host_addr & ~0xFull);
-  const uint8_t* src = reinterpret_cast<const uint8_t*>(src_data);
-  uint8_t mem[16];
-  memcpy(mem, aligned, 16);
-  // Write bytes 0..(offset-1) from the right part of the source.
-  for (int i = 0; i < static_cast<int>(offset); i++) {
-    // Use pshufb-compatible index: (i - offset) ^ 0x83, take bits 3:0
-    int src_idx =
-        (static_cast<uint8_t>(i - static_cast<int>(offset)) ^ 0x83) & 0x0F;
-    mem[i] = src[src_idx];
-  }
-  memcpy(aligned, mem, 16);
-}
 
 // ============================================================================
 // OPCODE_PACK
 // ============================================================================
 struct PACK : Sequence<PACK, I<OPCODE_PACK, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    switch (i.instr->flags & hir::PACK_TYPE_MODE) {
-      case hir::PACK_TYPE_D3DCOLOR:
+    switch (i.instr->flags & PACK_TYPE_MODE) {
+      case PACK_TYPE_D3DCOLOR:
         EmitD3DCOLOR(e, i);
         break;
-      case hir::PACK_TYPE_FLOAT16_2:
+      case PACK_TYPE_FLOAT16_2:
         EmitFLOAT16_2(e, i);
         break;
-      case hir::PACK_TYPE_FLOAT16_4:
+      case PACK_TYPE_FLOAT16_4:
         EmitFLOAT16_4(e, i);
         break;
-      case hir::PACK_TYPE_SHORT_2:
+      case PACK_TYPE_SHORT_2:
         EmitSHORT_2(e, i);
         break;
-      case hir::PACK_TYPE_SHORT_4:
+      case PACK_TYPE_SHORT_4:
         EmitSHORT_4(e, i);
         break;
-      case hir::PACK_TYPE_UINT_2101010:
+      case PACK_TYPE_UINT_2101010:
         EmitUINT_2101010(e, i);
         break;
-      case hir::PACK_TYPE_ULONG_4202020:
+      case PACK_TYPE_ULONG_4202020:
         EmitULONG_4202020(e, i);
         break;
-      case hir::PACK_TYPE_8_IN_16:
+      case PACK_TYPE_8_IN_16:
         Emit8_IN_16(e, i, i.instr->flags);
         break;
-      case hir::PACK_TYPE_16_IN_32:
+      case PACK_TYPE_16_IN_32:
         Emit16_IN_32(e, i, i.instr->flags);
         break;
       default:
@@ -1440,194 +1470,540 @@ struct PACK : Sequence<PACK, I<OPCODE_PACK, V128Op, V128Op, V128Op>> {
   }
   static void EmitD3DCOLOR(A64Emitter& e, const EmitArgType& i) {
     assert_true(i.src2.value->IsConstantZero());
-    int s = SrcVReg(e, i.src1, 2);
-    int d = i.dest.reg().getIdx();
-    // Clamp to [3.0f, 3.0f + 255*2^-22].
-    // fmaxnm/fminnm: NaN operand returns the non-NaN value (pack NaN as zero).
-    e.mov(e.w0, 0x40400000u);  // 3.0f
-    e.dup(VReg(0).s4, e.w0);
-    e.fmaxnm(VReg(d).s4, VReg(s).s4, VReg(0).s4);
-    e.mov(e.w0, 0x404000FFu);  // 3.0f + 255*2^-22
-    e.dup(VReg(0).s4, e.w0);
-    e.fminnm(VReg(d).s4, VReg(d).s4, VReg(0).s4);
-    // TBL: extract low byte from each lane, reorder RGBA->ARGB in lane 3.
-    // Control: bytes 0-11=0xFF (->0), bytes 12-15={0x08,0x04,0x00,0x0C}
-    vec128_t ctrl;
-    ctrl.low = 0xFFFFFFFF'FFFFFFFFull;
-    ctrl.high = 0x0C000408'FFFFFFFFull;
-    LoadV128Const(e, 0, ctrl);
-    e.tbl(VReg(d).b16, VReg(d).b16, 1, VReg(0).b16);
+    QReg src = i.src1.is_constant ? i.dest.reg() : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src, i.src1.constant());
+    }
+
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    // Saturate to [3,3....] so that only values between 3...[00] and 3...[FF]
+    // are valid - max before min to pack NaN as zero (5454082B is heavily
+    // affected by the order - packs 0xFFFFFFFF in matrix code to get a 0
+    // constant).
+    // Use FMAXNM/FMINNM (numeric max/min) instead of FMAX/FMIN to handle NaN
+    // correctly. FMAXNM returns the non-NaN value when one operand is NaN,
+    // matching x86 behavior and Windows ARM64 expectations.
+    e.LDR(Q0, VConstData, e.GetVConstOffset(V3333));
+    e.FMAXNM(i.dest.reg().S4(), src.S4(), Q0.S4());
+
+    e.LDR(Q0, VConstData, e.GetVConstOffset(VPackD3DCOLORSat));
+    e.FMINNM(i.dest.reg().S4(), i.dest.reg().S4(), Q0.S4());
+
+    // Extract bytes.
+    // RGBA (XYZW) -> ARGB (WXYZ)
+    // w = ((src1.uw & 0xFF) << 24) | ((src1.ux & 0xFF) << 16) |
+    //     ((src1.uy & 0xFF) << 8) | (src1.uz & 0xFF)
+    e.LDR(Q0, VConstData, e.GetVConstOffset(VPackD3DCOLOR));
+    e.TBL(i.dest.reg().B16(), List{i.dest.reg().B16()}, Q0.B16());
   }
-  static void EmitSHORT_2(A64Emitter& e, const EmitArgType& i) {
-    assert_true(i.src2.value->IsConstantZero());
-    int s = SrcVReg(e, i.src1, 2);
-    int d = i.dest.reg().getIdx();
-    // Clamp to [PackSHORT_Min, PackSHORT_Max].
-    e.mov(e.w0, 0x403F8001u);
-    e.dup(VReg(0).s4, e.w0);
-    e.fmaxnm(VReg(d).s4, VReg(s).s4, VReg(0).s4);
-    e.mov(e.w0, 0x40407FFFu);
-    e.dup(VReg(0).s4, e.w0);
-    e.fminnm(VReg(d).s4, VReg(d).s4, VReg(0).s4);
-    // TBL: extract low 2 bytes from lanes 0,1 -> pack into lane 3.
-    // TBL ctrl for PACK_SHORT_2: bytes 12-15={0x04,0x05,0x00,0x01}, rest=0xFF
-    vec128_t ctrl;
-    ctrl.low = 0xFFFFFFFF'FFFFFFFFull;
-    ctrl.high = 0x01000504'FFFFFFFFull;
-    LoadV128Const(e, 0, ctrl);
-    e.tbl(VReg(d).b16, VReg(d).b16, 1, VReg(0).b16);
-  }
-  static void EmitSHORT_4(A64Emitter& e, const EmitArgType& i) {
-    assert_true(i.src2.value->IsConstantZero());
-    int s = SrcVReg(e, i.src1, 2);
-    int d = i.dest.reg().getIdx();
-    e.mov(e.w0, 0x403F8001u);
-    e.dup(VReg(0).s4, e.w0);
-    e.fmaxnm(VReg(d).s4, VReg(s).s4, VReg(0).s4);
-    e.mov(e.w0, 0x40407FFFu);
-    e.dup(VReg(0).s4, e.w0);
-    e.fminnm(VReg(d).s4, VReg(d).s4, VReg(0).s4);
-    // TBL ctrl for PACK_SHORT_4: bytes 8-11={0x04,0x05,0x00,0x01},
-    // 12-15={0x0C,0x0D,0x08,0x09}
-    vec128_t ctrl;
-    ctrl.low = 0xFFFFFFFF'FFFFFFFFull;
-    ctrl.high = 0x09080D0C'01000504ull;
-    LoadV128Const(e, 0, ctrl);
-    e.tbl(VReg(d).b16, VReg(d).b16, 1, VReg(0).b16);
+  static uint8x16_t EmulateFLOAT16_2(void*, std::byte src1[16]) {
+    alignas(16) float a[4];
+    alignas(16) uint16_t b[8];
+
+    // Load NEON registers into a C array by casting to uint8_t*
+    vst1q_u8(reinterpret_cast<uint8_t*>(a),
+             vld1q_u8(reinterpret_cast<const uint8_t*>(src1)));
+    std::memset(b, 0, sizeof(b));
+
+    for (int i = 0; i < 2; i++) {
+      float x = a[i];
+      uint16_t h;
+
+      // Xbox 360 saturation behavior
+      if (x >= 65504.0f) {
+        h = 0x7FFF;  // Positive saturation sentinel
+      } else if (x <= -65504.0f) {
+        h = 0xFFFF;  // Negative saturation sentinel
+      } else {
+        h = half_float::detail::float2half<std::round_toward_zero>(x);
+      }
+
+      b[7 - i] = h;
+    }
+
+    // Store the uint16_t array into a uint8x16_t NEON register
+    return vld1q_u8(reinterpret_cast<const uint8_t*>(b));
   }
   static void EmitFLOAT16_2(A64Emitter& e, const EmitArgType& i) {
     assert_true(i.src2.value->IsConstantZero());
-    if (i.src1.is_constant) {
-      vec128_t result = {};
-      for (int j = 0; j < 2; j++) {
-        result.u16[7 - j] = float_to_xenos_half(i.src1.constant().f32[j]);
+    // http://blogs.msdn.com/b/chuckw/archive/2012/09/11/directxmath-f16c-and-fma.aspx
+    // dest = [(src1.x | src1.y), 0, 0, 0]
+
+    if (e.IsFeatureEnabled(kA64EmitF16C)) {
+      const QReg src1 = i.src1.is_constant ? Q0 : i.src1;
+      if (i.src1.is_constant) {
+        e.LoadConstantV(src1, i.src1.constant());
       }
-      LoadV128Const(e, i.dest.reg().getIdx(), result);
+
+      // Perform IEEE conversion first
+      e.FCVTN(i.dest.reg().toD().H4(), src1.S4());
+
+      // Xbox 360 rule: infinity values should be replaced with 0x7FFF/0xFFFF
+      // After FCVTN, +inf becomes 0x7C00, -inf becomes 0xFC00
+      // We need to detect these and replace them
+
+      // Create masks for infinity detection
+      QReg abs_mask = Q1;
+      QReg inf_pattern = Q2;
+      QReg is_inf = Q3;
+      QReg sign_mask = Q4;
+      QReg sentinel = Q5;
+
+      // Get absolute value of halfwords (clear sign bit)
+      e.MOVI(abs_mask.B16(), 0xFF);             // 0xFFFF
+      e.USHR(abs_mask.H8(), abs_mask.H8(), 1);  // 0x7FFF
+      e.AND(is_inf.toD().B8(), i.dest.reg().toD().B8(), abs_mask.toD().B8());
+
+      // Check if abs value == 0x7C00 (infinity)
+      e.MOVI(inf_pattern.H8(), 0x7C, oaknut::LslSymbol{}, 8);  // 0x7C00
+      e.CMEQ(is_inf.toD().H4(), is_inf.toD().H4(), inf_pattern.toD().H4());
+
+      // Get sign bits
+      e.MOVI(sign_mask.H8(), 0x80, oaknut::LslSymbol{}, 8);  // 0x8000
+      e.AND(sign_mask.toD().B8(), i.dest.reg().toD().B8(),
+            sign_mask.toD().B8());
+
+      // Create sentinel value: sign | 0x7FFF
+      e.MOVI(sentinel.B16(), 0xFF);             // 0xFFFF
+      e.USHR(sentinel.H8(), sentinel.H8(), 1);  // 0x7FFF
+      e.ORR(sentinel.toD().B8(), sentinel.toD().B8(), sign_mask.toD().B8());
+
+      // Apply replacement where infinity was detected
+      // Use BSL to replace infinities with sentinels
+      // BSL: result = (mask & src1) | (~mask & src2)
+      // We want: where is_inf is true, use sentinel; else use original
+      e.BSL(is_inf.toD().B8(), sentinel.toD().B8(), i.dest.reg().toD().B8());
+      e.MOV(i.dest.reg().toD().B8(), is_inf.toD().B8());
+
+      // Keep existing layout adjustments
+      e.MOVI(Q0.B16(), 0);
+      e.EXT(i.dest.reg().B16(), Q0.B16(), i.dest.reg().B16(), 4);
+      e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
       return;
     }
-    int s = i.src1.reg().getIdx();
-    int d = i.dest.reg().getIdx();
-    e.str(QReg(s),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    e.add(e.x1, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(reinterpret_cast<void*>(EmulatePACK_FLOAT16_2));
-    e.ldr(QReg(d),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
+
+    if (i.src1.is_constant) {
+      e.ADD(e.GetNativeParam(0), SP, e.StashConstantV(0, i.src1.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(0), SP, e.StashV(0, i.src1));
+    }
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateFLOAT16_2));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+  static uint8x16_t EmulateFLOAT16_4(void*, std::byte src1[16]) {
+    alignas(16) float a[4];
+    alignas(16) uint16_t b[8];
+
+    // Load NEON registers into a C array by casting to uint8_t*
+    vst1q_u8(reinterpret_cast<uint8_t*>(a),
+             vld1q_u8(reinterpret_cast<const uint8_t*>(src1)));
+    std::memset(b, 0, sizeof(b));
+
+    for (int i = 0; i < 4; i++) {
+      b[7 - (i ^ 2)] =
+          half_float::detail::float2half<std::round_toward_zero>(a[i]);
+    }
+
+    // Store the uint16_t array into a uint8x16_t NEON register
+    return vld1q_u8(reinterpret_cast<const uint8_t*>(b));
   }
   static void EmitFLOAT16_4(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant) {
-      vec128_t result = {};
-      for (int idx = 0; idx < 4; ++idx) {
-        result.u16[7 - (idx ^ 2)] =
-            float_to_xenos_half(i.src1.constant().f32[idx], false, true);
+    assert_true(i.src2.value->IsConstantZero());
+    // http://blogs.msdn.com/b/chuckw/archive/2012/09/11/directxmath-f16c-and-fma.aspx
+    // dest = [(src1.z | src1.w), (src1.x | src1.y), 0, 0]
+
+    if (e.IsFeatureEnabled(kA64EmitF16C)) {
+      const QReg src1 = i.src1.is_constant ? Q0 : i.src1;
+      if (i.src1.is_constant) {
+        e.LoadConstantV(src1, i.src1.constant());
       }
-      LoadV128Const(e, i.dest.reg().getIdx(), result);
+      e.FCVTN(i.dest.reg().toD().H4(), src1.S4());
+      e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+      e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
       return;
     }
-    int s = i.src1.reg().getIdx();
-    int d = i.dest.reg().getIdx();
-    e.str(QReg(s),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    e.add(e.x1, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(reinterpret_cast<void*>(EmulatePACK_FLOAT16_4));
-    e.ldr(QReg(d),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
+
+    if (i.src1.is_constant) {
+      e.ADD(e.GetNativeParam(0), SP, e.StashConstantV(0, i.src1.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(0), SP, e.StashV(0, i.src1));
+    }
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateFLOAT16_4));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+  static void EmitSHORT_2(A64Emitter& e, const EmitArgType& i) {
+    assert_true(i.src2.value->IsConstantZero());
+
+    // Check if input is constant zero - special case
+    if (i.src1.is_constant && i.src1.value->IsConstantZero()) {
+      e.EOR(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16());
+      return;
+    }
+
+    QReg src = i.src1.is_constant ? i.dest.reg() : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src, i.src1.constant());
+    } else {
+      // Copy src to dest if they're different registers
+      if (src.index() != i.dest.reg().index()) {
+        e.MOV(i.dest.reg().B16(), src.B16());
+      }
+    }
+
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    // Check if the value is zero (0x00000000) - if so, skip min/max
+    // Zero is a special case that doesn't use the mantissa trick
+    // Create a mask for zero elements
+    e.CMEQ(Q0.S4(), i.dest.reg().S4(), 0);
+
+    // Save the zero mask
+    e.MOV(Q2.B16(), Q0.B16());
+
+    // Saturate non-zero values - use FMAXNM/FMINNM to handle NaN correctly
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackSHORT_Min));
+    e.FMAXNM(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackSHORT_Max));
+    e.FMINNM(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    // Use BIC to clear values that were originally zero
+    e.BIC(i.dest.reg().B16(), i.dest.reg().B16(), Q2.B16());
+
+    // Pack
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackSHORT_2));
+    e.TBL(i.dest.reg().B16(), List{i.dest.reg().B16()}, Q1.B16());
+  }
+  static void EmitSHORT_4(A64Emitter& e, const EmitArgType& i) {
+    assert_true(i.src2.value->IsConstantZero());
+
+    // Check if input is constant zero - special case
+    if (i.src1.is_constant && i.src1.value->IsConstantZero()) {
+      e.EOR(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16());
+      return;
+    }
+
+    QReg src = i.src1.is_constant ? i.dest.reg() : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src, i.src1.constant());
+    } else {
+      // Copy src to dest if they're different registers
+      if (src.index() != i.dest.reg().index()) {
+        e.MOV(i.dest.reg().B16(), src.B16());
+      }
+    }
+
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    // Check if the value is zero (0x00000000) - if so, skip min/max
+    // Zero is a special case that doesn't use the mantissa trick
+    // Create a mask for zero elements
+    e.CMEQ(Q0.S4(), i.dest.reg().S4(), 0);
+
+    // Save the zero mask
+    e.MOV(Q2.B16(), Q0.B16());
+
+    // Saturate non-zero values - use FMAXNM/FMINNM to handle NaN correctly
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackSHORT_Min));
+    e.FMAXNM(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackSHORT_Max));
+    e.FMINNM(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    // Use BIC to clear values that were originally zero
+    e.BIC(i.dest.reg().B16(), i.dest.reg().B16(), Q2.B16());
+
+    // Pack
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackSHORT_4));
+    e.TBL(i.dest.reg().B16(), List{i.dest.reg().B16()}, Q1.B16());
   }
   static void EmitUINT_2101010(A64Emitter& e, const EmitArgType& i) {
-    int s = SrcVReg(e, i.src1, 2);
-    int d = i.dest.reg().getIdx();
-    e.str(QReg(s),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    e.add(e.x1, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(reinterpret_cast<void*>(EmulatePACK_UINT_2101010));
-    e.ldr(QReg(d),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
+    // https://www.opengl.org/registry/specs/ARB/vertex_type_2_10_10_10_rev.txt
+    // XYZ are 10 bits, signed and saturated.
+    // W is 2 bits, unsigned and saturated.
+    const QReg src = i.dest;
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src, i.src1.constant());
+    }
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    // Saturate.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackUINT_2101010_MinUnpacked));
+    e.FMAX(i.dest.reg().S4(), src.S4(), Q1.S4());
+
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackUINT_2101010_MaxUnpacked));
+    e.FMIN(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    // Remove the unneeded bits of the floats.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackUINT_2101010_MaskUnpacked));
+    e.AND(i.dest.reg().B16(), i.dest.reg().B16(), Q1.B16());
+
+    // Shift the components up.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackUINT_2101010_Shift));
+    e.USHL(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    // Combine the components.
+    e.LoadConstantV(Q1, vec128i(0x03'02'01'00 + 0x04'04'04'04 * 2,
+                                0x03'02'01'00 + 0x04'04'04'04 * 3,
+                                0x03'02'01'00 + 0x04'04'04'04 * 0,
+                                0x03'02'01'00 + 0x04'04'04'04 * 1));
+    e.TBL(Q0.B16(), List{i.dest.reg().B16()}, Q1.B16());
+    e.EOR(i.dest.reg().B16(), i.dest.reg().B16(), Q0.B16());
+
+    e.LoadConstantV(Q1, vec128i(0x03'02'01'00 + 0x04'04'04'04 * 1,
+                                0x03'02'01'00 + 0x04'04'04'04 * 0,
+                                0x03'02'01'00 + 0x04'04'04'04 * 3,
+                                0x03'02'01'00 + 0x04'04'04'04 * 2));
+    e.TBL(Q0.B16(), List{i.dest.reg().B16()}, Q1.B16());
+    e.EOR(i.dest.reg().B16(), i.dest.reg().B16(), Q0.B16());
   }
   static void EmitULONG_4202020(A64Emitter& e, const EmitArgType& i) {
-    int s = SrcVReg(e, i.src1, 2);
-    int d = i.dest.reg().getIdx();
-    e.str(QReg(s),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    e.add(e.x1, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(reinterpret_cast<void*>(EmulatePACK_ULONG_4202020));
-    e.ldr(QReg(d),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
+    // XYZ are 20 bits, signed and saturated.
+    // W is 4 bits, unsigned and saturated.
+    QReg src = i.src1.is_constant ? i.dest.reg() : i.src1.reg();
+    if (i.src1.is_constant) {
+      e.LoadConstantV(src, i.src1.constant());
+    }
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    // Saturate.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackULONG_4202020_MinUnpacked));
+    e.FMAX(i.dest.reg().S4(), src.S4(), Q1.S4());
+
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackULONG_4202020_MaxUnpacked));
+    e.FMIN(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    // Remove the unneeded bits of the floats (so excess nibbles will also be
+    // cleared).
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackULONG_4202020_MaskUnpacked));
+    e.AND(i.dest.reg().B16(), i.dest.reg().B16(), Q1.B16());
+
+    // Store Y and W shifted left by 4 so vpshufb can be used with them.
+    e.SHL(Q0.S4(), i.dest.reg().S4(), 4);
+
+    // Place XZ where they're supposed to be.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackULONG_4202020_PermuteXZ));
+    e.TBL(i.dest.reg().B16(), List{i.dest.reg().B16()}, Q1.B16());
+    // Place YW.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackULONG_4202020_PermuteYW));
+    e.TBL(Q0.B16(), List{Q0.B16()}, Q1.B16());
+    // Merge XZ and YW.
+    e.EOR(i.dest.reg().B16(), i.dest.reg().B16(), Q0.B16());
   }
-  // Keep existing 8_IN_16 and 16_IN_32 implementations unchanged:
   static void Emit8_IN_16(A64Emitter& e, const EmitArgType& i, uint32_t flags) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    bool saturate = hir::IsPackOutSaturate(flags);
-    bool in_unsigned = hir::IsPackInUnsigned(flags);
-    bool out_unsigned = hir::IsPackOutUnsigned(flags);
-    // PPC: src1(VA) -> bytes 0-7, src2(VB) -> bytes 8-15.
-    // NEON xtn narrows to low half (bytes 0-7), xtn2 to high half (bytes 8-15).
-    // So: xtn from src1 (VA -> low), xtn2 from src2 (VB -> high).
-    if (saturate) {
-      if (in_unsigned && out_unsigned) {
-        // unsigned -> unsigned saturate
-        e.uqxtn(VReg(2).b8, VReg(s1).h8);
-        e.uqxtn2(VReg(2).b16, VReg(s2).h8);
-      } else if (!in_unsigned && out_unsigned) {
-        // signed -> unsigned saturate (vpkshus)
-        e.sqxtun(VReg(2).b8, VReg(s1).h8);
-        e.sqxtun2(VReg(2).b16, VReg(s2).h8);
-      } else if (!in_unsigned && !out_unsigned) {
-        // signed -> signed saturate
-        e.sqxtn(VReg(2).b8, VReg(s1).h8);
-        e.sqxtn2(VReg(2).b16, VReg(s2).h8);
+    if (IsPackInUnsigned(flags)) {
+      if (IsPackOutUnsigned(flags)) {
+        if (IsPackOutSaturate(flags)) {
+          // unsigned -> unsigned + saturate
+          const QReg src1 = i.src1.is_constant ? Q0 : i.src1;
+          if (i.src1.is_constant) {
+            e.LoadConstantV(src1, i.src1.constant());
+          }
+
+          const QReg src2 = i.src2.is_constant ? Q1 : i.src2;
+          if (i.src2.is_constant) {
+            e.LoadConstantV(src2, i.src2.constant());
+          }
+          // Windows ARM64 requires src2->src1 ordering with EXT swap
+          // macOS works with src1->src2 without EXT
+#ifdef _WIN32
+          e.UQXTN(i.dest.reg().toD().B8(), src2.H8());
+          e.UQXTN2(i.dest.reg().B16(), src1.H8());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+#else
+          e.UQXTN(i.dest.reg().toD().B8(), src1.H8());
+          e.UQXTN2(i.dest.reg().B16(), src2.H8());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+#endif
+        } else {
+          // unsigned -> unsigned
+          // Windows ARM64 requires src2->src1 ordering with EXT swap
+#ifdef _WIN32
+          e.XTN(i.dest.reg().toD().B8(), i.src2.reg().H8());
+          e.XTN2(i.dest.reg().B16(), i.src1.reg().H8());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+#else
+          e.XTN(i.dest.reg().toD().B8(), i.src1.reg().H8());
+          e.XTN2(i.dest.reg().B16(), i.src2.reg().H8());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+#endif
+        }
       } else {
-        // unsigned -> signed saturate (shouldn't happen)
-        e.uqxtn(VReg(2).b8, VReg(s1).h8);
-        e.uqxtn2(VReg(2).b16, VReg(s2).h8);
+        if (IsPackOutSaturate(flags)) {
+          // unsigned -> signed + saturate
+          assert_always();
+        } else {
+          // unsigned -> signed
+          assert_always();
+        }
       }
     } else {
-      // Modulo (truncate)
-      e.xtn(VReg(2).b8, VReg(s1).h8);
-      e.xtn2(VReg(2).b16, VReg(s2).h8);
-    }
-    // Swap halfwords within 32-bit words to fix PPC big-endian layout.
-    // After narrowing, NEON h[0]=PPC_h1, h[1]=PPC_h0 within each word.
-    // rev32.h swaps them to correct PPC order.
-    e.rev32(VReg(2).h8, VReg(2).h8);
-    if (d != 2) {
-      e.mov(VReg(d).b16, VReg(2).b16);
+      if (IsPackOutUnsigned(flags)) {
+        if (IsPackOutSaturate(flags)) {
+          // signed -> unsigned + saturate
+          const QReg src1 = i.src1.is_constant ? Q0 : i.src1;
+          if (i.src1.is_constant) {
+            e.LoadConstantV(src1, i.src1.constant());
+          }
+
+          const QReg src2 = i.src2.is_constant ? Q1 : i.src2;
+          if (i.src2.is_constant) {
+            e.LoadConstantV(src2, i.src2.constant());
+          }
+
+          // Windows ARM64 requires src2->src1 ordering with EXT swap
+#ifdef _WIN32
+          e.SQXTUN(i.dest.reg().toD().B8(), src2.H8());
+          e.SQXTUN2(i.dest.reg().B16(), src1.H8());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+#else
+          e.SQXTUN(i.dest.reg().toD().B8(), src1.H8());
+          e.SQXTUN2(i.dest.reg().B16(), src2.H8());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+#endif
+        } else {
+          // signed -> unsigned
+          assert_always();
+        }
+      } else {
+        if (IsPackOutSaturate(flags)) {
+          // signed -> signed + saturate
+          // Windows ARM64 requires src2->src1 ordering with EXT swap
+#ifdef _WIN32
+          e.SQXTN(i.dest.reg().toD().B8(), i.src2.reg().H8());
+          e.SQXTN2(i.dest.reg().B16(), i.src1.reg().H8());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+#else
+          e.SQXTN(i.dest.reg().toD().B8(), i.src1.reg().H8());
+          e.SQXTN2(i.dest.reg().B16(), i.src2.reg().H8());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+#endif
+        } else {
+          // signed -> signed
+          assert_always();
+        }
+      }
     }
   }
+  // Pack 2 32-bit vectors into a 16-bit vector.
   static void Emit16_IN_32(A64Emitter& e, const EmitArgType& i,
                            uint32_t flags) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
-    int d = i.dest.reg().getIdx();
-    bool saturate = hir::IsPackOutSaturate(flags);
-    bool in_unsigned = hir::IsPackInUnsigned(flags);
-    bool out_unsigned = hir::IsPackOutUnsigned(flags);
-    // PPC: src1(VA) -> halfwords 0-3, src2(VB) -> halfwords 4-7.
-    // NEON xtn narrows to low half, xtn2 to high half.
-    // So: xtn from src1 (VA -> low), xtn2 from src2 (VB -> high).
-    if (saturate) {
-      if (in_unsigned && out_unsigned) {
-        e.uqxtn(VReg(2).h4, VReg(s1).s4);
-        e.uqxtn2(VReg(2).h8, VReg(s2).s4);
-      } else if (!in_unsigned && out_unsigned) {
-        e.sqxtun(VReg(2).h4, VReg(s1).s4);
-        e.sqxtun2(VReg(2).h8, VReg(s2).s4);
-      } else if (!in_unsigned && !out_unsigned) {
-        e.sqxtn(VReg(2).h4, VReg(s1).s4);
-        e.sqxtn2(VReg(2).h8, VReg(s2).s4);
+    // TODO(benvanik): handle src2 (or src1) being constant zero
+    if (IsPackInUnsigned(flags)) {
+      if (IsPackOutUnsigned(flags)) {
+        if (IsPackOutSaturate(flags)) {
+          // unsigned -> unsigned + saturate
+          const QReg src1 = i.src1.is_constant ? Q0 : i.src1;
+          if (i.src1.is_constant) {
+            e.LoadConstantV(src1, i.src1.constant());
+          }
+
+          const QReg src2 = i.src2.is_constant ? Q1 : i.src2;
+          if (i.src2.is_constant) {
+            e.LoadConstantV(src2, i.src2.constant());
+          }
+
+          // Create saturation limit: 0xFFFF in all lanes
+          e.MOV(W0, 0xFFFF);
+          e.DUP(Q2.S4(), W0);
+
+          // Saturate both sources
+          e.UMIN(Q0.S4(), src1.S4(), Q2.S4());  // Saturate src1 (v3)
+          e.UMIN(Q1.S4(), src2.S4(), Q2.S4());  // Saturate src2 (v4)
+
+          // Windows ARM64 requires src2->src1 ordering with EXT swap
+#ifdef _WIN32
+          e.UQXTN(i.dest.reg().toD().H4(),
+                  Q1.S4());                      // Pack src2 to lower 64 bits
+          e.UQXTN2(i.dest.reg().H8(), Q0.S4());  // Pack src1 to upper 64 bits
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+#else
+          e.UQXTN(i.dest.reg().toD().H4(),
+                  Q0.S4());                      // Pack src1 to lower 64 bits
+          e.UQXTN2(i.dest.reg().H8(), Q1.S4());  // Pack src2 to upper 64 bits
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+#endif
+        } else {
+          // unsigned -> unsigned
+          // Windows ARM64 requires src2->src1 ordering with EXT swap
+#ifdef _WIN32
+          e.XTN(i.dest.reg().toD().H4(), i.src2.reg().S4());
+          e.XTN2(i.dest.reg().H8(), i.src1.reg().S4());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+#else
+          e.XTN(i.dest.reg().toD().H4(), i.src1.reg().S4());
+          e.XTN2(i.dest.reg().H8(), i.src2.reg().S4());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+#endif
+        }
       } else {
-        e.uqxtn(VReg(2).h4, VReg(s1).s4);
-        e.uqxtn2(VReg(2).h8, VReg(s2).s4);
+        if (IsPackOutSaturate(flags)) {
+          // unsigned -> signed + saturate
+          assert_always();
+        } else {
+          // unsigned -> signed
+          assert_always();
+        }
       }
     } else {
-      e.xtn(VReg(2).h4, VReg(s1).s4);
-      e.xtn2(VReg(2).h8, VReg(s2).s4);
-    }
-    // Swap halfwords within 32-bit words to fix PPC big-endian layout.
-    e.rev32(VReg(2).h8, VReg(2).h8);
-    if (d != 2) {
-      e.mov(VReg(d).b16, VReg(2).b16);
+      if (IsPackOutUnsigned(flags)) {
+        if (IsPackOutSaturate(flags)) {
+          // signed -> unsigned + saturate
+          // Windows ARM64 requires src2->src1 ordering with EXT swap
+#ifdef _WIN32
+          e.SQXTUN(i.dest.reg().toD().H4(), i.src2.reg().S4());
+          e.SQXTUN2(i.dest.reg().H8(), i.src1.reg().S4());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+#else
+          e.SQXTUN(i.dest.reg().toD().H4(), i.src1.reg().S4());
+          e.SQXTUN2(i.dest.reg().H8(), i.src2.reg().S4());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+#endif
+        } else {
+          // signed -> unsigned
+          assert_always();
+        }
+      } else {
+        if (IsPackOutSaturate(flags)) {
+          // signed -> signed + saturate
+          const QReg src1 = i.src1.is_constant ? Q0 : i.src1;
+          if (i.src1.is_constant) {
+            e.LoadConstantV(src1, i.src1.constant());
+          }
+
+          const QReg src2 = i.src2.is_constant ? Q1 : i.src2;
+          if (i.src2.is_constant) {
+            e.LoadConstantV(src2, i.src2.constant());
+          }
+          // Windows ARM64 requires src2->src1 ordering with EXT swap
+#ifdef _WIN32
+          e.SQXTN(i.dest.reg().toD().H4(), src2.S4());
+          e.SQXTN2(i.dest.reg().H8(), src1.S4());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.dest.reg().B16(), 8);
+#else
+          e.SQXTN(i.dest.reg().toD().H4(), src1.S4());
+          e.SQXTN2(i.dest.reg().H8(), src2.S4());
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+#endif
+        } else {
+          // signed -> signed
+          assert_always();
+        }
+      }
     }
   }
 };
@@ -1638,32 +2014,32 @@ EMITTER_OPCODE_TABLE(OPCODE_PACK, PACK);
 // ============================================================================
 struct UNPACK : Sequence<UNPACK, I<OPCODE_UNPACK, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    switch (i.instr->flags & hir::PACK_TYPE_MODE) {
-      case hir::PACK_TYPE_D3DCOLOR:
+    switch (i.instr->flags & PACK_TYPE_MODE) {
+      case PACK_TYPE_D3DCOLOR:
         EmitD3DCOLOR(e, i);
         break;
-      case hir::PACK_TYPE_FLOAT16_2:
+      case PACK_TYPE_FLOAT16_2:
         EmitFLOAT16_2(e, i);
         break;
-      case hir::PACK_TYPE_FLOAT16_4:
+      case PACK_TYPE_FLOAT16_4:
         EmitFLOAT16_4(e, i);
         break;
-      case hir::PACK_TYPE_SHORT_2:
+      case PACK_TYPE_SHORT_2:
         EmitSHORT_2(e, i);
         break;
-      case hir::PACK_TYPE_SHORT_4:
+      case PACK_TYPE_SHORT_4:
         EmitSHORT_4(e, i);
         break;
-      case hir::PACK_TYPE_UINT_2101010:
+      case PACK_TYPE_UINT_2101010:
         EmitUINT_2101010(e, i);
         break;
-      case hir::PACK_TYPE_ULONG_4202020:
+      case PACK_TYPE_ULONG_4202020:
         EmitULONG_4202020(e, i);
         break;
-      case hir::PACK_TYPE_8_IN_16:
+      case PACK_TYPE_8_IN_16:
         Emit8_IN_16(e, i, i.instr->flags);
         break;
-      case hir::PACK_TYPE_16_IN_32:
+      case PACK_TYPE_16_IN_32:
         Emit16_IN_32(e, i, i.instr->flags);
         break;
       default:
@@ -1672,233 +2048,503 @@ struct UNPACK : Sequence<UNPACK, I<OPCODE_UNPACK, V128Op, V128Op>> {
     }
   }
   static void EmitD3DCOLOR(A64Emitter& e, const EmitArgType& i) {
-    int s = SrcVReg(e, i.src1, 2);
-    int d = i.dest.reg().getIdx();
-    if (i.src1.is_constant && i.src1.value->IsConstantZero()) {
-      // Zero -> 1.0f in all lanes.
-      e.mov(e.w0, 0x3F800000u);
-      e.dup(VReg(d).s4, e.w0);
-      return;
+    // ARGB (WXYZ) -> RGBA (XYZW)
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    QReg src(0);
+
+    if (i.src1.is_constant) {
+      if (i.src1.value->IsConstantZero()) {
+        e.FMOV(i.dest.reg().S4(), FImm8(0, 7, 0));
+        return;
+      }
+      src = i.dest;
+      e.LoadConstantV(src, i.src1.constant());
+    } else {
+      src = i.src1;
     }
-    // TBL: extract bytes from packed D3DCOLOR -> one byte per lane.
-    // TBL ctrl for UNPACK_D3DCOLOR: lane0<-byte14(R), lane1<-byte13(G),
-    // lane2<-byte12(B), lane3<-byte15(A)
-    vec128_t ctrl;
-    ctrl.low = 0xFFFFFF0D'FFFFFF0Eull;  // lane0: byte0=0x0E, lane1: byte4=0x0D
-    ctrl.high =
-        0xFFFFFF0F'FFFFFF0Cull;  // lane2: byte8=0x0C, lane3: byte12=0x0F
-    LoadV128Const(e, 1, ctrl);
-    e.tbl(VReg(d).b16, VReg(s).b16, 1, VReg(1).b16);
-    // OR with 1.0f (0x3F800000) to form the magic float.
-    e.mov(e.w0, 0x3F800000u);
-    e.dup(VReg(0).s4, e.w0);
-    e.orr(VReg(d).b16, VReg(d).b16, VReg(0).b16);
+    // src = ZZYYXXWW (ARGB packed as bytes)
+    // Unpack to 000000ZZ,000000YY,000000XX,000000WW
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VUnpackD3DCOLOR));
+    e.TBL(i.dest.reg().B16(), List{src.B16()}, Q1.B16());
+    // Convert to float by adding float bias
+    // XOR with 1.0f (0x3F800000) sets the exponent for values 0-127
+    // For values 128-255, we need to handle differently
+    e.FMOV(Q1.S4(), FImm8(0, 7, 0));  // Load 1.0f (0x3F800000)
+    e.EOR(i.dest.reg().B16(), i.dest.reg().B16(), Q1.B16());
+    // To convert to 0 to 1, games multiply by 0x47008081 and add 0xC7008081.
   }
-  static void EmitCallHelper(A64Emitter& e, const EmitArgType& i, void* fn) {
-    int s = SrcVReg(e, i.src1, 2);
-    int d = i.dest.reg().getIdx();
-    e.str(QReg(s),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    e.add(e.x1, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(fn);
-    e.ldr(QReg(d),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
+  static uint8x16_t EmulateFLOAT16_2(void*, std::byte src1[16]) {
+    alignas(16) uint16_t a[4];
+    alignas(16) float b[8];
+
+    // Load NEON registers into a C array by casting to uint8_t*
+    vst1q_u8(reinterpret_cast<uint8_t*>(a),
+             vld1q_u8(reinterpret_cast<const uint8_t*>(src1)));
+    std::memset(b, 0, sizeof(b));
+
+    for (int i = 0; i < 2; i++) {
+      uint16_t h = a[VEC128_W(6 + i)];
+
+      // Xbox 360 sentinel value handling
+      if (h == 0x7FFF) {
+        b[i] = 131008.0f;  // Special positive sentinel (0x47FFE000)
+      } else if (h == 0xFFFF) {
+        b[i] = -131008.0f;  // Special negative sentinel (0xC7FFE000)
+      } else {
+        b[i] = half_float::detail::half2float<float>(h);
+      }
+    }
+
+    // Constants, or something
+    b[2] = 0.f;
+    b[3] = 1.f;
+
+    // Store the float array into a uint8x16_t NEON register
+    return vld1q_u8(reinterpret_cast<const uint8_t*>(b));
   }
   static void EmitFLOAT16_2(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant) {
-      vec128_t result = {};
-      for (int j = 0; j < 2; j++) {
-        result.f32[j] =
-            xenos_half_to_float(i.src1.constant().u16[VEC128_W(6 + j)]);
+    // 1 bit sign, 5 bit exponent, 10 bit mantissa
+    // D3D10 half float format
+
+    if (e.IsFeatureEnabled(kA64EmitF16C)) {
+      // Load source properly
+      const QReg src = i.src1.is_constant ? Q0 : i.src1;
+      if (i.src1.is_constant) {
+        e.LoadConstantV(src, i.src1.constant());
       }
-      result.f32[2] = 0.0f;
-      result.f32[3] = 1.0f;
-      LoadV128Const(e, i.dest.reg().getIdx(), result);
+
+      // 1) Put src bytes [12..15] into bytes [0..3] of a temp
+      // EXT(..., #12) copies exactly those 4 bytes; the rest are zero
+      QReg halves = Q1;
+      e.EOR(Q0.B16(), Q0.B16(), Q0.B16());  // Q0 = 0
+      e.EXT(halves.B16(), src.B16(), Q0.B16(),
+            12);  // halves[0..3] = src[12..15]
+
+      // Keep copy for sentinel detection (before conversion)
+      QReg halves_copy = Q2;
+      e.MOV(halves_copy.B16(), halves.B16());
+
+      // 2) Convert low 4 halfwords -> 4 floats. FCVTL reads H0..H3 (low 64
+      // bits) After the EXT, H0 = low halfword of element 3, H1 = high
+      // halfword, H2 = H3 = 0
+      e.FCVTL(i.dest.reg().S4(), halves.toD().H4());
+
+      // Note: We do NOT swap the order - the natural order from EXT is correct
+
+      // 3) Xbox 360 rule: 0x7FFF → +131008.0f, 0xFFFF → -131008.0f
+
+      // Create sentinel patterns for halfword comparison
+      QReg h_7FFF = Q3;
+      QReg h_FFFF = Q4;
+
+      // Create 0xFFFF - all bytes 0xFF
+      e.MOVI(h_FFFF.B16(), 0xFF);  // All bytes 0xFF = 0xFFFF per halfword
+      // Create 0x7FFF by shifting 0xFFFF right by 1
+      e.USHR(h_7FFF.H8(), h_FFFF.H8(), 1);  // 0xFFFF >> 1 = 0x7FFF
+
+      // Compare only the low 64 bits (H0-H3) with sentinels
+      // After EXT, only H0 and H1 have data, H2 and H3 are zero
+      QReg mask_7FFF_H = Q5;
+      QReg mask_FFFF_H = Q6;
+      // Initialize masks to zero first
+      e.EOR(mask_7FFF_H.B16(), mask_7FFF_H.B16(), mask_7FFF_H.B16());
+      e.EOR(mask_FFFF_H.B16(), mask_FFFF_H.B16(), mask_FFFF_H.B16());
+      // Compare only the low 64 bits
+      e.CMEQ(mask_7FFF_H.toD().H4(), halves_copy.toD().H4(), h_7FFF.toD().H4());
+      e.CMEQ(mask_FFFF_H.toD().H4(), halves_copy.toD().H4(), h_FFFF.toD().H4());
+
+      // Widen halfword masks to word masks for blending with float32 values
+      // Use high-numbered registers to avoid any aliasing
+      QReg mask_7FFF_S = Q13;
+      QReg mask_FFFF_S = Q14;
+      e.SXTL(mask_7FFF_S.S4(), mask_7FFF_H.toD().H4());
+      e.SXTL(mask_FFFF_S.S4(), mask_FFFF_H.toD().H4());
+
+      // Prepare replacement values: ±131008.0f (broadcast to all lanes)
+      QReg f_pos_131008 = Q9;
+      QReg f_neg_131008 = Q10;
+      // Load immediate into S[0] then duplicate
+      e.MOV(W0, 0x47FFE000);
+      e.MOV(f_pos_131008.Selem()[0], W0);
+      e.DUP(f_pos_131008.S4(), f_pos_131008.Selem()[0]);  // +131008.0f
+
+      e.MOV(W0, 0xC7FFE000);
+      e.MOV(f_neg_131008.Selem()[0], W0);
+      e.DUP(f_neg_131008.S4(), f_neg_131008.Selem()[0]);  // -131008.0f
+
+      // 5) Blend using BIT which has clearer semantics
+      // BIT Vd, Vn, Vm => Vd = (Vn & Vm) | (Vd & ~Vm)
+      // When mask==0: result = (replacement & 0) | (original & 0xFFFF) =
+      // original When mask==0xFFFF: result = (replacement & 0xFFFF) | (original
+      // & 0) = replacement This is what we want!
+
+      // Apply sentinel replacements using BIT
+      // BIT Vd, Vn, Vm => Vd = (Vn & Vm) | (Vd & ~Vm)
+      // When mask is 0: keep original, when mask is 0xFFFFFFFF: use replacement
+      e.BIT(i.dest.reg().B16(), f_pos_131008.B16(), mask_7FFF_S.B16());
+      e.BIT(i.dest.reg().B16(), f_neg_131008.B16(), mask_FFFF_S.B16());
+
+      // 6) Swap S0 and S1 to match Xbox 360 halfword read order
+      // The software reads halfword 7 first, then 6, but EXT gives us 6 then 7
+      e.REV64(i.dest.reg().S4(), i.dest.reg().S4());
+
+      // Write 1.0 to element 3
+      e.FMOV(S0, oaknut::FImm8(0, 7, 0));
+      e.MOV(i.dest.reg().Selem()[3], Q0.Selem()[0]);
       return;
     }
-    EmitCallHelper(e, i, reinterpret_cast<void*>(EmulateUNPACK_FLOAT16_2));
+
+    if (i.src1.is_constant) {
+      e.ADD(e.GetNativeParam(0), SP, e.StashConstantV(0, i.src1.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(0), SP, e.StashV(0, i.src1));
+    }
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateFLOAT16_2));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+  static uint8x16_t EmulateFLOAT16_4(void*, std::byte src1[16]) {
+    alignas(16) uint16_t a[4];
+    alignas(16) float b[8];
+
+    // Load NEON registers into a C array by casting to uint8_t*
+    vst1q_u8(reinterpret_cast<uint8_t*>(a),
+             vld1q_u8(reinterpret_cast<const uint8_t*>(src1)));
+
+    for (int i = 0; i < 4; i++) {
+      b[i] = half_float::detail::half2float<float>(a[VEC128_W(4 + i)]);
+    }
+
+    // Store the float array into a uint8x16_t NEON register
+    return vld1q_u8(reinterpret_cast<const uint8_t*>(b));
   }
   static void EmitFLOAT16_4(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant) {
-      vec128_t result = {};
-      for (int idx = 0; idx < 4; ++idx) {
-        result.f32[idx] =
-            xenos_half_to_float(i.src1.constant().u16[VEC128_W(4 + idx)]);
+    // src = [(dest.x | dest.y), (dest.z | dest.w), 0, 0]
+    if (e.IsFeatureEnabled(kA64EmitF16C)) {
+      const QReg src1 = i.src1.is_constant ? Q0 : i.src1;
+      if (i.src1.is_constant) {
+        e.LoadConstantV(src1, i.src1.constant());
       }
-      LoadV128Const(e, i.dest.reg().getIdx(), result);
+      e.EXT(i.dest.reg().B16(), i.dest.reg().B16(), i.src1.reg().B16(), 8);
+      e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+      e.FCVTL(i.dest.reg().S4(), i.dest.reg().toD().H4());
       return;
     }
-    EmitCallHelper(e, i, reinterpret_cast<void*>(EmulateUNPACK_FLOAT16_4));
+
+    if (i.src1.is_constant) {
+      e.ADD(e.GetNativeParam(0), SP, e.StashConstantV(0, i.src1.constant()));
+    } else {
+      e.ADD(e.GetNativeParam(0), SP, e.StashV(0, i.src1));
+    }
+    e.CallNativeSafe(reinterpret_cast<void*>(EmulateFLOAT16_4));
+    e.MOV(i.dest.reg().B16(), Q0.B16());
   }
   static void EmitSHORT_2(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant && i.src1.value->IsConstantZero()) {
-      // Return {3.0, 3.0, 0.0, 1.0}
-      vec128_t c;
-      c.f32[0] = 3.0f;
-      c.f32[1] = 3.0f;
-      c.f32[2] = 0.0f;
-      c.f32[3] = 1.0f;
-      LoadV128Const(e, i.dest.reg().getIdx(), c);
-      return;
+    // (VD.x) = 3.0 + (VB.x>>16)*2^-22
+    // (VD.y) = 3.0 + (VB.x)*2^-22
+    // (VD.z) = 0.0
+    // (VD.w) = 1.0 (games splat W after unpacking to get vectors of 1.0f)
+    // src is (xx,xx,xx,VALUE)
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    QReg src(0);
+    if (i.src1.is_constant) {
+      if (i.src1.value->IsConstantZero()) {
+        src = i.dest;
+        e.LDR(i.dest, VConstData, e.GetVConstOffset(V3301));
+        return;
+      }
+      // TODO(benvanik): check other common constants/perform shuffle/or here.
+      src = i.src1;
+      e.LoadConstantV(src, i.src1.constant());
+    } else {
+      src = i.src1;
     }
-    EmitCallHelper(e, i, reinterpret_cast<void*>(EmulateUNPACK_SHORT_2));
+    // Shuffle bytes.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VUnpackSHORT_2));
+    e.TBL(i.dest.reg().B16(), List{src.B16()}, Q1.B16());
+
+    // If negative, make smaller than 3 - sign extend before adding.
+    e.SHL(i.dest.reg().S4(), i.dest.reg().S4(), 16);
+    e.SSHR(i.dest.reg().S4(), i.dest.reg().S4(), 16);
+
+    // Add 3,3,0,1.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(V3301));
+    e.ADD(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    // Return quiet NaNs in case of negative overflow.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VUnpackSHORT_Overflow));
+    e.CMEQ(Q0.S4(), i.dest.reg().S4(), Q1.S4());
+
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VQNaN));
+    e.BSL(Q0.B16(), Q1.B16(), i.dest.reg().B16());
+    e.MOV(i.dest.reg().B16(), Q0.B16());
   }
   static void EmitSHORT_4(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant && i.src1.value->IsConstantZero()) {
-      vec128_t c;
-      c.f32[0] = 3.0f;
-      c.f32[1] = 3.0f;
-      c.f32[2] = 3.0f;
-      c.f32[3] = 3.0f;
-      LoadV128Const(e, i.dest.reg().getIdx(), c);
-      return;
+    // (VD.x) = 3.0 + (VB.x>>16)*2^-22
+    // (VD.y) = 3.0 + (VB.x)*2^-22
+    // (VD.z) = 3.0 + (VB.y>>16)*2^-22
+    // (VD.w) = 3.0 + (VB.y)*2^-22
+    // src is (xx,xx,VALUE,VALUE)
+
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    QReg src(0);
+    if (i.src1.is_constant) {
+      if (i.src1.value->IsConstantZero()) {
+        e.LDR(i.dest, VConstData, e.GetVConstOffset(V3333));
+        return;
+      }
+      // TODO(benvanik): check other common constants/perform shuffle/or here.
+      src = i.dest;
+      e.LoadConstantV(src, i.src1.constant());
+    } else {
+      src = i.src1;
     }
-    EmitCallHelper(e, i, reinterpret_cast<void*>(EmulateUNPACK_SHORT_4));
+    // Shuffle bytes.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VUnpackSHORT_4));
+    e.TBL(i.dest.reg().B16(), List{src.B16()}, Q1.B16());
+
+    // If negative, make smaller than 3 - sign extend before adding.
+    e.SHL(i.dest.reg().S4(), i.dest.reg().S4(), 16);
+    e.SSHR(i.dest.reg().S4(), i.dest.reg().S4(), 16);
+
+    // Add 3,3,3,3.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(V3333));
+    e.ADD(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+
+    // Return quiet NaNs in case of negative overflow.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VUnpackSHORT_Overflow));
+    e.CMEQ(Q0.S4(), i.dest.reg().S4(), Q1.S4());
+
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VQNaN));
+    e.BSL(Q0.B16(), Q1.B16(), i.dest.reg().B16());
+    e.MOV(i.dest.reg().B16(), Q0.B16());
   }
   static void EmitUINT_2101010(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant && i.src1.value->IsConstantZero()) {
-      vec128_t c;
-      c.f32[0] = 3.0f;
-      c.f32[1] = 3.0f;
-      c.f32[2] = 3.0f;
-      c.f32[3] = 1.0f;
-      LoadV128Const(e, i.dest.reg().getIdx(), c);
-      return;
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    QReg src(0);
+    if (i.src1.is_constant) {
+      if (i.src1.value->IsConstantZero()) {
+        e.LDR(i.dest, VConstData, e.GetVConstOffset(V3331));
+        return;
+      }
+      src = i.dest;
+      e.LoadConstantV(src, i.src1.constant());
+    } else {
+      src = i.src1;
     }
-    EmitCallHelper(e, i, reinterpret_cast<void*>(EmulateUNPACK_UINT_2101010));
+
+    // Splat W.
+    e.DUP(i.dest.reg().S4(), src.Selem()[3]);
+    // Keep only the needed components.
+    // Red in 0-9 now, green in 10-19, blue in 20-29, alpha in 30-31.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackUINT_2101010_MaskPacked));
+    e.AND(i.dest.reg().B16(), i.dest.reg().B16(), Q1.B16());
+
+    // Shift the components down.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VPackUINT_2101010_Shift));
+    e.NEG(Q1.S4(), Q1.S4());
+    e.USHL(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+    // If XYZ are negative, make smaller than 3 - sign extend XYZ before adding.
+    // W is unsigned.
+    e.SHL(i.dest.reg().S4(), i.dest.reg().S4(), 22);
+    e.SSHR(i.dest.reg().S4(), i.dest.reg().S4(), 22);
+    // Add 3,3,3,1.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(V3331));
+    e.ADD(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+    // Return quiet NaNs in case of negative overflow.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VUnpackUINT_2101010_Overflow));
+    e.CMEQ(Q0.S4(), i.dest.reg().S4(), Q1.S4());
+
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VQNaN));
+    e.BSL(Q0.B16(), Q1.B16(), i.dest.reg().B16());
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+    // To convert XYZ to -1 to 1, games multiply by 0x46004020 & sub 0x46C06030.
+    // For W to 0 to 1, they multiply by and subtract 0x4A2AAAAB.}
   }
   static void EmitULONG_4202020(A64Emitter& e, const EmitArgType& i) {
-    if (i.src1.is_constant && i.src1.value->IsConstantZero()) {
-      vec128_t c;
-      c.f32[0] = 3.0f;
-      c.f32[1] = 3.0f;
-      c.f32[2] = 3.0f;
-      c.f32[3] = 1.0f;
-      LoadV128Const(e, i.dest.reg().getIdx(), c);
-      return;
-    }
-    EmitCallHelper(e, i, reinterpret_cast<void*>(EmulateUNPACK_ULONG_4202020));
-  }
-  // Keep existing 8_IN_16 and 16_IN_32 implementations unchanged:
-  static void Emit8_IN_16(A64Emitter& e, const EmitArgType& i, uint32_t flags) {
-    int s = SrcVReg(e, i.src1, 0);
-    int d = i.dest.reg().getIdx();
-    bool is_unsigned = hir::IsPackOutUnsigned(flags);
-    bool to_hi = hir::IsPackToHi(flags);
-    // PPC stores vectors in word-swapped form: u32[0]=PPC_W0, but within each
-    // word, bytes are in LE order.  PPC "high" bytes (0-7) are in the NEON low
-    // half but with per-word byte reversal.  rev32(h8) swaps 16-bit halves
-    // within each 32-bit word, fixing the byte order for sign extension.
-    e.rev32(VReg(d).h8, VReg(s).h8);
-    if (to_hi) {
-      // PPC high bytes are in the NEON low half after rev32.
-      if (is_unsigned)
-        e.uxtl(VReg(d).h8, VReg(d).b8);
-      else
-        e.sxtl(VReg(d).h8, VReg(d).b8);
+    const XReg VConstData = X3;
+    e.MOV(VConstData, e.GetVConstPtr());
+
+    QReg src(0);
+    if (i.src1.is_constant) {
+      if (i.src1.value->IsConstantZero()) {
+        e.LDR(i.dest, VConstData, e.GetVConstOffset(V3331));
+        return;
+      }
+      src = i.dest;
+      e.LoadConstantV(src, i.src1.constant());
     } else {
-      // PPC low bytes are in the NEON high half after rev32.
-      if (is_unsigned)
-        e.uxtl2(VReg(d).h8, VReg(d).b16);
-      else
-        e.sxtl2(VReg(d).h8, VReg(d).b16);
+      src = i.src1;
+    }
+    // Extract pairs of nibbles to XZYW. XZ will have excess 4 upper bits, YW
+    // will have excess 4 lower bits.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VUnpackULONG_4202020_Permute));
+    e.TBL(i.dest.reg().B16(), List{src.B16()}, Q1.B16());
+
+    // Drop the excess nibble of YW.
+    e.USHR(Q0.S4(), i.dest.reg().S4(), 4);
+    // Merge XZ and YW now both starting at offset 0.
+    e.LoadConstantV(Q1, vec128i(3 * 0x04'04'04'04 + 0x03'02'01'00,
+                                2 * 0x04'04'04'04 + 0x03'02'01'00,
+                                1 * 0x04'04'04'04 + 0x03'02'01'00,
+                                0 * 0x04'04'04'04 + 0x03'02'01'00));
+    e.TBL(i.dest.reg().B16(), List{i.dest.reg().B16(), Q0.B16()}, Q1.B16());
+
+    // Reorder as XYZW.
+    e.LoadConstantV(Q1, vec128i(3 * 0x04'04'04'04 + 0x03'02'01'00,
+                                1 * 0x04'04'04'04 + 0x03'02'01'00,
+                                2 * 0x04'04'04'04 + 0x03'02'01'00,
+                                0 * 0x04'04'04'04 + 0x03'02'01'00));
+    e.TBL(i.dest.reg().B16(), List{i.dest.reg().B16(), Q0.B16()}, Q1.B16());
+    // Drop the excess upper nibble in XZ and sign-extend XYZ.
+    e.SHL(i.dest.reg().S4(), i.dest.reg().S4(), 12);
+    e.SSHR(i.dest.reg().S4(), i.dest.reg().S4(), 12);
+    // Add 3,3,3,1.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(V3331));
+    e.ADD(i.dest.reg().S4(), i.dest.reg().S4(), Q1.S4());
+    // Return quiet NaNs in case of negative overflow.
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VUnpackULONG_4202020_Overflow));
+    e.CMEQ(Q0.S4(), i.dest.reg().S4(), Q1.S4());
+
+    e.LDR(Q1, VConstData, e.GetVConstOffset(VQNaN));
+    e.BSL(Q0.B16(), Q1.B16(), i.dest.reg().B16());
+    e.MOV(i.dest.reg().B16(), Q0.B16());
+  }
+  static void Emit8_IN_16(A64Emitter& e, const EmitArgType& i, uint32_t flags) {
+    assert_false(IsPackOutSaturate(flags));
+    QReg src(0);
+    if (i.src1.is_constant) {
+      src = i.dest;
+      e.LoadConstantV(src, i.src1.constant());
+    } else {
+      src = i.src1;
+    }
+    if (IsPackToLo(flags)) {
+      // Unpack to LO.
+      if (IsPackInUnsigned(flags)) {
+        if (IsPackOutUnsigned(flags)) {
+          // unsigned -> unsigned
+          assert_always();
+        } else {
+          // unsigned -> signed
+          assert_always();
+        }
+      } else {
+        if (IsPackOutUnsigned(flags)) {
+          // signed -> unsigned
+          assert_always();
+        } else {
+          // signed -> signed
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.SXTL2(i.dest.reg().H8(), i.dest.reg().B16());
+        }
+      }
+    } else {
+      // Unpack to HI.
+      if (IsPackInUnsigned(flags)) {
+        if (IsPackOutUnsigned(flags)) {
+          // unsigned -> unsigned
+          assert_always();
+        } else {
+          // unsigned -> signed
+          assert_always();
+        }
+      } else {
+        if (IsPackOutUnsigned(flags)) {
+          // signed -> unsigned
+          assert_always();
+        } else {
+          // signed -> signed
+          e.REV32(i.dest.reg().H8(), i.dest.reg().H8());
+          e.SXTL(i.dest.reg().H8(), i.dest.reg().toD().B8());
+        }
+      }
     }
   }
   static void Emit16_IN_32(A64Emitter& e, const EmitArgType& i,
                            uint32_t flags) {
-    int s = SrcVReg(e, i.src1, 0);
-    int d = i.dest.reg().getIdx();
-    bool is_unsigned = hir::IsPackOutUnsigned(flags);
-    bool to_hi = hir::IsPackToHi(flags);
-    // PPC "high" halfwords (HW0-3) are in the NEON low half (h[0]-h[3])
-    // but with pairs swapped within each 32-bit word (HW0 at h[1], HW1 at
-    // h[0], etc.).  Sign-extend the correct half, then rev64(s4) swaps
-    // 32-bit pairs to fix the halfword ordering.
-    if (to_hi) {
-      // PPC high halfwords → NEON low half.
-      if (is_unsigned)
-        e.uxtl(VReg(d).s4, VReg(s).h4);
-      else
-        e.sxtl(VReg(d).s4, VReg(s).h4);
+    assert_false(IsPackOutSaturate(flags));
+    QReg src(0);
+    if (i.src1.is_constant) {
+      src = i.dest;
+      e.LoadConstantV(src, i.src1.constant());
     } else {
-      // PPC low halfwords → NEON high half.
-      if (is_unsigned)
-        e.uxtl2(VReg(d).s4, VReg(s).h8);
-      else
-        e.sxtl2(VReg(d).s4, VReg(s).h8);
+      src = i.src1;
     }
-    e.rev64(VReg(d).s4, VReg(d).s4);
+    if (IsPackToLo(flags)) {
+      // Unpack to LO.
+      if (IsPackInUnsigned(flags)) {
+        if (IsPackOutUnsigned(flags)) {
+          // unsigned -> unsigned
+          assert_always();
+        } else {
+          // unsigned -> signed
+          assert_always();
+        }
+      } else {
+        if (IsPackOutUnsigned(flags)) {
+          // signed -> unsigned
+          assert_always();
+        } else {
+          // signed -> signed
+          e.SXTL2(i.dest.reg().S4(), src.H8());
+        }
+      }
+    } else {
+      // Unpack to HI.
+      if (IsPackInUnsigned(flags)) {
+        if (IsPackOutUnsigned(flags)) {
+          // unsigned -> unsigned
+          assert_always();
+        } else {
+          // unsigned -> signed
+          assert_always();
+        }
+      } else {
+        if (IsPackOutUnsigned(flags)) {
+          // signed -> unsigned
+          assert_always();
+        } else {
+          // signed -> signed
+          e.SXTL(i.dest.reg().S4(), src.toD().H4());
+        }
+      }
+    }
+    e.REV64(i.dest.reg().S4(), i.dest.reg().S4());
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_UNPACK, UNPACK);
 
-// ============================================================================
-// OPCODE_LVL (Load Vector Left)
-// ============================================================================
-struct LVL_V128 : Sequence<LVL_V128, I<OPCODE_LVL, V128Op, I64Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    auto addr = ComputeMemoryAddress(e, i.src1);
-    int d = i.dest.reg().getIdx();
-    // x1 = host address = membase + guest_addr
-    e.add(e.x1, e.GetMembaseReg(), addr);
-    // x2 = result pointer (scratch area)
-    e.add(e.x2, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(reinterpret_cast<void*>(EmulateLVL));
-    e.ldr(QReg(d),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-  }
-};
-EMITTER_OPCODE_TABLE(OPCODE_LVL, LVL_V128);
+namespace {
+uint64_t SetNJMForwarder(void* raw_context, uint64_t value) {
+  auto* backend_context = reinterpret_cast<A64BackendContext*>(
+      reinterpret_cast<std::byte*>(raw_context) - sizeof(A64BackendContext));
+  backend_context->njm_enabled = value != 0;
+  return 0;
+}
+}  // namespace
 
 // ============================================================================
-// OPCODE_LVR (Load Vector Right)
+// OPCODE_SET_NJM
 // ============================================================================
-struct LVR_V128 : Sequence<LVR_V128, I<OPCODE_LVR, V128Op, I64Op>> {
+struct SET_NJM_I8 : Sequence<SET_NJM_I8, I<OPCODE_SET_NJM, VoidOp, I8Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    auto addr = ComputeMemoryAddress(e, i.src1);
-    int d = i.dest.reg().getIdx();
-    e.add(e.x1, e.GetMembaseReg(), addr);
-    e.add(e.x2, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(reinterpret_cast<void*>(EmulateLVR));
-    e.ldr(QReg(d),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
+    if (i.src1.is_constant) {
+      e.CallNative(SetNJMForwarder, static_cast<uint64_t>(i.src1.constant()));
+      return;
+    }
+    e.UXTB(W1, i.src1);
+    e.CallNativeSafe(reinterpret_cast<void*>(SetNJMForwarder));
   }
 };
-EMITTER_OPCODE_TABLE(OPCODE_LVR, LVR_V128);
-
-// ============================================================================
-// OPCODE_STVL (Store Vector Left)
-// ============================================================================
-struct STVL_V128 : Sequence<STVL_V128, I<OPCODE_STVL, VoidOp, I64Op, V128Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    auto addr = ComputeMemoryAddress(e, i.src1);
-    int s = SrcVReg(e, i.src2, 2);
-    // Store source vec to scratch for C helper to read.
-    e.str(QReg(s),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    // x1 = host address, x2 = src data pointer
-    e.add(e.x1, e.GetMembaseReg(), addr);
-    e.add(e.x2, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(reinterpret_cast<void*>(EmulateSTVL));
-  }
-};
-EMITTER_OPCODE_TABLE(OPCODE_STVL, STVL_V128);
-
-// ============================================================================
-// OPCODE_STVR (Store Vector Right)
-// ============================================================================
-struct STVR_V128 : Sequence<STVR_V128, I<OPCODE_STVR, VoidOp, I64Op, V128Op>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) {
-    auto addr = ComputeMemoryAddress(e, i.src1);
-    int s = SrcVReg(e, i.src2, 2);
-    e.str(QReg(s),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    e.add(e.x1, e.GetMembaseReg(), addr);
-    e.add(e.x2, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
-    e.CallNativeSafe(reinterpret_cast<void*>(EmulateSTVR));
-  }
-};
-EMITTER_OPCODE_TABLE(OPCODE_STVR, STVR_V128);
+EMITTER_OPCODE_TABLE(OPCODE_SET_NJM, SET_NJM_I8);
 
 }  // namespace a64
 }  // namespace backend

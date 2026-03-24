@@ -4,16 +4,17 @@
 <dict>
 	<key>application-identifier</key>
 	<string>com.UltraAssassin64.xenios.ios</string>
-	<key>get-task-allow</key>
+    <key>get-task-allow</key>
     <true/>
 
-    <key>com.apple.developer.kernel.extended-virtual-addressing</key>
-    <true/>
-    <key>com.apple.developer.kernel.increased-memory-limit</key>
-    <true/>
+	<key>com.apple.developer.kernel.increased-memory-limit</key>
+	<true/>
+    
+	<key>com.apple.developer.kernel.extended-virtual-addressing</key>
+	<true/>
 
-    <key>com.apple.private.memorystatus</key>
-    <true/>
+	<key>com.apple.security.get-task-allow</key>
+	<true/>
 
     <key>jb.pmap_cs_custom_trust</key>
     <string>PMAP_CS_APP_STORE</string>
