@@ -705,7 +705,7 @@ workspace("xenia")
           ["ARCHS"] = "arm64",
           ["IPHONEOS_DEPLOYMENT_TARGET"] = "16.0",
           ["SDKROOT"] = "iphoneos",
-          ["OTHER_LDFLAGS"] = "$(inherited) -flag",
+          ["OTHER_LDFLAGS"] = "$(inherited)",
         })
       filter({})
     elseif os.istarget("macosx") then
@@ -724,7 +724,7 @@ workspace("xenia")
         architecture("ARM64")
         xcodebuildsettings({
           ["ARCHS"] = "arm64",
-          ["OTHER_LDFLAGS"] = "$(inherited) -flag",
+          ["OTHER_LDFLAGS"] = "$(inherited)",
         })
       filter("platforms:Mac-x86_64")
         architecture("x86_64")
