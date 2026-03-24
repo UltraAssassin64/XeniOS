@@ -1,4 +1,4 @@
-xenia-build.py python3
+#!/usr/bin/env python3
 
 # Copyright 2025 Ben Vanik. All Rights Reserved.
 
