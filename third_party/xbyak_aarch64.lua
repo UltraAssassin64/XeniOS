@@ -14,4 +14,12 @@ project("xbyak_aarch64")
   })
   files({
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_util.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_code_array.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_reg.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_gen.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_mnemonic_def.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_meta_mnemonic.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_perf.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_adr.h",
   })
