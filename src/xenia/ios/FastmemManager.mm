@@ -26,7 +26,7 @@
   if (self = [super init]) {
 #if XE_PLATFORM_IOS && XE_ARCH_ARM64
     // Test fastmem availability by attempting the allocation
-    self.fastmemAvailable = xe::memory::TestFastmemAvailability();
+    self.fastmemAvailable = xe::memory::xe::memory::TestFastmemAvailability();
 #else
     self.fastmemAvailable = false;
 #endif
