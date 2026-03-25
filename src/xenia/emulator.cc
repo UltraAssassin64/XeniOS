@@ -92,7 +92,7 @@ extern "C" int csops(pid_t pid, unsigned int ops, void* useraddr,
 #define CS_DEBUGGED 0x10000000
 #endif
 
-bool fastmem_available = IsFastmemAvailable();
+bool fastmem_available = xe::memory::IsFastmemAvailable;
 if (fastmem_available) {
   XELOGI("Fastmem is available on this jailbroken device");
   Config::SetBase(Config::MAIN_FASTMEM, true);
@@ -386,7 +386,7 @@ X_STATUS Emulator::Setup(
     // On iOS, probe whether JIT (executable memory) is available at runtime.
     // We use the dual-mapping (split W^X via vm_remap) approach, not MAP_JIT.
 #if XE_PLATFORM_IOS
-    const bool cs_debugged = IsIOSCsDebugged();
+    const bool cs_debugged = IsIOSDebugged();
     const bool can_map_exec = CanMapIOSExecutePage();
     // Use executable-memory probing as the authoritative runtime capability
     // signal instead of hard-coding OS-version policy.
