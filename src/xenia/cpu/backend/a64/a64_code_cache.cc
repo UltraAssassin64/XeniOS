@@ -70,7 +70,7 @@ DEFINE_bool(ios_jit_non_txm_force_mprotect_flip, false,
 
 namespace {
 
-bool ShouldLogIndirectionTable() {
+  bool ShouldLogIndirectionTable() {
   if (!cvars::a64_indirection_table_log) {
     return false;
   }
