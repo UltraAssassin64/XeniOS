@@ -36,6 +36,8 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <UIKit/UIKit.h>
+#include <string>
 #endif
 #include "xenia/cpu/backend/code_cache.h"
 #include "xenia/cpu/backend/null_backend.h"
@@ -75,6 +77,7 @@
 #include "xenia/vfs/file.h"
 #include "xenia/vfs/virtual_file_system.h"
 
+
 #if XE_ARCH_AMD64
 #include "xenia/cpu/backend/x64/x64_backend.h"
 #endif  // XE_ARCH
@@ -92,7 +95,7 @@ extern "C" int csops(pid_t pid, unsigned int ops, void* useraddr,
 #define CS_DEBUGGED 0x10000000
 #endif
 
-bool fastmem_available = xe::memory::IsFastmemAvailable;
+bool fastmem_available = xe::memory::IsFastmemAvailable();
 if (fastmem_available) {
   XELOGI("Fastmem is available on this jailbroken device");
   Config::SetBase(Config::MAIN_FASTMEM, true);
@@ -149,7 +152,7 @@ std::string GetIOSJitStrategy() {
     return "LuckTXM - hardware TXM (iOS 26+)";
   }
   
-  int ios_version = IOSProductMajorVersion();
+  int ios_version = get_ios_major_version_uidevice();
   if (ios_version >= 26) {
     // iOS 26+ without TXM hardware
     return "LuckNoTXM - dual-mapped (iOS 26+, no TXM)";
