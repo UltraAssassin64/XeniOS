@@ -34,57 +34,6 @@ namespace a64 {
 #define XE_A64_INDIRECTION_64BIT 0
 #endif
 
-#ifdef XE_PLATFORM_IOS
-
-enum class JitType {
-  Legacy,       // iOS < 26, W^X via per-thread toggles
-  LuckNoTXM,    // iOS 26+ without TXM hardware (dual-mapped regions)
-  LuckTXM       // iOS 26+ with TXM hardware (optimized)
-};
-
-class A64CodeCache : public CodeCache {
-  public:
-  ~A64CodeCache() override;
-
-  static std::unique_ptr<A64CodeCache> Create();
-
-  virtual bool Initialize();
-
-  const std::filesystem::path& file_name() const override { return file_name_; }
-  uintptr_t execute_base_address() const override {
-    return generated_code_execute_base_
-               ? reinterpret_cast<uintptr_t>(generated_code_execute_base_)
-               : kGeneratedCodeExecuteBase;
-  }
-  size_t total_size() const override { return kGeneratedCodeSize; }
-
-  // TODO(benvanik): ELF serialization/etc
-  // TODO(benvanik): keep track of code blocks
-  // TODO(benvanik): padding/guards/etc
-
-  bool has_indirection_table() { return indirection_table_base_ != nullptr; }
-  void set_indirection_default(uint32_t default_value);
-  JitType jit_type_ = JitType::LuckTXM;
-  
-  // Legacy W^X support
-  uint8_t* generated_code_rw_base_ = nullptr;
-  ptrdiff_t rw_region_diff_ = 0;
-
-  // LuckTXM support
-  static constexpr size_t kExecutableRegionSize = 536870912;  // 512 MiB
-  void* rx_region_ = nullptr;
-  
-  // Helper functions
-  bool InitializeJitType();
-  bool InitializeLegacyJit();
-  bool InitializeLuckNoTXMJit();
-  bool InitializeLuckTXMJit();
-  bool AllocateExecutableMemory_Legacy(void* dest, size_t size);
-  bool AllocateExecutableMemory_LuckNoTXM(void* dest, size_t size);
-  bool AllocateExecutableMemory_LuckTXM(void* dest, size_t size);
-};
-
-#endif  // XE_PLATFORM_IOS
 struct EmitFunctionInfo {
   struct _code_size {
     size_t prolog;
@@ -96,6 +45,16 @@ struct EmitFunctionInfo {
   size_t prolog_stack_alloc_offset;  // offset of instruction after stack alloc
   size_t stack_size;
 };
+
+#ifdef XE_PLATFORM_IOS
+
+enum class JitType {
+  Legacy,       // iOS < 26, W^X via per-thread toggles
+  LuckNoTXM,    // iOS 26+ without TXM hardware (dual-mapped regions)
+  LuckTXM       // iOS 26+ with TXM hardware (optimized)
+};
+
+#endif  // XE_PLATFORM_IOS
 
 class A64CodeCache : public CodeCache {
  public:
@@ -273,11 +232,6 @@ class A64CodeCache : public CodeCache {
   // rather than dual-alias mappings.
   bool generated_code_uses_mprotect_flip_ = false;
   // Current offset to empty space in generated code.
-    bool generated_code_uses_mprotect_flip_ = false;
-  #if XE_PLATFORM_IOS && XE_ARCH_ARM64
-    // Track current JIT strategy to avoid sync issues
-    JitType jit_type_ = JitType::LuckTXM;
-  #endif
   size_t generated_code_offset_ = 0;
   // Current high water mark of COMMITTED code.
   std::atomic<size_t> generated_code_commit_mark_ = {0};
@@ -285,6 +239,28 @@ class A64CodeCache : public CodeCache {
   // This can be used to bsearch on host PC to find the guest function.
   // The key is [start address | end address].
   std::vector<std::pair<uint64_t, GuestFunction*>> generated_code_map_;
+
+#ifdef XE_PLATFORM_IOS
+  // JIT type for iOS 26+ support
+  JitType jit_type_ = JitType::LuckTXM;
+  
+  // Legacy W^X support (iOS < 26)
+  uint8_t* generated_code_rw_base_ = nullptr;
+  ptrdiff_t rw_region_diff_ = 0;
+
+  // LuckTXM support (iOS 26+)
+  static constexpr size_t kExecutableRegionSize = 536870912;  // 512 MiB
+  void* rx_region_ = nullptr;
+  
+  // Helper functions for JIT initialization
+  bool InitializeJitType();
+  bool InitializeLegacyJit();
+  bool InitializeLuckNoTXMJit();
+  bool InitializeLuckTXMJit();
+  bool AllocateExecutableMemory_Legacy(void* dest, size_t size);
+  bool AllocateExecutableMemory_LuckNoTXM(void* dest, size_t size);
+  bool AllocateExecutableMemory_LuckTXM(void* dest, size_t size);
+#endif  // XE_PLATFORM_IOS
 };
 
 }  // namespace a64
@@ -292,4 +268,4 @@ class A64CodeCache : public CodeCache {
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_CPU_BACKEND_A64_A64_CODE_CACHE_H
+#endif  // XENIA_CPU_BACKEND_A64_A64_CODE_CACHE_H_
