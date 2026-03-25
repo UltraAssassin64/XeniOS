@@ -1159,6 +1159,18 @@ void A64CodeCache::PlaceGuestCode(uint32_t guest_address, void* machine_code,
               unwind_reservation);
 
 #if XE_PLATFORM_IOS && XE_ARCH_ARM64
+  // VALIDATION HAPPENS HERE - after PlaceCode succeeds
+  uintptr_t code_addr = reinterpret_cast<uintptr_t>(code_execute_address);
+  uintptr_t cache_base = reinterpret_cast<uintptr_t>(generated_code_execute_base_);
+  uintptr_t cache_end = cache_base + kGeneratedCodeSize;
+  
+  if (code_addr < cache_base || code_addr >= cache_end) {
+    XELOGE("PlaceGuestCode: Code placement FAILED...");
+    return;
+  }
+#endif
+
+#if XE_PLATFORM_IOS && XE_ARCH_ARM64
     if (generated_code_uses_mprotect_flip_) {
       // Transition the write-enabled mapping back to RX. Keeping an
       // intermediate non-executable state can fault concurrent execution on

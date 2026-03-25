@@ -64,26 +64,25 @@ class A64CodeCache : public CodeCache {
 
   bool has_indirection_table() { return indirection_table_base_ != nullptr; }
   void set_indirection_default(uint32_t default_value);
-  private:
-    JitType jit_type_ = JitType::LuckTXM;
+  JitType jit_type_ = JitType::LuckTXM;
   
-    // Legacy W^X support
-    uint8_t* generated_code_rw_base_ = nullptr;
-    ptrdiff_t rw_region_diff_ = 0;
+  // Legacy W^X support
+  uint8_t* generated_code_rw_base_ = nullptr;
+  ptrdiff_t rw_region_diff_ = 0;
+
+  // LuckTXM support
+  static constexpr size_t kExecutableRegionSize = 536870912;  // 512 MiB
+  void* rx_region_ = nullptr;
   
-   // LuckTXM support
-   static constexpr size_t kExecutableRegionSize = 536870912;  // 512 MiB
-   void* rx_region_ = nullptr;
-  
-   // Helper functions
-   bool InitializeJitType();
-   bool InitializeLegacyJit();
-   bool InitializeLuckNoTXMJit();
-   bool InitializeLuckTXMJit();
-   bool AllocateExecutableMemory_Legacy(void* dest, size_t size);
-   bool AllocateExecutableMemory_LuckNoTXM(void* dest, size_t size);
-   bool AllocateExecutableMemory_LuckTXM(void* dest, size_t size);
-  };
+  // Helper functions
+  bool InitializeJitType();
+  bool InitializeLegacyJit();
+  bool InitializeLuckNoTXMJit();
+  bool InitializeLuckTXMJit();
+  bool AllocateExecutableMemory_Legacy(void* dest, size_t size);
+  bool AllocateExecutableMemory_LuckNoTXM(void* dest, size_t size);
+  bool AllocateExecutableMemory_LuckTXM(void* dest, size_t size);
+};
 
 #endif  // XE_PLATFORM_IOS
 struct EmitFunctionInfo {
@@ -274,6 +273,11 @@ class A64CodeCache : public CodeCache {
   // rather than dual-alias mappings.
   bool generated_code_uses_mprotect_flip_ = false;
   // Current offset to empty space in generated code.
+    bool generated_code_uses_mprotect_flip_ = false;
+  #if XE_PLATFORM_IOS && XE_ARCH_ARM64
+    // Track current JIT strategy to avoid sync issues
+    JitType jit_type_ = JitType::LuckTXM;
+  #endif
   size_t generated_code_offset_ = 0;
   // Current high water mark of COMMITTED code.
   std::atomic<size_t> generated_code_commit_mark_ = {0};
