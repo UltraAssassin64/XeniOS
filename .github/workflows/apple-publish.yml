@@ -82,11 +82,6 @@ jobs:
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             channel="${{ inputs.channel }}"
-            if [[ "${channel}" == "preview" ]]; then
-              is_preview_ref "${GITHUB_REF}" || {
-                echo "::error::Manual preview publishes must run from refs/heads/preview (got ${GITHUB_REF})"
-                exit 1
-              }
             fi
           elif is_preview_ref "${GITHUB_REF}"; then
             channel="preview"
