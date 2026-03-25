@@ -24,6 +24,8 @@
 #endif
 #if XE_PLATFORM_APPLE && !XE_PLATFORM_IOS
 #include <pthread.h>
+#include <UIKit/UIKit.h>
+#include <string>
 #endif
 
 #include "third_party/fmt/include/fmt/format.h"
@@ -123,158 +125,7 @@ namespace a64 {
     
     return true;
   }
-  bool ShouldUseUniversalPrepareCommand() {
-  return cvars::ios_jit_brk_use_universal_0xf00d ||
-         ios_force_universal_prepare_command.load(std::memory_order_relaxed);
-  }
-  bool SetPageAlignedAccess(void* address, size_t length,
-                          xe::memory::PageAccess access) {
-    uintptr_t aligned_start = 0;
-    size_t aligned_length = 0;
-    if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
-        !aligned_length) {
-      return true;
-    }
-    return xe::memory::Protect(reinterpret_cast<void*>(aligned_start),
-                              aligned_length, access);
-  }
-  bool SetPageAlignedAccessWithMaxProtRetry(void* address, size_t length,
-                                          xe::memory::PageAccess access) {
-    if (SetPageAlignedAccess(address, length, access)) {
-      return true;
-    }
 
-    uintptr_t aligned_start = 0;
-    size_t aligned_length = 0;
-    if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
-        !aligned_length) {
-      return true;
-    }
-
-    vm_prot_t target_prot = 0;
-    switch (access) {
-      case xe::memory::PageAccess::kNoAccess:
-        target_prot = VM_PROT_NONE;
-        break;
-      case xe::memory::PageAccess::kReadOnly:
-        target_prot = VM_PROT_READ;
-        break;
-      case xe::memory::PageAccess::kReadWrite:
-        target_prot = VM_PROT_READ | VM_PROT_WRITE;
-        break;
-      case xe::memory::PageAccess::kExecuteReadOnly:
-        target_prot = VM_PROT_READ | VM_PROT_EXECUTE;
-        break;
-      case xe::memory::PageAccess::kExecuteReadWrite:
-        target_prot = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-        break;
-      default:
-        return false;
-    }
-
-    constexpr vm_prot_t kMaxProt = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-    const kern_return_t kr_max =
-        vm_protect(mach_task_self(), static_cast<vm_address_t>(aligned_start),
-                  aligned_length, TRUE, kMaxProt);
-    if (kr_max != KERN_SUCCESS) {
-      XELOGE(
-          "iOS JIT mprotect fallback: vm_protect set-max failed "
-          "addr=0x{:X} len=0x{:X} kr={}",
-          aligned_start, static_cast<uint32_t>(aligned_length), kr_max);
-      return false;
-    }
-
-    const kern_return_t kr_set =
-        vm_protect(mach_task_self(), static_cast<vm_address_t>(aligned_start),
-                  aligned_length, FALSE, target_prot);
-    if (kr_set != KERN_SUCCESS) {
-      XELOGE(
-          "iOS JIT mprotect fallback: vm_protect set-current failed "
-          "addr=0x{:X} len=0x{:X} target=0x{:X} kr={}",
-          aligned_start, static_cast<uint32_t>(aligned_length),
-          static_cast<uint32_t>(target_prot), kr_set);
-      return false;
-    }
-    return true;
-  }
-  bool SetPageAlignedAccessWithExternalPrepareFallback(
-    void* address, size_t length, xe::memory::PageAccess desired_access,
-    const char* transition_name) {
-    const bool use_txm_broker_path = IOSUseTXMBrokerPath();
-
-    // Non-broker path must stay strict W^X and never request RWX max-protection
-    // widening retries.
-    if (use_txm_broker_path) {
-      if (SetPageAlignedAccessWithMaxProtRetry(address, length, desired_access)) {
-        return true;
-      }
-    } else {
-      if (SetPageAlignedAccess(address, length, desired_access)) {
-        return true;
-      }
-    }
-
-    if (!use_txm_broker_path) {
-      const int ios_major_version = IOSProductMajorVersion();
-      if (ios_major_version > 0) {
-        XELOGW(
-            "iOS JIT mprotect flip: {} denied on iOS {} without RWX retry or "
-            "external brk fallback (non-broker path)",
-            transition_name, ios_major_version);
-      } else {
-        XELOGW(
-            "iOS JIT mprotect flip: {} denied without RWX retry or external "
-            "brk fallback (non-broker path)",
-            transition_name);
-      }
-      return false;
-    }
-
-    if (!cvars::ios_jit_brk_prepare_fallback) {
-      XELOGW(
-          "iOS JIT mprotect flip: {} denied with external brk fallback "
-          "disabled on TXM path",
-          transition_name);
-      return false;
-    }
-
-    XELOGW("iOS JIT mprotect flip: {} denied, requesting external prepare via {}",
-          transition_name, ExternalPrepareBreakpointDescription());
-    if (!MaybeRequestExternalJitPrepare(address, length)) {
-      return false;
-    }
-
-    // External JIT helpers (for example StikDebug scripts handling brk #0x69)
-    // may only widen max protections. Retry setting current protection.
-    if (SetPageAlignedAccessWithMaxProtRetry(address, length, desired_access)) {
-      return true;
-    }
-
-    // If direct transition is still denied, only proceed if QueryProtect reports
-    // the mapping already has at least the requested access.
-    uintptr_t aligned_start = 0;
-    size_t aligned_length = 0;
-    if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
-        !aligned_length) {
-      return true;
-    }
-
-    size_t query_length = 0;
-    xe::memory::PageAccess query_access = xe::memory::PageAccess::kNoAccess;
-    const bool query_ok = xe::memory::QueryProtect(
-        reinterpret_cast<void*>(aligned_start), query_length, query_access);
-    if (query_ok && AccessSatisfies(query_access, desired_access)) {
-      return true;
-    }
-
-    XELOGE(
-        "iOS JIT mprotect flip: external prepare did not yield {} mapping "
-        "addr=0x{:X} len=0x{:X} query_ok={} query_access={} query_len=0x{:X}",
-        transition_name, aligned_start, static_cast<uint32_t>(aligned_length),
-        query_ok, static_cast<uint32_t>(query_access),
-        static_cast<uint32_t>(query_length));
-    return false;
-  }
 
   // ============================================================================
   // Legacy JIT: W^X via per-thread protection toggles (iOS < 26)
@@ -1515,3 +1366,155 @@ namespace a64 {
 }  // namespace backend
 }  // namespace cpu
 }  // namespace xe
+bool ShouldUseUniversalPrepareCommand() {
+return cvars::ios_jit_brk_use_universal_0xf00d ||
+      ios_force_universal_prepare_command.load(std::memory_order_relaxed);
+}
+bool SetPageAlignedAccess(void* address, size_t length,
+                        xe::memory::PageAccess access) {
+  uintptr_t aligned_start = 0;
+  size_t aligned_length = 0;
+  if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
+      !aligned_length) {
+    return true;
+  }
+  return xe::memory::Protect(reinterpret_cast<void*>(aligned_start),
+                            aligned_length, access);
+}
+bool SetPageAlignedAccessWithMaxProtRetry(void* address, size_t length,
+                                        xe::memory::PageAccess access) {
+  if (SetPageAlignedAccess(address, length, access)) {
+    return true;
+  }
+
+  uintptr_t aligned_start = 0;
+  size_t aligned_length = 0;
+  if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
+      !aligned_length) {
+    return true;
+  }
+
+  vm_prot_t target_prot = 0;
+  switch (access) {
+    case xe::memory::PageAccess::kNoAccess:
+      target_prot = VM_PROT_NONE;
+      break;
+    case xe::memory::PageAccess::kReadOnly:
+      target_prot = VM_PROT_READ;
+      break;
+    case xe::memory::PageAccess::kReadWrite:
+      target_prot = VM_PROT_READ | VM_PROT_WRITE;
+      break;
+    case xe::memory::PageAccess::kExecuteReadOnly:
+      target_prot = VM_PROT_READ | VM_PROT_EXECUTE;
+      break;
+    case xe::memory::PageAccess::kExecuteReadWrite:
+      target_prot = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+      break;
+    default:
+      return false;
+  }
+
+  constexpr vm_prot_t kMaxProt = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+  const kern_return_t kr_max =
+      vm_protect(mach_task_self(), static_cast<vm_address_t>(aligned_start),
+                aligned_length, TRUE, kMaxProt);
+  if (kr_max != KERN_SUCCESS) {
+    XELOGE(
+        "iOS JIT mprotect fallback: vm_protect set-max failed "
+        "addr=0x{:X} len=0x{:X} kr={}",
+        aligned_start, static_cast<uint32_t>(aligned_length), kr_max);
+    return false;
+  }
+
+  const kern_return_t kr_set =
+      vm_protect(mach_task_self(), static_cast<vm_address_t>(aligned_start),
+                aligned_length, FALSE, target_prot);
+  if (kr_set != KERN_SUCCESS) {
+    XELOGE(
+        "iOS JIT mprotect fallback: vm_protect set-current failed "
+        "addr=0x{:X} len=0x{:X} target=0x{:X} kr={}",
+        aligned_start, static_cast<uint32_t>(aligned_length),
+        static_cast<uint32_t>(target_prot), kr_set);
+    return false;
+  }
+  return true;
+}
+bool SetPageAlignedAccessWithExternalPrepareFallback(
+  void* address, size_t length, xe::memory::PageAccess desired_access,
+  const char* transition_name) {
+  const bool use_txm_broker_path = IOSUseTXMBrokerPath();
+
+  // Non-broker path must stay strict W^X and never request RWX max-protection
+  // widening retries.
+  if (use_txm_broker_path) {
+    if (SetPageAlignedAccessWithMaxProtRetry(address, length, desired_access)) {
+      return true;
+    }
+  } else {
+    if (SetPageAlignedAccess(address, length, desired_access)) {
+      return true;
+    }
+  }
+
+  if (!use_txm_broker_path) {
+    const int ios_major_version = IOSProductMajorVersion();
+    if (ios_major_version > 0) {
+      XELOGW(
+          "iOS JIT mprotect flip: {} denied on iOS {} without RWX retry or "
+          "external brk fallback (non-broker path)",
+          transition_name, ios_major_version);
+    } else {
+      XELOGW(
+          "iOS JIT mprotect flip: {} denied without RWX retry or external "
+          "brk fallback (non-broker path)",
+          transition_name);
+    }
+    return false;
+  }
+
+  if (!cvars::ios_jit_brk_prepare_fallback) {
+    XELOGW(
+        "iOS JIT mprotect flip: {} denied with external brk fallback "
+        "disabled on TXM path",
+        transition_name);
+    return false;
+  }
+
+  XELOGW("iOS JIT mprotect flip: {} denied, requesting external prepare via {}",
+        transition_name, ExternalPrepareBreakpointDescription());
+  if (!MaybeRequestExternalJitPrepare(address, length)) {
+    return false;
+  }
+
+  // External JIT helpers (for example StikDebug scripts handling brk #0x69)
+  // may only widen max protections. Retry setting current protection.
+  if (SetPageAlignedAccessWithMaxProtRetry(address, length, desired_access)) {
+    return true;
+  }
+
+  // If direct transition is still denied, only proceed if QueryProtect reports
+  // the mapping already has at least the requested access.
+  uintptr_t aligned_start = 0;
+  size_t aligned_length = 0;
+  if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
+      !aligned_length) {
+    return true;
+  }
+
+  size_t query_length = 0;
+  xe::memory::PageAccess query_access = xe::memory::PageAccess::kNoAccess;
+  const bool query_ok = xe::memory::QueryProtect(
+      reinterpret_cast<void*>(aligned_start), query_length, query_access);
+  if (query_ok && AccessSatisfies(query_access, desired_access)) {
+    return true;
+  }
+
+  XELOGE(
+      "iOS JIT mprotect flip: external prepare did not yield {} mapping "
+      "addr=0x{:X} len=0x{:X} query_ok={} query_access={} query_len=0x{:X}",
+      transition_name, aligned_start, static_cast<uint32_t>(aligned_length),
+      query_ok, static_cast<uint32_t>(query_access),
+      static_cast<uint32_t>(query_length));
+  return false;
+}
