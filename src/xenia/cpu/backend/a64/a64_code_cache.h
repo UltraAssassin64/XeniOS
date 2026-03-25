@@ -292,4 +292,4 @@ class A64CodeCache : public CodeCache {
 }  // namespace cpu
 }  // namespace xe
 
-#endif  // XENIA_CPU_BACKEND_A64_A64_CODE_CACHE_H_
+#endif  // XENIA_CPU_BACKEND_A64_A64_CODE_CACHE_H
