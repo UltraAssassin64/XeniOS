@@ -488,6 +488,12 @@ if is_ios_target() then
       -- triggering implicit module imports that pull in Foundation (ObjC).
       "-fno-modules",
     })
+    files({
+      'src/xenia/base/memory_fastmem_ios.h',
+      'src/xenia/base/memory_fastmem_ios.cc',
+      'src/xenia/ios/FastmemManager.h',
+      'src/xenia/ios/FastmemManager.mm',
+    })
     removefatalwarnings("All")
   filter({})
 end
@@ -910,6 +916,9 @@ workspace("xenia")
   include("src/xenia/gpu")
   if os.istarget("macosx") or is_ios_target() then
     include("src/xenia/gpu/metal")
+  end
+  if is_ios_target() then
+    include("src/xenia/ios")
   end
   include("src/xenia/gpu/null")
   include("src/xenia/gpu/vulkan")

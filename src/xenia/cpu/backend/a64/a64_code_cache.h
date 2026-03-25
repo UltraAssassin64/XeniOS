@@ -34,6 +34,58 @@ namespace a64 {
 #define XE_A64_INDIRECTION_64BIT 0
 #endif
 
+#ifdef XE_PLATFORM_IOS
+
+enum class JitType {
+  Legacy,       // iOS < 26, W^X via per-thread toggles
+  LuckNoTXM,    // iOS 26+ without TXM hardware (dual-mapped regions)
+  LuckTXM       // iOS 26+ with TXM hardware (optimized)
+};
+
+class A64CodeCache : public CodeCache {
+  public:
+  ~A64CodeCache() override;
+
+  static std::unique_ptr<A64CodeCache> Create();
+
+  virtual bool Initialize();
+
+  const std::filesystem::path& file_name() const override { return file_name_; }
+  uintptr_t execute_base_address() const override {
+    return generated_code_execute_base_
+               ? reinterpret_cast<uintptr_t>(generated_code_execute_base_)
+               : kGeneratedCodeExecuteBase;
+  }
+  size_t total_size() const override { return kGeneratedCodeSize; }
+
+  // TODO(benvanik): ELF serialization/etc
+  // TODO(benvanik): keep track of code blocks
+  // TODO(benvanik): padding/guards/etc
+
+  bool has_indirection_table() { return indirection_table_base_ != nullptr; }
+  void set_indirection_default(uint32_t default_value);
+  private:
+    JitType jit_type_ = JitType::LuckTXM;
+  
+    // Legacy W^X support
+    uint8_t* generated_code_rw_base_ = nullptr;
+    ptrdiff_t rw_region_diff_ = 0;
+  
+   // LuckTXM support
+   static constexpr size_t kExecutableRegionSize = 536870912;  // 512 MiB
+   void* rx_region_ = nullptr;
+  
+   // Helper functions
+   bool InitializeJitType();
+   bool InitializeLegacyJit();
+   bool InitializeLuckNoTXMJit();
+   bool InitializeLuckTXMJit();
+   bool AllocateExecutableMemory_Legacy(void* dest, size_t size);
+   bool AllocateExecutableMemory_LuckNoTXM(void* dest, size_t size);
+   bool AllocateExecutableMemory_LuckTXM(void* dest, size_t size);
+  };
+
+#endif  // XE_PLATFORM_IOS
 struct EmitFunctionInfo {
   struct _code_size {
     size_t prolog;

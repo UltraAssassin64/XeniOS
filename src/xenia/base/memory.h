@@ -89,6 +89,16 @@ bool IsWritableExecutableMemorySupported();
 // writable executable memory on a system with it.
 bool IsWritableExecutableMemoryPreferred();
 
+#if XE_PLATFORM_IOS && XE_ARCH_ARM64
+// Fastmem support for iOS jailbroken devices
+// Call this during initialization to determine if large VA regions are available
+#include "xenia/base/memory_fastmem_ios.h"
+#endif
+
+// Whether fastmem is available on this device
+// Only true on jailbroken iOS with extended VA space access
+bool IsFastmemAvailable();
+
 // Allocates a block of memory at the given page-aligned base address.
 // Fails if the memory is not available.
 // Specify nullptr for base_address to leave it up to the system.

@@ -82,10 +82,6 @@
 #if XE_PLATFORM_IOS
 namespace {
 
-extern "C" void ios_request_jit();
-
-void AskForJIT() { ios_request_jit(); }
-
 extern "C" int csops(pid_t pid, unsigned int ops, void* useraddr,
                      size_t usersize);
 
@@ -96,12 +92,41 @@ extern "C" int csops(pid_t pid, unsigned int ops, void* useraddr,
 #define CS_DEBUGGED 0x10000000
 #endif
 
-bool IsIOSCsDebugged() {
+bool fastmem_available = IsFastmemAvailable();
+if (fastmem_available) {
+  XELOGI("Fastmem is available on this jailbroken device");
+  Config::SetBase(Config::MAIN_FASTMEM, true);
+  Config::SetBase(Config::MAIN_FASTMEM_ARENA, true);
+} else {
+  XELOGI("Fastmem is NOT available (non-jailbroken or limited VA space)");
+  Config::SetBase(Config::MAIN_FASTMEM, false);
+  Config::SetBase(Config::MAIN_FASTMEM_ARENA, false);
+}
+
+// Determine if device has TXM hardware (iOS 26+)
+bool IOSHasTXM() {
+  // Check for Trusted Execution Monitor firmware file
+  const char* paths[] = {
+    "/System/Volumes/Preboot/*/boot/*/usr/standalone/firmware/FUD/Ap,TrustedExecutionMonitor.img4",
+    "/private/preboot/*/usr/standalone/firmware/FUD/Ap,TrustedExecutionMonitor.img4"
+  };
+  
+  for (const char* path : paths) {
+    if (access(path, F_OK) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Check if running under debugger (enables JIT on iOS < 26)
+bool IsIOSDebugged() {
   int flags = 0;
   return !csops(getpid(), CS_OPS_STATUS, &flags, sizeof(flags)) &&
          (flags & CS_DEBUGGED);
 }
 
+// Test if we can map executable memory (iOS JIT capable)
 bool CanMapIOSExecutePage() {
   const size_t test_size = xe::memory::page_size();
   void* test = mmap(nullptr, test_size, PROT_READ | PROT_EXEC,
@@ -111,6 +136,31 @@ bool CanMapIOSExecutePage() {
   }
   munmap(test, test_size);
   return true;
+}
+
+// Determine which JIT strategy to use
+std::string GetIOSJitStrategy() {
+  if (!CanMapIOSExecutePage()) {
+    return "None - executable memory not available";
+  }
+  
+  if (IOSHasTXM()) {
+    // iOS 26+ with hardware TXM
+    return "LuckTXM - hardware TXM (iOS 26+)";
+  }
+  
+  int ios_version = IOSProductMajorVersion();
+  if (ios_version >= 26) {
+    // iOS 26+ without TXM hardware
+    return "LuckNoTXM - dual-mapped (iOS 26+, no TXM)";
+  }
+  
+  if (IsIOSDebugged()) {
+    // iOS < 26 with debugger
+    return "Legacy - W^X via debugger (iOS < 26)";
+  }
+  
+  return "None - requires debugger on iOS < 26";
 }
 
 }  // namespace
