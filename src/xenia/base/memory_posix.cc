@@ -201,7 +201,7 @@ void* AllocFixed(void* base_address, size_t length,
       const size_t system_page_size = page_size();
       uintptr_t start = reinterpret_cast<uintptr_t>(base_address);
       uintptr_t aligned_start = start & ~(system_page_size - 1);
-      uintptr_t aligned_end = xe::align(start + length, system_page_size);
+      uintptr_t aligned_end = align(start + length, system_page_size);
       size_t aligned_length =
           aligned_end > aligned_start ? aligned_end - aligned_start : 0;
       if (!aligned_length) {
