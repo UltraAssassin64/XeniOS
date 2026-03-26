@@ -134,6 +134,7 @@ bool A64CodeCache::InitializeJitType() {
 }
 
 #endif  // XE_PLATFORM_IOS && XE_ARCH_ARM64
+
 bool A64CodeCache::Initialize() {
 #if XE_PLATFORM_IOS && XE_ARCH_ARM64
   if (!InitializeJitType()) {
@@ -145,8 +146,8 @@ bool A64CodeCache::Initialize() {
   } else {
     XELOGI("Fastmem not available, using standard memory access");
   }
-};
-#else
+#endif  // XE_PLATFORM_IOS && XE_ARCH_ARM64
+
 #if XE_A64_INDIRECTION_64BIT
   // On ARM64 platforms, allocate the indirection table wherever the OS allows,
   // then update our base address to match. Reserve as no-access and commit
