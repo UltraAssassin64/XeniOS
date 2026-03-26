@@ -134,135 +134,137 @@ bool A64CodeCache::InitializeJitType() {
 }
 
 #endif  // XE_PLATFORM_IOS && XE_ARCH_ARM64
-    if (!InitializeJitType()) {
-      XELOGE("Failed to initialize iOS JIT");
-      return false;
-    }
-    if (xe::memory::IsFastmemAvailable()) {
-      XELOGI("Using fastmem for optimized guest memory access");
-    } else {
-      XELOGI("Fastmem not available, using standard memory access");
-    }
-  };
-  #else
-  #if XE_A64_INDIRECTION_64BIT
-    // On ARM64 platforms, allocate the indirection table wherever the OS allows,
-    // then update our base address to match. Reserve as no-access and commit
-    // executable ranges lazily to reduce upfront VM pressure on iOS.
+bool A64CodeCache::Initialize() {
+#if XE_PLATFORM_IOS && XE_ARCH_ARM64
+  if (!InitializeJitType()) {
+    XELOGE("Failed to initialize iOS JIT");
+    return false;
+  }
+  if (xe::memory::IsFastmemAvailable()) {
+    XELOGI("Using fastmem for optimized guest memory access");
+  } else {
+    XELOGI("Fastmem not available, using standard memory access");
+  }
+};
+#else
+#if XE_A64_INDIRECTION_64BIT
+  // On ARM64 platforms, allocate the indirection table wherever the OS allows,
+  // then update our base address to match. Reserve as no-access and commit
+  // executable ranges lazily to reduce upfront VM pressure on iOS.
 
+  indirection_table_base_ = reinterpret_cast<uint8_t*>(xe::memory::AllocFixed(
+      nullptr, kIndirectionTableSize, xe::memory::AllocationType::kReserve,
+      xe::memory::PageAccess::kNoAccess));
+
+  if (!indirection_table_base_) {
+    XELOGE("Unable to reserve indirection table at any address (size=0x{:X})",
+          static_cast<uint32_t>(kIndirectionTableSize));
+    return false;
+  }
+
+  // Keep kIndirectionTableBase as 0x80000000 for offset calculations
+  // Store the actual allocated address separately
+  indirection_table_actual_base_ =
+      reinterpret_cast<uintptr_t>(indirection_table_base_);
+#if XE_A64_INDIRECTION_64BIT
+  // With rel32 entries, slot address is table_base + (guest - guest_base).
+  indirection_table_base_bias_ = indirection_table_actual_base_ -
+                                static_cast<uintptr_t>(kIndirectionTableBase);
+  external_indirection_targets_ = std::make_unique<uint64_t[]>(
+      static_cast<size_t>(kIndirectionExternalCapacity));
+  if (!external_indirection_targets_) {
+    XELOGE("Unable to allocate external indirection table (entries={})",
+          static_cast<uint32_t>(kIndirectionExternalCapacity));
+    return false;
+  }
+  external_indirection_target_count_.store(0, std::memory_order_relaxed);
+#endif
+#else
+  // Other platforms: try to allocate at the preferred address first.
+  indirection_table_base_ = reinterpret_cast<uint8_t*>(xe::memory::AllocFixed(
+      reinterpret_cast<void*>(kIndirectionTableBase), kIndirectionTableSize,
+      xe::memory::AllocationType::kReserve,
+      xe::memory::PageAccess::kReadWrite));
+  if (!indirection_table_base_) {
+    XELOGW("Preferred indirection table base unavailable; falling back");
     indirection_table_base_ = reinterpret_cast<uint8_t*>(xe::memory::AllocFixed(
         nullptr, kIndirectionTableSize, xe::memory::AllocationType::kReserve,
-        xe::memory::PageAccess::kNoAccess));
-
-    if (!indirection_table_base_) {
-      XELOGE("Unable to reserve indirection table at any address (size=0x{:X})",
-            static_cast<uint32_t>(kIndirectionTableSize));
-      return false;
-    }
-
-    // Keep kIndirectionTableBase as 0x80000000 for offset calculations
-    // Store the actual allocated address separately
-    indirection_table_actual_base_ =
-        reinterpret_cast<uintptr_t>(indirection_table_base_);
-  #if XE_A64_INDIRECTION_64BIT
-    // With rel32 entries, slot address is table_base + (guest - guest_base).
-    indirection_table_base_bias_ = indirection_table_actual_base_ -
-                                  static_cast<uintptr_t>(kIndirectionTableBase);
-    external_indirection_targets_ = std::make_unique<uint64_t[]>(
-        static_cast<size_t>(kIndirectionExternalCapacity));
-    if (!external_indirection_targets_) {
-      XELOGE("Unable to allocate external indirection table (entries={})",
-            static_cast<uint32_t>(kIndirectionExternalCapacity));
-      return false;
-    }
-    external_indirection_target_count_.store(0, std::memory_order_relaxed);
-  #endif
-  #else
-    // Other platforms: try to allocate at the preferred address first.
-    indirection_table_base_ = reinterpret_cast<uint8_t*>(xe::memory::AllocFixed(
-        reinterpret_cast<void*>(kIndirectionTableBase), kIndirectionTableSize,
-        xe::memory::AllocationType::kReserve,
         xe::memory::PageAccess::kReadWrite));
-    if (!indirection_table_base_) {
-      XELOGW("Preferred indirection table base unavailable; falling back");
-      indirection_table_base_ = reinterpret_cast<uint8_t*>(xe::memory::AllocFixed(
-          nullptr, kIndirectionTableSize, xe::memory::AllocationType::kReserve,
-          xe::memory::PageAccess::kReadWrite));
-    }
-    if (!indirection_table_base_) {
-      XELOGE("Unable to allocate code cache indirection table");
-      XELOGE("Tried preferred range {:X}-{:X} with fallback to OS-chosen",
-            static_cast<uint64_t>(kIndirectionTableBase),
-            kIndirectionTableBase + kIndirectionTableSize);
+  }
+  if (!indirection_table_base_) {
+    XELOGE("Unable to allocate code cache indirection table");
+    XELOGE("Tried preferred range {:X}-{:X} with fallback to OS-chosen",
+          static_cast<uint64_t>(kIndirectionTableBase),
+          kIndirectionTableBase + kIndirectionTableSize);
+    return false;
+  }
+  indirection_table_actual_base_ =
+      reinterpret_cast<uintptr_t>(indirection_table_base_);
+#if XE_A64_INDIRECTION_64BIT
+  indirection_table_base_bias_ = indirection_table_actual_base_ -
+                                static_cast<uintptr_t>(kIndirectionTableBase);
+#endif
+#endif
+
+  if (ShouldLogIndirectionTable()) {
+    XELOGI(
+        "A64 indirection table: guest_base=0x{:08X} table_base=0x{:016X} "
+        "size=0x{:X} entry_bytes={}",
+        static_cast<uint32_t>(kIndirectionTableBase),
+        static_cast<uint64_t>(indirection_table_actual_base_),
+        static_cast<uint32_t>(kIndirectionTableSize),
+        static_cast<uint32_t>(kIndirectionEntrySize));
+  }
+
+  // Create mmap file. This allows us to share the code cache with the debugger.
+  file_name_ = fmt::format("xenia_code_cache_{}", Clock::QueryHostTickCount());
+  mapping_ = xe::memory::CreateFileMappingHandle(
+      file_name_, kGeneratedCodeSize, xe::memory::PageAccess::kExecuteReadWrite,
+      false);
+  if (mapping_ == xe::memory::kFileMappingHandleInvalid) {
+    XELOGE("Unable to create code cache mmap");
+    return false;
+  }
+
+  // Map generated code region into the file. Pages are committed as required.
+  if (xe::memory::IsWritableExecutableMemoryPreferred()) {
+#if XE_PLATFORM_APPLE && XE_ARCH_ARM64
+    // On macOS ARM64, always use OS-chosen MAP_JIT memory.
+    generated_code_execute_base_ = reinterpret_cast<uint8_t*>(
+        xe::memory::AllocFixed(nullptr, kGeneratedCodeSize,
+                              xe::memory::AllocationType::kReserveCommit,
+                              xe::memory::PageAccess::kExecuteReadWrite));
+    generated_code_write_base_ = generated_code_execute_base_;
+    if (!generated_code_execute_base_ || !generated_code_write_base_) {
+      XELOGE("Unable to allocate code cache generated code storage");
       return false;
     }
-    indirection_table_actual_base_ =
-        reinterpret_cast<uintptr_t>(indirection_table_base_);
-  #if XE_A64_INDIRECTION_64BIT
-    indirection_table_base_bias_ = indirection_table_actual_base_ -
-                                  static_cast<uintptr_t>(kIndirectionTableBase);
-  #endif
-  #endif
-
-    if (ShouldLogIndirectionTable()) {
-      XELOGI(
-          "A64 indirection table: guest_base=0x{:08X} table_base=0x{:016X} "
-          "size=0x{:X} entry_bytes={}",
-          static_cast<uint32_t>(kIndirectionTableBase),
-          static_cast<uint64_t>(indirection_table_actual_base_),
-          static_cast<uint32_t>(kIndirectionTableSize),
-          static_cast<uint32_t>(kIndirectionEntrySize));
-    }
-
-    // Create mmap file. This allows us to share the code cache with the debugger.
-    file_name_ = fmt::format("xenia_code_cache_{}", Clock::QueryHostTickCount());
-    mapping_ = xe::memory::CreateFileMappingHandle(
-        file_name_, kGeneratedCodeSize, xe::memory::PageAccess::kExecuteReadWrite,
-        false);
-    if (mapping_ == xe::memory::kFileMappingHandleInvalid) {
-      XELOGE("Unable to create code cache mmap");
-      return false;
-    }
-
-    // Map generated code region into the file. Pages are committed as required.
-    if (xe::memory::IsWritableExecutableMemoryPreferred()) {
-  #if XE_PLATFORM_APPLE && XE_ARCH_ARM64
-      // On macOS ARM64, always use OS-chosen MAP_JIT memory.
-      generated_code_execute_base_ = reinterpret_cast<uint8_t*>(
-          xe::memory::AllocFixed(nullptr, kGeneratedCodeSize,
-                                xe::memory::AllocationType::kReserveCommit,
-                                xe::memory::PageAccess::kExecuteReadWrite));
-      generated_code_write_base_ = generated_code_execute_base_;
-      if (!generated_code_execute_base_ || !generated_code_write_base_) {
-        XELOGE("Unable to allocate code cache generated code storage");
-        return false;
-      }
-      // On macOS ARM64, verify the memory is properly allocated for MAP_JIT
-  #else
+    // On macOS ARM64, verify the memory is properly allocated for MAP_JIT
+#else
+    generated_code_execute_base_ =
+        reinterpret_cast<uint8_t*>(xe::memory::MapFileView(
+            mapping_, reinterpret_cast<void*>(kGeneratedCodeExecuteBase),
+            kGeneratedCodeSize, xe::memory::PageAccess::kExecuteReadWrite, 0));
+    if (!generated_code_execute_base_) {
+      XELOGW(
+          "Fixed address mapping for generated code failed, trying OS-chosen "
+          "address");
       generated_code_execute_base_ =
           reinterpret_cast<uint8_t*>(xe::memory::MapFileView(
-              mapping_, reinterpret_cast<void*>(kGeneratedCodeExecuteBase),
-              kGeneratedCodeSize, xe::memory::PageAccess::kExecuteReadWrite, 0));
-      if (!generated_code_execute_base_) {
-        XELOGW(
-            "Fixed address mapping for generated code failed, trying OS-chosen "
-            "address");
-        generated_code_execute_base_ =
-            reinterpret_cast<uint8_t*>(xe::memory::MapFileView(
-                mapping_, nullptr, kGeneratedCodeSize,
-                xe::memory::PageAccess::kExecuteReadWrite, 0));
-      }
-      generated_code_write_base_ = generated_code_execute_base_;
-      if (!generated_code_execute_base_ || !generated_code_write_base_) {
-        XELOGE("Unable to allocate code cache generated code storage");
-        XELOGE(
-            "This is likely because the {:X}-{:X} range is in use by some other "
-            "system DLL",
-            uint64_t(kGeneratedCodeExecuteBase),
-            uint64_t(kGeneratedCodeExecuteBase + kGeneratedCodeSize));
-        return false;
-      }
-  #endif
+              mapping_, nullptr, kGeneratedCodeSize,
+              xe::memory::PageAccess::kExecuteReadWrite, 0));
+    }
+    generated_code_write_base_ = generated_code_execute_base_;
+    if (!generated_code_execute_base_ || !generated_code_write_base_) {
+      XELOGE("Unable to allocate code cache generated code storage");
+      XELOGE(
+          "This is likely because the {:X}-{:X} range is in use by some other "
+          "system DLL",
+          uint64_t(kGeneratedCodeExecuteBase),
+          uint64_t(kGeneratedCodeExecuteBase + kGeneratedCodeSize));
+      return false;
+    }
+#endif
     } else {
   #if XE_PLATFORM_APPLE && XE_ARCH_ARM64
   #if XE_PLATFORM_IOS
@@ -613,7 +615,7 @@ bool A64CodeCache::InitializeJitType() {
             uint64_t(kGeneratedCodeWriteBase + kGeneratedCodeSize));
         return false;
       }
-  #endif
+    #endif
     }
 
     // Preallocate the function map to a large, reasonable size.
