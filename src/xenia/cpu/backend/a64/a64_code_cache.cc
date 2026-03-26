@@ -81,6 +81,22 @@ DEFINE_bool(
     "CPU");
 
 // ---------------------------------------------------------------------------
+// Out-of-class definitions for static and non-inline members
+// ---------------------------------------------------------------------------
+
+// On ARM64 platforms kIndirectionTableBase is determined at runtime, so it
+// cannot be a compile-time constant.  It must have an out-of-class definition.
+#if XE_A64_INDIRECTION_64BIT
+uintptr_t A64CodeCache::kIndirectionTableBase = 0x80000000;
+#endif
+
+// Constructor and destructor bodies.  These must be defined (even if empty)
+// because PosixA64CodeCache inherits from A64CodeCache and the linker needs
+// the symbols.  Defining the destructor here also anchors the vtable and
+// typeinfo to this translation unit.
+A64CodeCache::A64CodeCache() = default;
+A64CodeCache::~A64CodeCache() = default;
+// ---------------------------------------------------------------------------
 // Indirection-table logging helper
 // ---------------------------------------------------------------------------
 

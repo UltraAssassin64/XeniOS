@@ -1537,7 +1537,7 @@ class BaseBuildCommand(Command):
             ios_args = []
             if target_os == "ios":
                 ios_args = [
-                    "-sdk", "iphoneos",
+                    "-sdk", "iphoneos26.2",
                     "-destination", "generic/platform=iOS",
                     "IPHONEOS_DEPLOYMENT_TARGET=16.0"
                 ]
@@ -1894,7 +1894,7 @@ def build_shaders(targets=None, config="release", target_os=None):
                 """Invoke a Metal tool, using xcrun if needed."""
                 if use_xcrun:
                     return ["xcrun", "-sdk",
-                            "iphoneos" if target_os == "ios" else "macosx",
+                            "iphoneos26.2" if target_os == "ios" else "macosx",
                             tool] + args
                 return [tool] + args
 
