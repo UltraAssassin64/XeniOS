@@ -165,7 +165,30 @@ bool ShouldUseUniversalPrepareCommand() {
 // These are file-local free functions. They do not touch jit_type_ and can
 // therefore remain outside the class.
 // ---------------------------------------------------------------------------
-
+static bool GetPageAlignedRange(void* address, size_t length, uintptr_t& aligned_start,
+                         size_t& aligned_length) {
+  if (!length) {
+    aligned_start = 0;
+    aligned_length = 0;
+    return true;
+  }
+  const uintptr_t start = reinterpret_cast<uintptr_t>(address);
+  const size_t page_size = xe::memory::page_size();
+  aligned_start = start & ~(page_size - 1);
+  const uintptr_t aligned_end = xe::align(start + length, page_size);
+  if (aligned_end <= aligned_start) {
+    aligned_length = 0;
+    return true;
+  }
+  aligned_length = aligned_end - aligned_start;
+  return true;
+}
+static bool AccessSatisfies(xe::memory::PageAccess actual,
+                     xe::memory::PageAccess desired) {
+  const uint32_t actual_bits = static_cast<uint32_t>(actual);
+  const uint32_t desired_bits = static_cast<uint32_t>(desired);
+  return (actual_bits & desired_bits) == desired_bits;
+}
 static bool SetPageAlignedAccess(void* address, size_t length,
                                  xe::memory::PageAccess access) {
   uintptr_t aligned_start  = 0;
