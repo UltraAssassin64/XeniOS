@@ -30,7 +30,7 @@ bool IsWritableExecutableMemoryPreferred() {
          cvars::writable_executable_memory;
 }
 
-using xe::swcache::CacheLine;
+using swcache::CacheLine;
 
 static constexpr unsigned NUM_CACHELINES_IN_PAGE = 4096 / sizeof(CacheLine);
 
@@ -60,18 +60,18 @@ static void XeCopy16384StreamingAVX(CacheLine* XE_RESTRICT to,
   CacheLine* src4 = from + (NUM_CACHELINES_IN_PAGE * 3);
 
   for (uint32_t i = 0; i < num_lines_for_8k; ++i) {
-    xe::swcache::CacheLine line0, line1, line2, line3;
+    swcache::CacheLine line0, line1, line2, line3;
 
-    xe::swcache::ReadLine(&line0, src1 + i);
-    xe::swcache::ReadLine(&line1, src2 + i);
-    xe::swcache::ReadLine(&line2, src3 + i);
-    xe::swcache::ReadLine(&line3, src4 + i);
+    swcache::ReadLine(&line0, src1 + i);
+    swcache::ReadLine(&line1, src2 + i);
+    swcache::ReadLine(&line2, src3 + i);
+    swcache::ReadLine(&line3, src4 + i);
     XE_MSVC_REORDER_BARRIER();
-    xe::swcache::WriteLineNT(dest1 + i, &line0);
-    xe::swcache::WriteLineNT(dest2 + i, &line1);
+    swcache::WriteLineNT(dest1 + i, &line0);
+    swcache::WriteLineNT(dest2 + i, &line1);
 
-    xe::swcache::WriteLineNT(dest3 + i, &line2);
-    xe::swcache::WriteLineNT(dest4 + i, &line3);
+    swcache::WriteLineNT(dest3 + i, &line2);
+    swcache::WriteLineNT(dest4 + i, &line3);
   }
   XE_MSVC_REORDER_BARRIER();
 }
@@ -128,21 +128,21 @@ static void vastcpy_impl_avx(CacheLine* XE_RESTRICT physaddr,
   uint32_t i = 0;
 
   for (; i + 1 < num_written_lines; i += 2) {
-    xe::swcache::CacheLine line0, line1;
+    swcache::CacheLine line0, line1;
 
-    xe::swcache::ReadLine(&line0, rdmapping + i);
+    swcache::ReadLine(&line0, rdmapping + i);
 
-    xe::swcache::ReadLine(&line1, rdmapping + i + 1);
+    swcache::ReadLine(&line1, rdmapping + i + 1);
     XE_MSVC_REORDER_BARRIER();
-    xe::swcache::WriteLineNT(physaddr + i, &line0);
-    xe::swcache::WriteLineNT(physaddr + i + 1, &line1);
+    swcache::WriteLineNT(physaddr + i, &line0);
+    swcache::WriteLineNT(physaddr + i + 1, &line1);
   }
 
   if (i < num_written_lines) {
-    xe::swcache::CacheLine line0;
+    swcache::CacheLine line0;
 
-    xe::swcache::ReadLine(&line0, rdmapping + i);
-    xe::swcache::WriteLineNT(physaddr + i, &line0);
+    swcache::ReadLine(&line0, rdmapping + i);
+    swcache::WriteLineNT(physaddr + i, &line0);
   }
 }
 

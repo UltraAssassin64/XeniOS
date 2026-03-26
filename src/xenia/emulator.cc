@@ -96,6 +96,7 @@ extern "C" int csops(pid_t pid, unsigned int ops, void* useraddr,
 #define CS_DEBUGGED 0x10000000
 #endif
 
+bool fastmem_available = xe::memory::IsFastmemAvailable();
 
 // Determine if device has TXM hardware (iOS 26+)
 bool IOSHasTXM() {
@@ -384,7 +385,7 @@ X_STATUS Emulator::Setup(
     const bool can_map_exec = CanMapIOSExecutePage();
     // Use executable-memory probing as the authoritative runtime capability
     // signal instead of hard-coding OS-version policy.
-
+    
     const bool jit_available = can_map_exec;
     if (!jit_available) {
       XELOGW(
