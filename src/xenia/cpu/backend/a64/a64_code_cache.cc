@@ -58,30 +58,24 @@ DEFINE_bool(a64_indirection_table_log, false,
 DEFINE_int32(a64_indirection_table_log_limit, 32,
              "Maximum number of A64 indirection table log entries.", "CPU");
 
-#if XE_PLATFORM_IOS
-DEFINE_bool(
-    ios_jit_brk_prepare_fallback, true,
-    "On iOS ARM64, if protection transitions fail, issue external JIT "
-    "prepare breakpoint (brk #0xf00d/x16=1 by default; optional legacy "
-    "brk #0x69) so external brokers can prepare the region, then retry.",
-    "CPU");
-DEFINE_bool(
-    ios_jit_brk_use_universal_0xf00d, true,
-    "On iOS ARM64, use universal JIT broker breakpoint brk #0xf00d "
-    "(x16=1) instead of legacy brk #0x69 for external prepare. "
-    "Enabled by default for modern StikDebug scripts.",
-    "CPU");
-DEFINE_int32(
-    ios_jit_initial_external_prepare_bytes, 0,
-    "On iOS ARM64 TXM startup, issue one external prepare for "
-    "this many bytes from code cache base (0 means full code cache).",
-    "CPU");
-DEFINE_bool(
-    ios_jit_non_txm_force_mprotect_flip, false,
-    "On iOS ARM64, skip dual-map JIT setup and use single-view "
-    "mprotect flips only (RW while writing, RX when published).",
-    "CPU");
-#endif
+DEFINE_bool(ios_jit_brk_prepare_fallback, true,
+            "On iOS ARM64, if protection transitions fail, issue external JIT "
+            "prepare breakpoint (brk #0xf00d/x16=1 by default; optional legacy "
+            "brk #0x69) so external brokers can prepare the region, then retry.",
+            "CPU");
+DEFINE_bool(ios_jit_brk_use_universal_0xf00d, true,
+            "On iOS ARM64, use universal JIT broker breakpoint brk #0xf00d "
+            "(x16=1) instead of legacy brk #0x69 for external prepare. "
+            "Enabled by default for modern StikDebug scripts.",
+            "CPU");
+DEFINE_int32(ios_jit_initial_external_prepare_bytes, 0,
+            "On iOS ARM64 TXM startup, issue one external prepare for "
+            "this many bytes from code cache base (0 means full code cache).",
+            "CPU");
+DEFINE_bool(ios_jit_non_txm_force_mprotect_flip, false,
+            "On iOS ARM64, skip dual-map JIT setup and use single-view "
+            "mprotect flips only (RW while writing, RX when published).",
+            "CPU");
 // ---------------------------------------------------------------------------
 // Out-of-class definitions for static and non-inline members
 // ---------------------------------------------------------------------------

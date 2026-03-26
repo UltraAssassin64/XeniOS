@@ -30,11 +30,11 @@ bool IsWritableExecutableMemoryPreferred() {
          cvars::writable_executable_memory;
 }
 bool IsFastmemAvailable() {
-#if XE_PLATFORM_IOS && XE_ARCH_ARM64
-  return g_fastmem_available;
-#else
-  return false;
-#endif
+  #if XE_PLATFORM_IOS && XE_ARCH_ARM64
+    return g_fastmem_available;
+  #else
+    return false;
+  #endif
 }
 
 using swcache::CacheLine;
