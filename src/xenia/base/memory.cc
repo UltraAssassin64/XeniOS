@@ -31,7 +31,7 @@ bool IsWritableExecutableMemoryPreferred() {
 }
 bool IsFastmemAvailable() {
 #if XE_PLATFORM_IOS && XE_ARCH_ARM64
-  return xe::memory::g_fastmem_available;
+  return g_fastmem_available;
 #else
   return false;
 #endif
