@@ -110,7 +110,7 @@ namespace a64 {
     } else {
       XELOGI("Fastmem not available, using standard memory access");
     }
-  }
+  };
   #else
   #if XE_A64_INDIRECTION_64BIT
     // On ARM64 platforms, allocate the indirection table wherever the OS allows,
@@ -1112,6 +1112,7 @@ namespace a64 {
 }  // namespace xe
 
 JitType jit_type_;
+
 bool A64CodeCache::InitializeJitType() {
   if (!IOSHasTXM()) {
     // No TXM: use legacy W^X approach
