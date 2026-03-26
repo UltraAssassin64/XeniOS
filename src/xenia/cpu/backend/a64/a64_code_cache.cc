@@ -57,6 +57,8 @@ DEFINE_bool(a64_indirection_table_log, false,
             "Log A64 indirection table mapping and updates.", "CPU");
 DEFINE_int32(a64_indirection_table_log_limit, 32,
              "Maximum number of A64 indirection table log entries.", "CPU");
+
+#if XE_PLATFORM_IOS
 DEFINE_bool(
     ios_jit_brk_prepare_fallback, true,
     "On iOS ARM64, if protection transitions fail, issue external JIT "
@@ -79,7 +81,7 @@ DEFINE_bool(
     "On iOS ARM64, skip dual-map JIT setup and use single-view "
     "mprotect flips only (RW while writing, RX when published).",
     "CPU");
-
+#endif
 // ---------------------------------------------------------------------------
 // Out-of-class definitions for static and non-inline members
 // ---------------------------------------------------------------------------
