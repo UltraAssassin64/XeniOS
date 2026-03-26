@@ -96,7 +96,6 @@ extern "C" int csops(pid_t pid, unsigned int ops, void* useraddr,
 #define CS_DEBUGGED 0x10000000
 #endif
 
-bool fastmem_available = xe::memory::IsFastmemAvailable();
 
 // Determine if device has TXM hardware (iOS 26+)
 bool IOSHasTXM() {
@@ -385,15 +384,7 @@ X_STATUS Emulator::Setup(
     const bool can_map_exec = CanMapIOSExecutePage();
     // Use executable-memory probing as the authoritative runtime capability
     // signal instead of hard-coding OS-version policy.
-    if (fastmem_available) {
-      XELOGI("Fastmem is available on this jailbroken device");
-      Config::SetBase(Config::MAIN_FASTMEM, true);
-      Config::SetBase(Config::MAIN_FASTMEM_ARENA, true);
-    } else {
-      XELOGI("Fastmem is NOT available (non-jailbroken or limited VA space)");
-      Config::SetBase(Config::MAIN_FASTMEM, false);
-      Config::SetBase(Config::MAIN_FASTMEM_ARENA, false);
-    }
+
     const bool jit_available = can_map_exec;
     if (!jit_available) {
       XELOGW(
