@@ -39,419 +39,6 @@
 #include "xenia/cpu/function.h"
 #include "xenia/cpu/module.h"
 
-
-JitType jit_type_;
-bool A64CodeCache::InitializeJitType() {
-  if (!IOSHasTXM()) {
-    // No TXM: use legacy W^X approach
-    jit_type_ = JitType::Legacy;
-    return InitializeLegacyJit();
-  }
-  
-  if (IOSProductMajorVersion() < 26) {
-    // Has TXM but iOS < 26: use legacy
-    jit_type_ = JitType::Legacy;
-    return InitializeLegacyJit();
-  }
-  
-  // iOS 26+ with TXM
-  jit_type_ = JitType::LuckTXM;
-  
-  // Try TXM path first, fall back to LuckNoTXM if it fails
-  if (!InitializeLuckTXMJit()) {
-    XELOGW("LuckTXM initialization failed, falling back to LuckNoTXM");
-    jit_type_ = JitType::LuckNoTXM;
-    return InitializeLuckNoTXMJit();
-  }
-  
-  return true;
-}
-
-
-// ============================================================================
-// Legacy JIT: W^X via per-thread protection toggles (iOS < 26)
-// ============================================================================
-
-bool A64CodeCache::InitializeLegacyJit() {
-  // Allocate as RX (read+execute) with mmap
-  generated_code_execute_base_ = reinterpret_cast<uint8_t*>(
-      mmap(nullptr, kGeneratedCodeSize, PROT_READ | PROT_EXEC,
-          MAP_ANON | MAP_PRIVATE, -1, 0));
-  
-  if (generated_code_execute_base_ == MAP_FAILED) {
-    XELOGE("Legacy JIT: mmap RX allocation failed");
-    generated_code_execute_base_ = nullptr;
-    return false;
-  }
-  
-  // For writes, we'll use W^X toggles at the page level via mprotect
-  generated_code_write_base_ = generated_code_execute_base_;
-  generated_code_uses_mprotect_flip_ = true;
-  
-  XELOGI("Legacy JIT initialized: RX={:X} (W^X toggles enabled)",
-        reinterpret_cast<uintptr_t>(generated_code_execute_base_));
-  
-  return true;
-}
-
-// ============================================================================
-// LuckNoTXM JIT: Dual-mapped regions via vm_remap (iOS 26+ without TXM)
-// ============================================================================
-
-bool A64CodeCache::InitializeLuckNoTXMJit() {
-  // Step 1: Allocate RW region
-  generated_code_write_base_ = reinterpret_cast<uint8_t*>(
-      mmap(nullptr, kGeneratedCodeSize * 2, PROT_READ | PROT_WRITE,
-          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
-  
-  if (generated_code_write_base_ == MAP_FAILED) {
-    XELOGE("LuckNoTXM: RW mmap failed");
-    generated_code_write_base_ = nullptr;
-    return false;
-  }
-  
-  // Step 2: Widen max protection to allow RWX
-  vm_prot_t kWriteProt = VM_PROT_READ | VM_PROT_WRITE;
-  vm_prot_t kExecProt = VM_PROT_READ | VM_PROT_EXECUTE;
-  vm_prot_t kWriteExecProt = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-  
-  kern_return_t kr_max = vm_protect(
-      mach_task_self(),
-      reinterpret_cast<vm_address_t>(generated_code_write_base_),
-      kGeneratedCodeSize, TRUE, kWriteExecProt);
-  
-  if (kr_max == KERN_SUCCESS) {
-    // Keep write mapping non-executable for W^X compliance
-    vm_protect(mach_task_self(),
-              reinterpret_cast<vm_address_t>(generated_code_write_base_),
-              kGeneratedCodeSize, FALSE, kWriteProt);
-  }
-  
-  // Step 3: Create RX alias via vm_remap pointing to same physical pages
-  vm_address_t remap_addr = 0;
-  vm_prot_t cur_prot, max_prot;
-  
-  kern_return_t kr = vm_remap(
-      mach_task_self(), &remap_addr, kGeneratedCodeSize,
-      0,  // mask
-      VM_FLAGS_ANYWHERE, mach_task_self(),
-      reinterpret_cast<vm_address_t>(generated_code_write_base_),
-      FALSE,  // copy = false (share physical pages)
-      &cur_prot, &max_prot, VM_INHERIT_NONE);
-  
-  if (kr != KERN_SUCCESS) {
-    XELOGE("LuckNoTXM: vm_remap failed (kr={})", kr);
-    munmap(generated_code_write_base_, kGeneratedCodeSize * 2);
-    generated_code_write_base_ = nullptr;
-    return false;
-  }
-  
-  generated_code_execute_base_ = reinterpret_cast<uint8_t*>(remap_addr);
-  rw_region_diff_ = generated_code_write_base_ - generated_code_execute_base_;
-  
-  // Step 4: Ensure execute permission in max set
-  kern_return_t kr_exec_max = vm_protect(
-      mach_task_self(), remap_addr, kGeneratedCodeSize, TRUE, kExecProt);
-  
-  if (kr_exec_max != KERN_SUCCESS) {
-    XELOGW("LuckNoTXM: vm_protect set-max RX failed (kr={})", kr_exec_max);
-  }
-  
-  // Step 5: Set remapped region to RX
-  kern_return_t kr_exec = vm_protect(mach_task_self(), remap_addr,
-                                    kGeneratedCodeSize, FALSE, kExecProt);
-  
-  if (kr_exec != KERN_SUCCESS) {
-    XELOGE("LuckNoTXM: vm_protect RX failed (kr={})", kr_exec);
-    vm_deallocate(mach_task_self(), remap_addr, kGeneratedCodeSize);
-    munmap(generated_code_write_base_, kGeneratedCodeSize * 2);
-    generated_code_write_base_ = nullptr;
-    return false;
-  }
-  
-  generated_code_uses_vm_remap_fallback_ = true;
-  
-  XELOGI("LuckNoTXM JIT initialized: RW={:X} RX={:X} (dual-mapped)",
-        reinterpret_cast<uintptr_t>(generated_code_write_base_),
-        reinterpret_cast<uintptr_t>(generated_code_execute_base_));
-  
-  return true;
-}
-
-// ============================================================================
-// LuckTXM JIT: Optimized with hardware TXM support (iOS 26+ with TXM)
-// ============================================================================
-
-bool A64CodeCache::InitializeLuckTXMJit() {
-  // Allocate large RX region upfront (512 MiB)
-  rx_region_ = reinterpret_cast<uint8_t*>(
-      mmap(nullptr, kExecutableRegionSize, PROT_READ | PROT_EXEC,
-          MAP_ANON | MAP_PRIVATE, -1, 0));
-  
-  if (!rx_region_) {
-    XELOGE("LuckTXM: RX region allocation failed");
-    return false;
-  }
-  
-  // Signal external JIT broker to prepare the region
-  // Uses breakpoint 0xf00d (universal) or 0x69 (legacy)
-  register uint64_t x0 __asm("x0") = reinterpret_cast<uint64_t>(rx_region_);
-  register uint64_t x1 __asm("x1") = kExecutableRegionSize;
-  
-  if (ShouldUseUniversalPrepareCommand()) {
-    register uint64_t x16 __asm("x16") = 1;  // CMD_PREPARE
-    asm volatile("brk #0xf00d" : "+r"(x0), "+r"(x1), "+r"(x16) : : "memory");
-  } else {
-    asm volatile("brk #0x69" : "+r"(x0), "+r"(x1) : : "memory");
-  }
-  
-  // Create RW alias via vm_remap
-  vm_address_t rw_region = 0;
-  vm_prot_t cur_prot, max_prot;
-  
-  kern_return_t kr = vm_remap(
-      mach_task_self(), &rw_region, kExecutableRegionSize,
-      0, VM_FLAGS_ANYWHERE, mach_task_self(),
-      reinterpret_cast<vm_address_t>(rx_region_),
-      FALSE,  // copy = false
-      &cur_prot, &max_prot, VM_INHERIT_NONE);
-  
-  if (kr != KERN_SUCCESS) {
-    XELOGE("LuckTXM: vm_remap for RW alias failed (kr={})", kr);
-    munmap(rx_region_, kExecutableRegionSize);
-    rx_region_ = nullptr;
-    return false;
-  }
-  
-  uint8_t* rw_ptr = reinterpret_cast<uint8_t*>(rw_region);
-  
-  // Set RW permissions on the alias
-  if (mprotect(rw_ptr, kExecutableRegionSize, PROT_READ | PROT_WRITE) != 0) {
-    XELOGE("LuckTXM: mprotect RW failed");
-    vm_deallocate(mach_task_self(), rw_region, kExecutableRegionSize);
-    munmap(rx_region_, kExecutableRegionSize);
-    rx_region_ = nullptr;
-    return false;
-  }
-  
-  generated_code_write_base_ = rw_ptr;
-  generated_code_execute_base_ = reinterpret_cast<uint8_t*>(rx_region_);
-  rw_region_diff_ = rw_ptr - reinterpret_cast<uint8_t*>(rx_region_);
-  
-  XELOGI("LuckTXM JIT initialized: RX={:X} RW={:X} (512 MiB TXM region)",
-        reinterpret_cast<uintptr_t>(rx_region_),
-        reinterpret_cast<uintptr_t>(rw_ptr));
-  
-  return true;
-}
-
-// ============================================================================
-// Memory Protection for Each JIT Type
-// ============================================================================
-
-bool RegionLockRead(void* address, size_t length) {
-  if (jit_type_ == JitType::LuckTXM) {
-    // TXM path: use SetPageAlignedAccessWithMaxProtRetry
-    return SetPageAlignedAccessWithMaxProtRetry(
-        address, length, xe::memory::PageAccess::kReadOnly);
-  }
-  return SetPageAlignedAccess(address, length,
-                              xe::memory::PageAccess::kReadOnly);
-}
-
-bool RegionUnlockWrite(void* address, size_t length) {
-  if (jit_type_== JitType::Legacy:) {
-    // Legacy: toggle per-page via mprotect (W^X)
-    return SetPageAlignedAccess(address, length,
-                                xe::memory::PageAccess::kReadWrite);
-  }
-  else if (jit_type_== JitType::LuckNoTXM:|| jit_type_ == JitType::LuckTXM:) {
-    // Both use external prepare fallback for TXM devices
-    return SetPageAlignedAccessWithExternalPrepareFallback(
-        address, length, xe::memory::PageAccess::kReadWrite, "RW transition");
-  }
-  else
-    return false;
-}
-
-bool RegionSetExec(void* address, size_t length) {
-  if (jit_type_== JitType::Legacy:) {
-    // Legacy: toggle per-page via mprotect
-    return SetPageAlignedAccess(address, length,
-                                xe::memory::PageAccess::kExecuteReadOnly);
-  }
-  else if (jit_type_== JitType::LuckNoTXM:|| jit_type_ == JitType::LuckTXM:) {
-    // Both use external prepare fallback
-    return SetPageAlignedAccessWithExternalPrepareFallback(
-        address, length, xe::memory::PageAccess::kExecuteReadOnly,
-        "RX transition");
-  }
-  else
-    return false;
-}
-
-#endif  // XE_PLATFORM_IOS && XE_ARCH_ARM64
-
-// In Initialize() method, call:
-bool A64CodeCache::Initialize() {
-  generated_code_uses_vm_remap_fallback_ = false;
-  generated_code_uses_mprotect_flip_ = false;
-}
-
-bool ShouldUseUniversalPrepareCommand() {
-return cvars::ios_jit_brk_use_universal_0xf00d ||
-    ios_force_universal_prepare_command.load(std::memory_order_relaxed);
-}
-bool SetPageAlignedAccess(void* address, size_t length,
-                      xe::memory::PageAccess access) {
-uintptr_t aligned_start = 0;
-size_t aligned_length = 0;
-if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
-    !aligned_length) {
-  return true;
-}
-return xe::memory::Protect(reinterpret_cast<void*>(aligned_start),
-                          aligned_length, access);
-}
-bool SetPageAlignedAccessWithMaxProtRetry(void* address, size_t length,
-                                      xe::memory::PageAccess access) {
-if (SetPageAlignedAccess(address, length, access)) {
-  return true;
-}
-
-uintptr_t aligned_start = 0;
-size_t aligned_length = 0;
-if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
-    !aligned_length) {
-  return true;
-}
-
-vm_prot_t target_prot = 0;
-switch (access) {
-  case xe::memory::PageAccess::kNoAccess:
-    target_prot = VM_PROT_NONE;
-    break;
-  case xe::memory::PageAccess::kReadOnly:
-    target_prot = VM_PROT_READ;
-    break;
-  case xe::memory::PageAccess::kReadWrite:
-    target_prot = VM_PROT_READ | VM_PROT_WRITE;
-    break;
-  case xe::memory::PageAccess::kExecuteReadOnly:
-    target_prot = VM_PROT_READ | VM_PROT_EXECUTE;
-    break;
-  case xe::memory::PageAccess::kExecuteReadWrite:
-    target_prot = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-    break;
-  default:
-    return false;
-}
-
-constexpr vm_prot_t kMaxProt = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-const kern_return_t kr_max =
-    vm_protect(mach_task_self(), static_cast<vm_address_t>(aligned_start),
-              aligned_length, TRUE, kMaxProt);
-if (kr_max != KERN_SUCCESS) {
-  XELOGE(
-      "iOS JIT mprotect fallback: vm_protect set-max failed "
-      "addr=0x{:X} len=0x{:X} kr={}",
-      aligned_start, static_cast<uint32_t>(aligned_length), kr_max);
-  return false;
-}
-
-const kern_return_t kr_set =
-    vm_protect(mach_task_self(), static_cast<vm_address_t>(aligned_start),
-              aligned_length, FALSE, target_prot);
-if (kr_set != KERN_SUCCESS) {
-  XELOGE(
-      "iOS JIT mprotect fallback: vm_protect set-current failed "
-      "addr=0x{:X} len=0x{:X} target=0x{:X} kr={}",
-      aligned_start, static_cast<uint32_t>(aligned_length),
-      static_cast<uint32_t>(target_prot), kr_set);
-  return false;
-}
-return true;
-}
-bool SetPageAlignedAccessWithExternalPrepareFallback(
-void* address, size_t length, xe::memory::PageAccess desired_access,
-const char* transition_name) {
-const bool use_txm_broker_path = IOSUseTXMBrokerPath();
-
-// Non-broker path must stay strict W^X and never request RWX max-protection
-// widening retries.
-if (use_txm_broker_path) {
-  if (SetPageAlignedAccessWithMaxProtRetry(address, length, desired_access)) {
-    return true;
-  }
-} else {
-  if (SetPageAlignedAccess(address, length, desired_access)) {
-    return true;
-  }
-}
-
-if (!use_txm_broker_path) {
-  const int ios_major_version = IOSProductMajorVersion();
-  if (ios_major_version > 0) {
-    XELOGW(
-        "iOS JIT mprotect flip: {} denied on iOS {} without RWX retry or "
-        "external brk fallback (non-broker path)",
-        transition_name, ios_major_version);
-  } else {
-    XELOGW(
-        "iOS JIT mprotect flip: {} denied without RWX retry or external "
-        "brk fallback (non-broker path)",
-        transition_name);
-  }
-  return false;
-}
-
-if (!cvars::ios_jit_brk_prepare_fallback) {
-  XELOGW(
-      "iOS JIT mprotect flip: {} denied with external brk fallback "
-      "disabled on TXM path",
-      transition_name);
-  return false;
-}
-
-XELOGW("iOS JIT mprotect flip: {} denied, requesting external prepare via {}",
-      transition_name, ExternalPrepareBreakpointDescription());
-if (!MaybeRequestExternalJitPrepare(address, length)) {
-  return false;
-}
-
-// External JIT helpers (for example StikDebug scripts handling brk #0x69)
-// may only widen max protections. Retry setting current protection.
-if (SetPageAlignedAccessWithMaxProtRetry(address, length, desired_access)) {
-  return true;
-}
-
-// If direct transition is still denied, only proceed if QueryProtect reports
-// the mapping already has at least the requested access.
-uintptr_t aligned_start = 0;
-size_t aligned_length = 0;
-if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
-    !aligned_length) {
-  return true;
-}
-
-size_t query_length = 0;
-xe::memory::PageAccess query_access = xe::memory::PageAccess::kNoAccess;
-const bool query_ok = xe::memory::QueryProtect(
-    reinterpret_cast<void*>(aligned_start), query_length, query_access);
-if (query_ok && AccessSatisfies(query_access, desired_access)) {
-  return true;
-}
-
-XELOGE(
-    "iOS JIT mprotect flip: external prepare did not yield {} mapping "
-    "addr=0x{:X} len=0x{:X} query_ok={} query_access={} query_len=0x{:X}",
-    transition_name, aligned_start, static_cast<uint32_t>(aligned_length),
-    query_ok, static_cast<uint32_t>(query_access),
-    static_cast<uint32_t>(query_length));
-  return false;
-}
-
-
 namespace xe {
 namespace cpu {
 namespace backend {
@@ -1523,3 +1110,418 @@ namespace a64 {
 }  // namespace backend
 }  // namespace cpu
 }  // namespace xe
+
+JitType jit_type_;
+bool A64CodeCache::InitializeJitType() {
+  if (!IOSHasTXM()) {
+    // No TXM: use legacy W^X approach
+    jit_type_ = JitType::Legacy;
+    return InitializeLegacyJit();
+  }
+  
+  if (IOSProductMajorVersion() < 26) {
+    // Has TXM but iOS < 26: use legacy
+    jit_type_ = JitType::Legacy;
+    return InitializeLegacyJit();
+  }
+  
+  // iOS 26+ with TXM
+  jit_type_ = JitType::LuckTXM;
+  
+  // Try TXM path first, fall back to LuckNoTXM if it fails
+  if (!InitializeLuckTXMJit()) {
+    XELOGW("LuckTXM initialization failed, falling back to LuckNoTXM");
+    jit_type_ = JitType::LuckNoTXM;
+    return InitializeLuckNoTXMJit();
+  }
+  
+  return true;
+}
+
+
+// ============================================================================
+// Legacy JIT: W^X via per-thread protection toggles (iOS < 26)
+// ============================================================================
+
+bool A64CodeCache::InitializeLegacyJit() {
+  // Allocate as RX (read+execute) with mmap
+  generated_code_execute_base_ = reinterpret_cast<uint8_t*>(
+      mmap(nullptr, kGeneratedCodeSize, PROT_READ | PROT_EXEC,
+          MAP_ANON | MAP_PRIVATE, -1, 0));
+  
+  if (generated_code_execute_base_ == MAP_FAILED) {
+    XELOGE("Legacy JIT: mmap RX allocation failed");
+    generated_code_execute_base_ = nullptr;
+    return false;
+  }
+  
+  // For writes, we'll use W^X toggles at the page level via mprotect
+  generated_code_write_base_ = generated_code_execute_base_;
+  generated_code_uses_mprotect_flip_ = true;
+  
+  XELOGI("Legacy JIT initialized: RX={:X} (W^X toggles enabled)",
+        reinterpret_cast<uintptr_t>(generated_code_execute_base_));
+  
+  return true;
+}
+
+// ============================================================================
+// LuckNoTXM JIT: Dual-mapped regions via vm_remap (iOS 26+ without TXM)
+// ============================================================================
+
+bool A64CodeCache::InitializeLuckNoTXMJit() {
+  // Step 1: Allocate RW region
+  generated_code_write_base_ = reinterpret_cast<uint8_t*>(
+      mmap(nullptr, kGeneratedCodeSize * 2, PROT_READ | PROT_WRITE,
+          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+  
+  if (generated_code_write_base_ == MAP_FAILED) {
+    XELOGE("LuckNoTXM: RW mmap failed");
+    generated_code_write_base_ = nullptr;
+    return false;
+  }
+  
+  // Step 2: Widen max protection to allow RWX
+  vm_prot_t kWriteProt = VM_PROT_READ | VM_PROT_WRITE;
+  vm_prot_t kExecProt = VM_PROT_READ | VM_PROT_EXECUTE;
+  vm_prot_t kWriteExecProt = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+  
+  kern_return_t kr_max = vm_protect(
+      mach_task_self(),
+      reinterpret_cast<vm_address_t>(generated_code_write_base_),
+      kGeneratedCodeSize, TRUE, kWriteExecProt);
+  
+  if (kr_max == KERN_SUCCESS) {
+    // Keep write mapping non-executable for W^X compliance
+    vm_protect(mach_task_self(),
+              reinterpret_cast<vm_address_t>(generated_code_write_base_),
+              kGeneratedCodeSize, FALSE, kWriteProt);
+  }
+  
+  // Step 3: Create RX alias via vm_remap pointing to same physical pages
+  vm_address_t remap_addr = 0;
+  vm_prot_t cur_prot, max_prot;
+  
+  kern_return_t kr = vm_remap(
+      mach_task_self(), &remap_addr, kGeneratedCodeSize,
+      0,  // mask
+      VM_FLAGS_ANYWHERE, mach_task_self(),
+      reinterpret_cast<vm_address_t>(generated_code_write_base_),
+      FALSE,  // copy = false (share physical pages)
+      &cur_prot, &max_prot, VM_INHERIT_NONE);
+  
+  if (kr != KERN_SUCCESS) {
+    XELOGE("LuckNoTXM: vm_remap failed (kr={})", kr);
+    munmap(generated_code_write_base_, kGeneratedCodeSize * 2);
+    generated_code_write_base_ = nullptr;
+    return false;
+  }
+  
+  generated_code_execute_base_ = reinterpret_cast<uint8_t*>(remap_addr);
+  rw_region_diff_ = generated_code_write_base_ - generated_code_execute_base_;
+  
+  // Step 4: Ensure execute permission in max set
+  kern_return_t kr_exec_max = vm_protect(
+      mach_task_self(), remap_addr, kGeneratedCodeSize, TRUE, kExecProt);
+  
+  if (kr_exec_max != KERN_SUCCESS) {
+    XELOGW("LuckNoTXM: vm_protect set-max RX failed (kr={})", kr_exec_max);
+  }
+  
+  // Step 5: Set remapped region to RX
+  kern_return_t kr_exec = vm_protect(mach_task_self(), remap_addr,
+                                    kGeneratedCodeSize, FALSE, kExecProt);
+  
+  if (kr_exec != KERN_SUCCESS) {
+    XELOGE("LuckNoTXM: vm_protect RX failed (kr={})", kr_exec);
+    vm_deallocate(mach_task_self(), remap_addr, kGeneratedCodeSize);
+    munmap(generated_code_write_base_, kGeneratedCodeSize * 2);
+    generated_code_write_base_ = nullptr;
+    return false;
+  }
+  
+  generated_code_uses_vm_remap_fallback_ = true;
+  
+  XELOGI("LuckNoTXM JIT initialized: RW={:X} RX={:X} (dual-mapped)",
+        reinterpret_cast<uintptr_t>(generated_code_write_base_),
+        reinterpret_cast<uintptr_t>(generated_code_execute_base_));
+  
+  return true;
+}
+
+// ============================================================================
+// LuckTXM JIT: Optimized with hardware TXM support (iOS 26+ with TXM)
+// ============================================================================
+
+bool A64CodeCache::InitializeLuckTXMJit() {
+  // Allocate large RX region upfront (512 MiB)
+  rx_region_ = reinterpret_cast<uint8_t*>(
+      mmap(nullptr, kExecutableRegionSize, PROT_READ | PROT_EXEC,
+          MAP_ANON | MAP_PRIVATE, -1, 0));
+  
+  if (!rx_region_) {
+    XELOGE("LuckTXM: RX region allocation failed");
+    return false;
+  }
+  
+  // Signal external JIT broker to prepare the region
+  // Uses breakpoint 0xf00d (universal) or 0x69 (legacy)
+  register uint64_t x0 __asm("x0") = reinterpret_cast<uint64_t>(rx_region_);
+  register uint64_t x1 __asm("x1") = kExecutableRegionSize;
+  
+  if (ShouldUseUniversalPrepareCommand()) {
+    register uint64_t x16 __asm("x16") = 1;  // CMD_PREPARE
+    asm volatile("brk #0xf00d" : "+r"(x0), "+r"(x1), "+r"(x16) : : "memory");
+  } else {
+    asm volatile("brk #0x69" : "+r"(x0), "+r"(x1) : : "memory");
+  }
+  
+  // Create RW alias via vm_remap
+  vm_address_t rw_region = 0;
+  vm_prot_t cur_prot, max_prot;
+  
+  kern_return_t kr = vm_remap(
+      mach_task_self(), &rw_region, kExecutableRegionSize,
+      0, VM_FLAGS_ANYWHERE, mach_task_self(),
+      reinterpret_cast<vm_address_t>(rx_region_),
+      FALSE,  // copy = false
+      &cur_prot, &max_prot, VM_INHERIT_NONE);
+  
+  if (kr != KERN_SUCCESS) {
+    XELOGE("LuckTXM: vm_remap for RW alias failed (kr={})", kr);
+    munmap(rx_region_, kExecutableRegionSize);
+    rx_region_ = nullptr;
+    return false;
+  }
+  
+  uint8_t* rw_ptr = reinterpret_cast<uint8_t*>(rw_region);
+  
+  // Set RW permissions on the alias
+  if (mprotect(rw_ptr, kExecutableRegionSize, PROT_READ | PROT_WRITE) != 0) {
+    XELOGE("LuckTXM: mprotect RW failed");
+    vm_deallocate(mach_task_self(), rw_region, kExecutableRegionSize);
+    munmap(rx_region_, kExecutableRegionSize);
+    rx_region_ = nullptr;
+    return false;
+  }
+  
+  generated_code_write_base_ = rw_ptr;
+  generated_code_execute_base_ = reinterpret_cast<uint8_t*>(rx_region_);
+  rw_region_diff_ = rw_ptr - reinterpret_cast<uint8_t*>(rx_region_);
+  
+  XELOGI("LuckTXM JIT initialized: RX={:X} RW={:X} (512 MiB TXM region)",
+        reinterpret_cast<uintptr_t>(rx_region_),
+        reinterpret_cast<uintptr_t>(rw_ptr));
+  
+  return true;
+}
+
+// ============================================================================
+// Memory Protection for Each JIT Type
+// ============================================================================
+
+bool RegionLockRead(void* address, size_t length) {
+  if (jit_type_ == JitType::LuckTXM) {
+    // TXM path: use SetPageAlignedAccessWithMaxProtRetry
+    return SetPageAlignedAccessWithMaxProtRetry(
+        address, length, xe::memory::PageAccess::kReadOnly);
+  }
+  return SetPageAlignedAccess(address, length,
+                              xe::memory::PageAccess::kReadOnly);
+}
+
+bool RegionUnlockWrite(void* address, size_t length) {
+  if (jit_type_== JitType::Legacy:) {
+    // Legacy: toggle per-page via mprotect (W^X)
+    return SetPageAlignedAccess(address, length,
+                                xe::memory::PageAccess::kReadWrite);
+  }
+  else if (jit_type_== JitType::LuckNoTXM:|| jit_type_ == JitType::LuckTXM:) {
+    // Both use external prepare fallback for TXM devices
+    return SetPageAlignedAccessWithExternalPrepareFallback(
+        address, length, xe::memory::PageAccess::kReadWrite, "RW transition");
+  }
+  else
+    return false;
+}
+
+bool RegionSetExec(void* address, size_t length) {
+  if (jit_type_== JitType::Legacy:) {
+    // Legacy: toggle per-page via mprotect
+    return SetPageAlignedAccess(address, length,
+                                xe::memory::PageAccess::kExecuteReadOnly);
+  }
+  else if (jit_type_== JitType::LuckNoTXM:|| jit_type_ == JitType::LuckTXM:) {
+    // Both use external prepare fallback
+    return SetPageAlignedAccessWithExternalPrepareFallback(
+        address, length, xe::memory::PageAccess::kExecuteReadOnly,
+        "RX transition");
+  }
+  else
+    return false;
+}
+
+#endif  // XE_PLATFORM_IOS && XE_ARCH_ARM64
+
+// In Initialize() method, call:
+bool A64CodeCache::Initialize() {
+  generated_code_uses_vm_remap_fallback_ = false;
+  generated_code_uses_mprotect_flip_ = false;
+}
+
+bool ShouldUseUniversalPrepareCommand() {
+return cvars::ios_jit_brk_use_universal_0xf00d ||
+    ios_force_universal_prepare_command.load(std::memory_order_relaxed);
+}
+bool SetPageAlignedAccess(void* address, size_t length,
+                      xe::memory::PageAccess access) {
+uintptr_t aligned_start = 0;
+size_t aligned_length = 0;
+if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
+    !aligned_length) {
+  return true;
+}
+return xe::memory::Protect(reinterpret_cast<void*>(aligned_start),
+                          aligned_length, access);
+}
+bool SetPageAlignedAccessWithMaxProtRetry(void* address, size_t length,
+                                      xe::memory::PageAccess access) {
+if (SetPageAlignedAccess(address, length, access)) {
+  return true;
+}
+
+uintptr_t aligned_start = 0;
+size_t aligned_length = 0;
+if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
+    !aligned_length) {
+  return true;
+}
+
+vm_prot_t target_prot = 0;
+switch (access) {
+  case xe::memory::PageAccess::kNoAccess:
+    target_prot = VM_PROT_NONE;
+    break;
+  case xe::memory::PageAccess::kReadOnly:
+    target_prot = VM_PROT_READ;
+    break;
+  case xe::memory::PageAccess::kReadWrite:
+    target_prot = VM_PROT_READ | VM_PROT_WRITE;
+    break;
+  case xe::memory::PageAccess::kExecuteReadOnly:
+    target_prot = VM_PROT_READ | VM_PROT_EXECUTE;
+    break;
+  case xe::memory::PageAccess::kExecuteReadWrite:
+    target_prot = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+    break;
+  default:
+    return false;
+}
+
+constexpr vm_prot_t kMaxProt = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+const kern_return_t kr_max =
+    vm_protect(mach_task_self(), static_cast<vm_address_t>(aligned_start),
+              aligned_length, TRUE, kMaxProt);
+if (kr_max != KERN_SUCCESS) {
+  XELOGE(
+      "iOS JIT mprotect fallback: vm_protect set-max failed "
+      "addr=0x{:X} len=0x{:X} kr={}",
+      aligned_start, static_cast<uint32_t>(aligned_length), kr_max);
+  return false;
+}
+
+const kern_return_t kr_set =
+    vm_protect(mach_task_self(), static_cast<vm_address_t>(aligned_start),
+              aligned_length, FALSE, target_prot);
+if (kr_set != KERN_SUCCESS) {
+  XELOGE(
+      "iOS JIT mprotect fallback: vm_protect set-current failed "
+      "addr=0x{:X} len=0x{:X} target=0x{:X} kr={}",
+      aligned_start, static_cast<uint32_t>(aligned_length),
+      static_cast<uint32_t>(target_prot), kr_set);
+  return false;
+}
+return true;
+}
+bool SetPageAlignedAccessWithExternalPrepareFallback(
+void* address, size_t length, xe::memory::PageAccess desired_access,
+const char* transition_name) {
+const bool use_txm_broker_path = IOSUseTXMBrokerPath();
+
+// Non-broker path must stay strict W^X and never request RWX max-protection
+// widening retries.
+if (use_txm_broker_path) {
+  if (SetPageAlignedAccessWithMaxProtRetry(address, length, desired_access)) {
+    return true;
+  }
+} else {
+  if (SetPageAlignedAccess(address, length, desired_access)) {
+    return true;
+  }
+}
+
+if (!use_txm_broker_path) {
+  const int ios_major_version = IOSProductMajorVersion();
+  if (ios_major_version > 0) {
+    XELOGW(
+        "iOS JIT mprotect flip: {} denied on iOS {} without RWX retry or "
+        "external brk fallback (non-broker path)",
+        transition_name, ios_major_version);
+  } else {
+    XELOGW(
+        "iOS JIT mprotect flip: {} denied without RWX retry or external "
+        "brk fallback (non-broker path)",
+        transition_name);
+  }
+  return false;
+}
+
+if (!cvars::ios_jit_brk_prepare_fallback) {
+  XELOGW(
+      "iOS JIT mprotect flip: {} denied with external brk fallback "
+      "disabled on TXM path",
+      transition_name);
+  return false;
+}
+
+XELOGW("iOS JIT mprotect flip: {} denied, requesting external prepare via {}",
+      transition_name, ExternalPrepareBreakpointDescription());
+if (!MaybeRequestExternalJitPrepare(address, length)) {
+  return false;
+}
+
+// External JIT helpers (for example StikDebug scripts handling brk #0x69)
+// may only widen max protections. Retry setting current protection.
+if (SetPageAlignedAccessWithMaxProtRetry(address, length, desired_access)) {
+  return true;
+}
+
+// If direct transition is still denied, only proceed if QueryProtect reports
+// the mapping already has at least the requested access.
+uintptr_t aligned_start = 0;
+size_t aligned_length = 0;
+if (!GetPageAlignedRange(address, length, aligned_start, aligned_length) ||
+    !aligned_length) {
+  return true;
+}
+
+size_t query_length = 0;
+xe::memory::PageAccess query_access = xe::memory::PageAccess::kNoAccess;
+const bool query_ok = xe::memory::QueryProtect(
+    reinterpret_cast<void*>(aligned_start), query_length, query_access);
+if (query_ok && AccessSatisfies(query_access, desired_access)) {
+  return true;
+}
+
+XELOGE(
+    "iOS JIT mprotect flip: external prepare did not yield {} mapping "
+    "addr=0x{:X} len=0x{:X} query_ok={} query_access={} query_len=0x{:X}",
+    transition_name, aligned_start, static_cast<uint32_t>(aligned_length),
+    query_ok, static_cast<uint32_t>(query_access),
+    static_cast<uint32_t>(query_length));
+  return false;
+}
+}
+}
+}
+}
