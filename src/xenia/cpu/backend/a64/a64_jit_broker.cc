@@ -8,7 +8,9 @@
 #ifdef XE_PLATFORM_IOS
 
 #include <atomic>
+#include <cstdlib>
 #include <sys/mman.h>
+#include <sys/sysctl.h>
 #include <unistd.h>
 
 #include "xenia/base/cvar.h"
