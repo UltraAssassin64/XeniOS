@@ -6,25 +6,15 @@
 
 #if XE_PLATFORM_IOS && XE_ARCH_ARM64
 
-namespace xe {
-namespace memory {
+// NOTE: This header is included from inside namespace xe::memory in memory.h.
+// Do NOT open any namespaces here — declarations go directly into xe::memory.
 
-// The "fastmem region" - a large contiguous VA space for fast memory access
-// This is what Dolphin-iOS tests during initialization
-// Size: 16 GiB (0x400000000 bytes)
-constexpr size_t kFastmemRegionSize = 0x400000000ULL;
+constexpr size_t kFastmemRegionSize = 0x400000000ULL;  // 16 GiB
 
-// Test if the iOS jailbroken device supports allocating large VA regions
-// Returns true if allocation succeeded
 bool TestFastmemAvailability();
 
-// The actual fastmem region base (set after successful allocation)
-// Only valid if TestFastmemAvailability() returned true
 extern void* g_fastmem_region_base;
 extern bool g_fastmem_available;
-
-}  // namespace memory
-}  // namespace xe
 
 #endif  // XE_PLATFORM_IOS && XE_ARCH_ARM64
 
