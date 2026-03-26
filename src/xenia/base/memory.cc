@@ -29,6 +29,13 @@ bool IsWritableExecutableMemoryPreferred() {
   return IsWritableExecutableMemorySupported() &&
          cvars::writable_executable_memory;
 }
+bool IsFastmemAvailable() {
+#if XE_PLATFORM_IOS && XE_ARCH_ARM64
+  return xe::memory::g_fastmem_available;
+#else
+  return false;
+#endif
+}
 
 using swcache::CacheLine;
 
@@ -660,13 +667,7 @@ void copy_and_swap_16_in_32_unaligned(void* dst_ptr, const void* src_ptr,
     count--;
   }
 }
-bool IsFastmemAvailable() {
-#if XE_PLATFORM_IOS && XE_ARCH_ARM64
-  return xe::memory::g_fastmem_available;
-#else
-  return false;
-#endif
-}
+
 
 #endif
 
