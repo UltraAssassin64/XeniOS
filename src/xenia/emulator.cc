@@ -36,8 +36,9 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <UIKit/UIKit.h>
 #include <string>
+// Defined in jit_helper.mm (Objective-C++) so UIKit stays out of C++ TUs.
+extern "C" int get_ios_major_version_uidevice();
 #endif
 #include "xenia/cpu/backend/code_cache.h"
 #include "xenia/cpu/backend/null_backend.h"
