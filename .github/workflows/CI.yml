@@ -518,9 +518,9 @@ jobs:
             done
           }
 
-          xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' ! -iname '*beta*' | sort -V | tail -n 1)"
+          xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26.3.app' ! -iname '*beta*' | sort -V | tail -n 1)"
           if [ -z "$xcode_app" ]; then
-            xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort -V | tail -n 1)"
+            xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26.3.app' | sort -V | tail -n 1)"
           fi
           if [ -z "$xcode_app" ]; then
             echo "::error::Xcode 26 not found on runner"
