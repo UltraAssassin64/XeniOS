@@ -96,11 +96,39 @@ namespace a64 {
         return false;
       }
     }
+  #endif
   // ============================================================================
   // JIT Type Detection and Initialization
   // ============================================================================
   
-  #if XE_PLATFORM_IOS && XE_ARCH_ARM64
+    #if XE_PLATFORM_IOS && XE_ARCH_ARM64
+    JitType jit_type_;
+
+    bool A64CodeCache::InitializeJitType() {
+      if (!IOSHasTXM()) {
+        // No TXM: use legacy W^X approach
+        jit_type_ = JitType::Legacy;
+        return InitializeLegacyJit();
+      }
+      
+      if (IOSProductMajorVersion() < 26) {
+        // Has TXM but iOS < 26: use legacy
+        jit_type_ = JitType::Legacy;
+        return InitializeLegacyJit();
+      }
+      
+      // iOS 26+ with TXM
+      jit_type_ = JitType::LuckTXM;
+      
+      // Try TXM path first, fall back to LuckNoTXM if it fails
+      if (!InitializeLuckTXMJit()) {
+        XELOGW("LuckTXM initialization failed, falling back to LuckNoTXM");
+        jit_type_ = JitType::LuckNoTXM;
+        return InitializeLuckNoTXMJit();
+      }
+      
+      return true;
+    }
     if (!InitializeJitType()) {
       XELOGE("Failed to initialize iOS JIT");
       return false;
@@ -1111,33 +1139,7 @@ namespace a64 {
 }  // namespace cpu
 }  // namespace xe
 
-JitType jit_type_;
 
-bool A64CodeCache::InitializeJitType() {
-  if (!IOSHasTXM()) {
-    // No TXM: use legacy W^X approach
-    jit_type_ = JitType::Legacy;
-    return InitializeLegacyJit();
-  }
-  
-  if (IOSProductMajorVersion() < 26) {
-    // Has TXM but iOS < 26: use legacy
-    jit_type_ = JitType::Legacy;
-    return InitializeLegacyJit();
-  }
-  
-  // iOS 26+ with TXM
-  jit_type_ = JitType::LuckTXM;
-  
-  // Try TXM path first, fall back to LuckNoTXM if it fails
-  if (!InitializeLuckTXMJit()) {
-    XELOGW("LuckTXM initialization failed, falling back to LuckNoTXM");
-    jit_type_ = JitType::LuckNoTXM;
-    return InitializeLuckNoTXMJit();
-  }
-  
-  return true;
-}
 
 
 // ============================================================================
@@ -1521,6 +1523,7 @@ XELOGE(
     query_ok, static_cast<uint32_t>(query_access),
     static_cast<uint32_t>(query_length));
   return false;
+}
 }
 }
 }
