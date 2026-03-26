@@ -7,7 +7,10 @@ project("xenia-base")
   language("C++")
   links({
     "fmt",
-    "xenia-ios",
+  })
+  files({
+    "*.h",
+    "*.cc",
   })
   local_platform_files()
   removefiles({
