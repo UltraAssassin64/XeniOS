@@ -83,10 +83,11 @@ namespace a64 {
   static std::atomic<int32_t> log_count{0};
   const int32_t count = log_count.fetch_add(1, std::memory_order_relaxed);
   return count < limit;
-  }
+}
 
-  #if XE_PLATFORM_IOS && XE_ARCH_ARM64
-    bool IOSHasTXM() {
+#if XE_PLATFORM_IOS && XE_ARCH_ARM64
+
+bool IOSHasTXM() {
   static const bool has_txm = []() -> bool {
     if (const char* env = std::getenv("HAS_TXM")) {
       if (env[0] == '1' && env[1] == '\0') {
@@ -96,39 +97,43 @@ namespace a64 {
         return false;
       }
     }
-  #endif
-  // ============================================================================
-  // JIT Type Detection and Initialization
-  // ============================================================================
-  
-    #if XE_PLATFORM_IOS && XE_ARCH_ARM64
-    JitType jit_type_;
+    // Default detection logic here
+    return false;
+  }();
+  return has_txm;
+}
 
-    bool A64CodeCache::InitializeJitType() {
-      if (!IOSHasTXM()) {
-        // No TXM: use legacy W^X approach
-        jit_type_ = JitType::Legacy;
-        return InitializeLegacyJit();
-      }
-      
-      if (IOSProductMajorVersion() < 26) {
-        // Has TXM but iOS < 26: use legacy
-        jit_type_ = JitType::Legacy;
-        return InitializeLegacyJit();
-      }
-      
-      // iOS 26+ with TXM
-      jit_type_ = JitType::LuckTXM;
-      
-      // Try TXM path first, fall back to LuckNoTXM if it fails
-      if (!InitializeLuckTXMJit()) {
-        XELOGW("LuckTXM initialization failed, falling back to LuckNoTXM");
-        jit_type_ = JitType::LuckNoTXM;
-        return InitializeLuckNoTXMJit();
-      }
-      
-      return true;
-    }
+// ============================================================================
+// JIT Type Detection and Initialization
+// ============================================================================
+
+bool A64CodeCache::InitializeJitType() {
+  if (!IOSHasTXM()) {
+    // No TXM: use legacy W^X approach
+    jit_type_ = JitType::Legacy;
+    return InitializeLegacyJit();
+  }
+  
+  if (IOSProductMajorVersion() < 26) {
+    // Has TXM but iOS < 26: use legacy
+    jit_type_ = JitType::Legacy;
+    return InitializeLegacyJit();
+  }
+  
+  // iOS 26+ with TXM
+  jit_type_ = JitType::LuckTXM;
+  
+  // Try TXM path first, fall back to LuckNoTXM if it fails
+  if (!InitializeLuckTXMJit()) {
+    XELOGW("LuckTXM initialization failed, falling back to LuckNoTXM");
+    jit_type_ = JitType::LuckNoTXM;
+    return InitializeLuckNoTXMJit();
+  }
+  
+  return true;
+}
+
+#endif  // XE_PLATFORM_IOS && XE_ARCH_ARM64
     if (!InitializeJitType()) {
       XELOGE("Failed to initialize iOS JIT");
       return false;
