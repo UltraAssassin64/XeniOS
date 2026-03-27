@@ -263,7 +263,7 @@ project("xenia-app")
       ["TARGETED_DEVICE_FAMILY"] = "1,2",
       ["PRODUCT_NAME"] = "XeniOS",
       ["EXECUTABLE_NAME"] = "xenios",
-      ["PRODUCT_BUNDLE_IDENTIFIER"] = "jp.xenios.xenios.ios",
+      ["PRODUCT_BUNDLE_IDENTIFIER"] = "com.UltraAssassin64.xenios.ios",
       ["ASSETCATALOG_COMPILER_APPICON_NAME"] = "AppIcon",
       ["CODE_SIGN_STYLE"] = "Automatic",
       ["CODE_SIGN_ENTITLEMENTS"] = ios_entitlements_path,
