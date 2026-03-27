@@ -15,6 +15,9 @@
 #if XE_ARCH_ARM64
 #include <arm_neon.h>
 #endif
+#if XE_PLATFORM_IOS
+#include "xenia/base/memory_fastmem_ios.h”
+#endif
 
 DEFINE_bool(
     writable_executable_memory, true,

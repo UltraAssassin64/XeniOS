@@ -3,7 +3,7 @@
 // Companion translation unit for a64_code_cache.cc.
 // Provides the iOS JIT-broker helpers forward-declared there.
 
-#include "xenia/cpu/backend/a64/a64_code_cache.h"
+#include "xenia/cpu/backend/a64/a64_code_cache.cc"
 
 #ifdef XE_PLATFORM_IOS
 
@@ -18,8 +18,8 @@
 
 
 // Pull in the cvars declared in a64_code_cache.cc.
-DECLARE_bool(cvars::ios_jit_brk_prepare_fallback);
-DECLARE_bool(cvars::ios_jit_brk_use_universal_0xf00d);
+DECLARE_bool(ios_jit_brk_prepare_fallback);
+DECLARE_bool(ios_jit_brk_use_universal_0xf00d);
 
 namespace xe {
 namespace cpu {
