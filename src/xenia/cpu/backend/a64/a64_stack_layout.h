@@ -58,6 +58,7 @@ class StackLayout {
   static constexpr size_t GUEST_CALL_RET_ADDR        = 56;
   static constexpr size_t HOST_RET_ADDR              = 64;
   static constexpr size_t GUEST_SAVED_STACKPOINT_DEPTH = 72;
+  static const size_t GUEST_CTX_HOME = 80;
 };
 
 }  // namespace a64
