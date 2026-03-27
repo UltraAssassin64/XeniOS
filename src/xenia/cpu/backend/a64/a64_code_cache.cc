@@ -134,6 +134,8 @@ bool IOSUseTXMBrokerPath();
 /// Returns false if the prepare could not be requested.
 bool MaybeRequestExternalJitPrepare(void* address, size_t length);
 
+JitType JitType::jit_type_;
+
 /// Returns a human-readable description of the prepare breakpoint that will
 /// be issued (e.g. "brk #0xf00d (x16=1)" or "brk #0x69").
 const char* ExternalPrepareBreakpointDescription();
