@@ -52,7 +52,11 @@ struct EmitFunctionInfo {
   size_t lr_save_offset = 0;
 #endif
 };
-
+enum JitType {
+    Legacy,
+    LuckNoTXM,
+    LuckTXM
+};
 class A64CodeCache : public CodeCache {
  public:
   ~A64CodeCache() override;
