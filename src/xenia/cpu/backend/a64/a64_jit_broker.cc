@@ -18,8 +18,8 @@
 
 
 // Pull in the cvars declared in a64_code_cache.cc.
-DECLARE_bool(ios_jit_brk_prepare_fallback);
-DECLARE_bool(ios_jit_brk_use_universal_0xf00d);
+DECLARE_bool(cvars::ios_jit_brk_prepare_fallback);
+DECLARE_bool(cvars::ios_jit_brk_use_universal_0xf00d);
 
 namespace xe {
 namespace cpu {
