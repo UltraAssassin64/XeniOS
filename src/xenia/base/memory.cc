@@ -17,7 +17,7 @@
 #endif
 
 #if XE_PLATFORM_IOS
-#include "src/xenia/base/memory_fastmem_ios.h"
+#include "src/xenia/base/memory_fastmem_ios.cc"
 #endif
 
 DEFINE_bool(
