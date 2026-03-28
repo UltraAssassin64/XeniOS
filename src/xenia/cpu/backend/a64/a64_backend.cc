@@ -1128,12 +1128,12 @@ HostToGuestThunk A64ThunkEmitter::EmitHostToGuestThunk() {
   LDR(GetMembaseReg(), GetContextReg(),
       offsetof(ppc::PPCContext, virtual_membase));
   MOV(X0, X2);  // return address
-  ADR(X17, return_label);
+  ADR(X17, &return_label);
   MOV(X30, X17);
-  BR(X3);
+  BLR(X3);
   BLR(X16);
 
-  return_label:
+  
 
   EmitLoadNonvolatileRegs();
 
@@ -1188,12 +1188,11 @@ GuestToHostThunk A64ThunkEmitter::EmitGuestToHostThunk() {
 
   MOV(X16, X0);              // function
   MOV(X0, GetContextReg());  // context
-  ADR(X17, return_label);
+  ADR(X17, &return_label);
   MOV(X30, X17);
-  BR(X3);
+  BLR(X3);
   BLR(X16);
-
-  return_label:
+  Bind(&return_label);
 
   EmitLoadVolatileRegs();
   // Reload membase in case the host clobbered it.
@@ -1260,7 +1259,7 @@ ResolveFunctionThunk A64ThunkEmitter::EmitResolveFunctionThunk() {
   MOV(X0, GetContextReg());  // context
   MOV(W1, W17);
   MOV(X16, reinterpret_cast<uint64_t>(&ResolveFunction));
-  ADR(X17, return_label);
+  ADR(X17, &return_label);
   MOV(X30, X17);
   BLR(X16);
 
@@ -1338,12 +1337,13 @@ StackSyncThunk A64ThunkEmitter::EmitStackSyncThunk() {
       offsetof(ppc::PPCContext, virtual_membase));
 
   // Restore host frame and stack.
+  Label return_label;
   MOV(X29, X5);
   MOV(SP, X4);
   MOV(X30, X3);
-  BR(X3);
+  BLR(X3);
   RET();
-  
+  Bind(&return_label);
 
   l(no_sync);
   RET();
