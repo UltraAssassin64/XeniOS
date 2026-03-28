@@ -86,7 +86,7 @@ bool ShouldLogIndirectionTable() {
 #if XE_PLATFORM_IOS && XE_ARCH_ARM64
 std::atomic<bool> ios_external_prepare_issued{false};
 std::atomic<bool> ios_external_detach_issued{false};
-std::atomic<bool> ios_force_universal_prepare_command{false};
+extern std::atomic<bool> ios_force_universal_prepare_command{false};
 constexpr uint32_t kLegacyPrepareRejectedResult = 0xE0000069u;
 constexpr uint32_t kLegacyPrepareRejectedResultSwapped = 0x690000E0u;
 
