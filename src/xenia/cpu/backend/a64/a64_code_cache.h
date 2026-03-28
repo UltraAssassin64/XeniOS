@@ -217,6 +217,7 @@ class A64CodeCache : public CodeCache {
   std::vector<std::pair<uint64_t, GuestFunction*>> generated_code_map_;
 
 #ifdef XE_PLATFORM_IOS
+  JitType    jit_type_              = JitType::LuckTXM;
   // iOS JIT strategy resolved at Initialize() time.
   // Helpers for the mprotect-flip W^X path (defined in a64_code_cache.cc).
   bool RegionLockRead(void* address, size_t length);
