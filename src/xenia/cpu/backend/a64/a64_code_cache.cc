@@ -381,7 +381,6 @@ bool A64CodeCache::RegionLockRead(void* address, size_t length) {
 }
 
 bool A64CodeCache::RegionUnlockWrite(void* address, size_t length) {
-  bool RegionUnlockWrite(void* address, size_t length) {
   // Same vm_protect max-widen as RegionSetExec — iOS 16 requires
   // EXECUTE in the max protections before we can later flip to RX.
   uintptr_t aligned_start = 0;
