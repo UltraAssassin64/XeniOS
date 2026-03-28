@@ -388,9 +388,19 @@ bool A64CodeCache::RegionUnlockWrite(void* address, size_t length) {
   } else if (jit_type_ == JitType::LuckNoTXM ||
              jit_type_ == JitType::LuckTXM) {
     // Both Luck paths use the external-prepare fallback.
-    return SetPageAlignedAccessWithExternalPrepareFallback(
-        address, length, xe::memory::PageAccess::kReadWrite, "RW transition");
-  }
+              uintptr_t aligned_start = 0;
+              size_t aligned_length = 0;
+              if (GetPageAlignedRange(address, length, aligned_start, aligned_length)
+                  && aligned_length) {
+                constexpr vm_prot_t kMaxExec =
+                    VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+                vm_protect(mach_task_self(),
+                          static_cast<vm_address_t>(aligned_start),
+                          aligned_length, TRUE, kMaxExec);
+              }
+              return SetPageAlignedAccessWithExternalPrepareFallback(
+                  address, length, xe::memory::PageAccess::kReadWrite, "RW transition");
+      }
   return false;
 }
 
@@ -401,10 +411,20 @@ bool A64CodeCache::RegionSetExec(void* address, size_t length) {
                                 xe::memory::PageAccess::kExecuteReadOnly);
   } else if (jit_type_ == JitType::LuckNoTXM ||
              jit_type_ == JitType::LuckTXM) {
-    return SetPageAlignedAccessWithExternalPrepareFallback(
-        address, length, xe::memory::PageAccess::kExecuteReadOnly,
-        "RX transition");
-  }
+              uintptr_t aligned_start = 0;
+              size_t aligned_length = 0;
+              if (GetPageAlignedRange(address, length, aligned_start, aligned_length)
+                  && aligned_length) {
+                constexpr vm_prot_t kMaxExec =
+                    VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+                vm_protect(mach_task_self(),
+                          static_cast<vm_address_t>(aligned_start),
+                          aligned_length, TRUE, kMaxExec);
+              }
+              return SetPageAlignedAccessWithExternalPrepareFallback(
+                  address, length, xe::memory::PageAccess::kExecuteReadOnly,
+                  "RX transition");
+      }
   return false;
 }
 
@@ -921,15 +941,21 @@ bool A64CodeCache::Initialize() {
       // For W^X flips, prefer starting from an RX mapping (so EXECUTE is
       // present in the mapping's max protections on iOS), then temporarily
       // switching pages to RW for writes.
-      generated_code_write_base_ = reinterpret_cast<uint8_t*>(
-          mmap(nullptr, kGeneratedCodeSize, PROT_READ | PROT_WRITE,
-               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
       if (generated_code_write_base_ == MAP_FAILED) {
-        generated_code_write_base_ = nullptr;
-        XELOGE("Unable to allocate iOS JIT code cache (RX mapping)");
-        return false;
+          generated_code_write_base_ = nullptr;
+          XELOGE("Unable to allocate iOS JIT code cache (RX mapping)");
+          return false;
       }
-      generated_code_execute_base_       = generated_code_write_base_;
+      // Pre-set to RW; individual PlaceGuestCode calls will flip back to RX.
+      // Starting from RX ensures execute is in the Mach max protections.
+      if (mprotect(generated_code_write_base_, kGeneratedCodeSize,
+                  PROT_READ | PROT_WRITE) != 0) {
+          XELOGE("iOS JIT: initial RW flip failed, errno={}", errno);
+          munmap(generated_code_write_base_, kGeneratedCodeSize);
+          generated_code_write_base_ = nullptr;
+          return false;
+      }
+      generated_code_execute_base_ = generated_code_write_base_;
       generated_code_uses_mprotect_flip_ = true;
       if (use_txm_broker_path) {
         XELOGI("iOS JIT mprotect-flip fallback active (TXM/broker path)");
