@@ -723,6 +723,8 @@ bool A64CodeCache::Initialize() {
       }
       generated_code_execute_base_       = generated_code_write_base_;
       generated_code_uses_mprotect_flip_ = true;
+      
+    
       if (use_txm_broker_path) {
         XELOGI("iOS JIT mprotect-flip fallback active (TXM/broker path)");
       } else if (has_txm) {
@@ -735,6 +737,7 @@ bool A64CodeCache::Initialize() {
       }
       XELOGI("iOS JIT mprotect-flip mapping (RX base): {:p}",
              static_cast<void*>(generated_code_execute_base_));
+      return true;
     }
 
 #else  // XE_PLATFORM_IOS
