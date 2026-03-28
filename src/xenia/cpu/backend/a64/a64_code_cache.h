@@ -53,6 +53,17 @@ struct EmitFunctionInfo {
 #endif
 };
 
+#ifdef XE_PLATFORM_IOS
+
+enum class JitType {
+  Legacy,     // iOS < 26, W^X via per-thread toggles
+  LuckNoTXM,  // iOS 26+ without TXM hardware (dual-mapped regions)
+  LuckTXM     // iOS 26+ with TXM hardware (optimized)
+};
+
+#endif  // XE_PLATFORM_IOS
+
+
 class A64CodeCache : public CodeCache {
  public:
   ~A64CodeCache() override;
@@ -218,11 +229,31 @@ class A64CodeCache : public CodeCache {
 
 #ifdef XE_PLATFORM_IOS
   JitType    jit_type_              = JitType::LuckTXM;
+
+    // W^X / dual-map book-keeping.
+  uint8_t*   generated_code_rw_base_ = nullptr;
+  ptrdiff_t  rw_region_diff_         = 0;
+
+  // LuckTXM: pre-allocated 512 MiB RX window.
+  static constexpr size_t kExecutableRegionSize = 536870912;  // 512 MiB
+  void* rx_region_ = nullptr;
+
+  // JIT strategy initializers.
+  bool InitializeJitType();
+  bool InitializeLegacyJit();
+  bool InitializeLuckNoTXMJit();
+  bool InitializeLuckTXMJit(); 
   // iOS JIT strategy resolved at Initialize() time.
   // Helpers for the mprotect-flip W^X path (defined in a64_code_cache.cc).
   bool RegionLockRead(void* address, size_t length);
   bool RegionUnlockWrite(void* address, size_t length);
   bool RegionSetExec(void* address, size_t length);
+
+  bool AllocateExecutableMemory_Legacy(void* dest, size_t size);
+  bool AllocateExecutableMemory_LuckNoTXM(void* dest, size_t size);
+  bool AllocateExecutableMemory_LuckTXM(void* dest, size_t size);
+
+
 #endif  // XE_PLATFORM_IOS
 };
 
