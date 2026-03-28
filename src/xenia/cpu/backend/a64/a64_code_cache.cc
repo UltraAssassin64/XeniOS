@@ -381,7 +381,8 @@ bool A64CodeCache::RegionLockRead(void* address, size_t length) {
 }
 
 bool A64CodeCache::RegionUnlockWrite(void* address, size_t length) {
-// Same vm_protect max-widen as RegionSetExec — iOS 16 requires
+  bool RegionUnlockWrite(void* address, size_t length) {
+  // Same vm_protect max-widen as RegionSetExec — iOS 16 requires
   // EXECUTE in the max protections before we can later flip to RX.
   uintptr_t aligned_start = 0;
   size_t aligned_length = 0;
@@ -397,9 +398,8 @@ bool A64CodeCache::RegionUnlockWrite(void* address, size_t length) {
       address, length, xe::memory::PageAccess::kReadWrite, "RW transition");
 }
 
-
 bool A64CodeCache::RegionSetExec(void* address, size_t length) {
- // On iOS 16 (non-TXM), mprotect to PROT_EXEC can be refused if the
+  // On iOS 16 (non-TXM), mprotect to PROT_EXEC can be refused if the
   // Mach max protections don't include VM_PROT_EXECUTE.  Try widening
   // the max protections first via vm_protect(TRUE), then set current.
   uintptr_t aligned_start = 0;
@@ -465,13 +465,7 @@ bool A64CodeCache::InitializeLegacyJit() {
     generated_code_execute_base_ = nullptr;
     return false;
   }
-  if (mprotect(generated_code_write_base_, kGeneratedCodeSize,
-             PROT_READ | PROT_WRITE) != 0) {
-                XELOGE("iOS JIT: initial RW flip failed, errno={}", errno);
-                munmap(generated_code_write_base_, kGeneratedCodeSize);
-                generated_code_write_base_ = nullptr;
-                return false;
-  }
+
   // Writes use W^X toggles at the page level via mprotect.
   generated_code_execute_base_ = generated_code_write_base_;
   generated_code_uses_mprotect_flip_ = true;
@@ -489,8 +483,8 @@ bool A64CodeCache::InitializeLuckNoTXMJit() {
   // Step 1: allocate the RW region (2× size to work around iOS 18 vm_remap
   // startup issues).
   generated_code_write_base_ = reinterpret_cast<uint8_t*>(
-      mmap(nullptr, kGeneratedCodeSize * 2, PROT_READ | PROT_EXEC,
-           MAP_PRIVATE | MAP_ANON, -1, 0));
+      mmap(nullptr, kGeneratedCodeSize * 2, PROT_READ | PROT_WRITE,
+           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
 
   if (generated_code_write_base_ == MAP_FAILED) {
     XELOGE("LuckNoTXM: RW mmap failed");
@@ -575,7 +569,7 @@ bool A64CodeCache::InitializeLuckNoTXMJit() {
 bool A64CodeCache::InitializeLuckTXMJit() {
   // Allocate a large RX region upfront (512 MiB).
   rx_region_ = mmap(nullptr, kExecutableRegionSize, PROT_READ | PROT_EXEC,
-                    MAP_PRIVATE | MAP_ANON, -1, 0);
+                    MAP_ANON | MAP_PRIVATE, -1, 0);
   if (!rx_region_ || rx_region_ == MAP_FAILED) {
     XELOGE("LuckTXM: RX region allocation failed");
     rx_region_ = nullptr;
@@ -936,21 +930,16 @@ bool A64CodeCache::Initialize() {
       // For W^X flips, prefer starting from an RX mapping (so EXECUTE is
       // present in the mapping's max protections on iOS), then temporarily
       // switching pages to RW for writes.
-      if (generated_code_write_base_ == MAP_FAILED) {
-          generated_code_write_base_ = nullptr;
-          XELOGE("Unable to allocate iOS JIT code cache (RX mapping)");
-          return false;
-      }
-      // Pre-set to RW; individual PlaceGuestCode calls will flip back to RX.
-      // Starting from RX ensures execute is in the Mach max protections.
+      generated_code_write_base_ = reinterpret_cast<uint8_t*>(
+          mmap(nullptr, kGeneratedCodeSize, PROT_READ | PROT_EXEC,
+               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
       if (mprotect(generated_code_write_base_, kGeneratedCodeSize,
-                  PROT_READ | PROT_WRITE) != 0) {
-          XELOGE("iOS JIT: initial RW flip failed, errno={}", errno);
-          munmap(generated_code_write_base_, kGeneratedCodeSize);
-          generated_code_write_base_ = nullptr;
-          return false;
+             PROT_READ | PROT_WRITE) != 0) {
+        generated_code_write_base_ = nullptr;
+        XELOGE("Unable to allocate iOS JIT code cache (RX mapping)");
+        return false;
       }
-      generated_code_execute_base_ = generated_code_write_base_;
+      generated_code_execute_base_       = generated_code_write_base_;
       generated_code_uses_mprotect_flip_ = true;
       if (use_txm_broker_path) {
         XELOGI("iOS JIT mprotect-flip fallback active (TXM/broker path)");
