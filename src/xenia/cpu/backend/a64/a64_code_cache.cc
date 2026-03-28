@@ -476,7 +476,13 @@ bool A64CodeCache::InitializeLegacyJit() {
     generated_code_execute_base_ = nullptr;
     return false;
   }
-
+  if (mprotect(generated_code_write_base_, kGeneratedCodeSize,
+             PROT_READ | PROT_WRITE) != 0) {
+                XELOGE("iOS JIT: initial RW flip failed, errno={}", errno);
+                munmap(generated_code_write_base_, kGeneratedCodeSize);
+                generated_code_write_base_ = nullptr;
+                return false;
+  }
   // Writes use W^X toggles at the page level via mprotect.
   generated_code_write_base_         = generated_code_execute_base_;
   generated_code_uses_mprotect_flip_ = true;
@@ -494,7 +500,7 @@ bool A64CodeCache::InitializeLuckNoTXMJit() {
   // Step 1: allocate the RW region (2× size to work around iOS 18 vm_remap
   // startup issues).
   generated_code_write_base_ = reinterpret_cast<uint8_t*>(
-      mmap(nullptr, kGeneratedCodeSize * 2, PROT_READ | PROT_WRITE,
+      mmap(nullptr, kGeneratedCodeSize * 2, PROT_READ | PROT_EXEC,
            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
 
   if (generated_code_write_base_ == MAP_FAILED) {
