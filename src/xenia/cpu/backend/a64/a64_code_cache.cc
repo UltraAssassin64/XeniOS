@@ -458,7 +458,7 @@ bool A64CodeCache::InitializeJitType() {
 bool A64CodeCache::InitializeLegacyJit() {
   generated_code_execute_base_ = reinterpret_cast<uint8_t*>(
       mmap(nullptr, kGeneratedCodeSize, PROT_READ | PROT_EXEC,
-           MAP_ANON | MAP_PRIVATE, -1, 0));
+           MAP_PRIVATE | MAP_ANON, -1, 0));
 
   if (generated_code_execute_base_ == MAP_FAILED) {
     XELOGE("Legacy JIT: mmap RX allocation failed");
@@ -490,7 +490,7 @@ bool A64CodeCache::InitializeLuckNoTXMJit() {
   // startup issues).
   generated_code_write_base_ = reinterpret_cast<uint8_t*>(
       mmap(nullptr, kGeneratedCodeSize * 2, PROT_READ | PROT_EXEC,
-           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+           MAP_PRIVATE | MAP_ANON, -1, 0));
 
   if (generated_code_write_base_ == MAP_FAILED) {
     XELOGE("LuckNoTXM: RW mmap failed");
@@ -575,7 +575,7 @@ bool A64CodeCache::InitializeLuckNoTXMJit() {
 bool A64CodeCache::InitializeLuckTXMJit() {
   // Allocate a large RX region upfront (512 MiB).
   rx_region_ = mmap(nullptr, kExecutableRegionSize, PROT_READ | PROT_EXEC,
-                    MAP_ANON | MAP_PRIVATE, -1, 0);
+                    MAP_PRIVATE | MAP_ANON, -1, 0);
   if (!rx_region_ || rx_region_ == MAP_FAILED) {
     XELOGE("LuckTXM: RX region allocation failed");
     rx_region_ = nullptr;
