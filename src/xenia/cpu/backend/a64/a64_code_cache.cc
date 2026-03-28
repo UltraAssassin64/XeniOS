@@ -381,51 +381,40 @@ bool A64CodeCache::RegionLockRead(void* address, size_t length) {
 }
 
 bool A64CodeCache::RegionUnlockWrite(void* address, size_t length) {
-  if (jit_type_ == JitType::Legacy) {
-    // Legacy: toggle per-page via mprotect (W^X).
-    return SetPageAlignedAccess(address, length,
-                                xe::memory::PageAccess::kReadWrite);
-  } else if (jit_type_ == JitType::LuckNoTXM ||
-             jit_type_ == JitType::LuckTXM) {
-    // Both Luck paths use the external-prepare fallback.
-              uintptr_t aligned_start = 0;
-              size_t aligned_length = 0;
-              if (GetPageAlignedRange(address, length, aligned_start, aligned_length)
-                  && aligned_length) {
-                constexpr vm_prot_t kMaxExec =
-                    VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-                vm_protect(mach_task_self(),
-                          static_cast<vm_address_t>(aligned_start),
-                          aligned_length, TRUE, kMaxExec);
-              }
-              return SetPageAlignedAccessWithExternalPrepareFallback(
-                  address, length, xe::memory::PageAccess::kReadWrite, "RW transition");
-      }
-  return false;
+// Same vm_protect max-widen as RegionSetExec — iOS 16 requires
+  // EXECUTE in the max protections before we can later flip to RX.
+  uintptr_t aligned_start = 0;
+  size_t aligned_length = 0;
+  if (GetPageAlignedRange(address, length, aligned_start, aligned_length)
+      && aligned_length) {
+    constexpr vm_prot_t kMaxExec =
+        VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+    vm_protect(mach_task_self(),
+               static_cast<vm_address_t>(aligned_start),
+               aligned_length, TRUE, kMaxExec);
+  }
+  return SetPageAlignedAccessWithExternalPrepareFallback(
+      address, length, xe::memory::PageAccess::kReadWrite, "RW transition");
 }
 
+
 bool A64CodeCache::RegionSetExec(void* address, size_t length) {
-  if (jit_type_ == JitType::Legacy) {
-    // Legacy: toggle per-page via mprotect.
-    return SetPageAlignedAccess(address, length,
-                                xe::memory::PageAccess::kExecuteReadOnly);
-  } else if (jit_type_ == JitType::LuckNoTXM ||
-             jit_type_ == JitType::LuckTXM) {
-              uintptr_t aligned_start = 0;
-              size_t aligned_length = 0;
-              if (GetPageAlignedRange(address, length, aligned_start, aligned_length)
-                  && aligned_length) {
-                constexpr vm_prot_t kMaxExec =
-                    VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
-                vm_protect(mach_task_self(),
-                          static_cast<vm_address_t>(aligned_start),
-                          aligned_length, TRUE, kMaxExec);
-              }
-              return SetPageAlignedAccessWithExternalPrepareFallback(
-                  address, length, xe::memory::PageAccess::kExecuteReadOnly,
-                  "RX transition");
-      }
-  return false;
+ // On iOS 16 (non-TXM), mprotect to PROT_EXEC can be refused if the
+  // Mach max protections don't include VM_PROT_EXECUTE.  Try widening
+  // the max protections first via vm_protect(TRUE), then set current.
+  uintptr_t aligned_start = 0;
+  size_t aligned_length = 0;
+  if (GetPageAlignedRange(address, length, aligned_start, aligned_length)
+      && aligned_length) {
+    constexpr vm_prot_t kMaxExec =
+        VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+    vm_protect(mach_task_self(),
+               static_cast<vm_address_t>(aligned_start),
+               aligned_length, TRUE, kMaxExec);
+  }
+  return SetPageAlignedAccessWithExternalPrepareFallback(
+      address, length, xe::memory::PageAccess::kExecuteReadOnly,
+      "RX transition");
 }
 
 // ===========================================================================
