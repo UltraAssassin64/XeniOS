@@ -1128,7 +1128,12 @@ HostToGuestThunk A64ThunkEmitter::EmitHostToGuestThunk() {
   LDR(GetMembaseReg(), GetContextReg(),
       offsetof(ppc::PPCContext, virtual_membase));
   MOV(X0, X2);  // return address
+  ADR(X17, return_label);
+  MOV(X30, X17);
+  BR(X3);
   BLR(X16);
+
+  return_label:
 
   EmitLoadNonvolatileRegs();
 
@@ -1183,7 +1188,12 @@ GuestToHostThunk A64ThunkEmitter::EmitGuestToHostThunk() {
 
   MOV(X16, X0);              // function
   MOV(X0, GetContextReg());  // context
+  ADR(X17, return_label);
+  MOV(X30, X17);
+  BR(X3);
   BLR(X16);
+
+  return_label:
 
   EmitLoadVolatileRegs();
   // Reload membase in case the host clobbered it.
@@ -1250,7 +1260,11 @@ ResolveFunctionThunk A64ThunkEmitter::EmitResolveFunctionThunk() {
   MOV(X0, GetContextReg());  // context
   MOV(W1, W17);
   MOV(X16, reinterpret_cast<uint64_t>(&ResolveFunction));
+  ADR(X17, return_label);
+  MOV(X30, X17);
   BLR(X16);
+
+  return_label:
   MOV(X16, X0);
 
   EmitLoadVolatileRegs();
@@ -1326,7 +1340,10 @@ StackSyncThunk A64ThunkEmitter::EmitStackSyncThunk() {
   // Restore host frame and stack.
   MOV(X29, X5);
   MOV(SP, X4);
+  MOV(X30, X3);
   BR(X3);
+  RET();
+  
 
   l(no_sync);
   RET();
@@ -1426,6 +1443,7 @@ StackSyncThunk A64ThunkEmitter::EmitStackSyncHelper() {
   ADD(X7, X3, X7);
   LDR(X13, X7, offsetof(A64BackendStackpoint, host_sp));
   LDR(X14, X7, offsetof(A64BackendStackpoint, host_fp));
+  LDR(X30, X7, offsetof(A64BackendStackpoint, host_lr));
   MOV(SP, X13);
   MOV(X29, X14);
   // Adjust for caller stack size.
@@ -1466,7 +1484,8 @@ void A64ThunkEmitter::EmitSaveVolatileRegs() {
   STP(X9, X10, SP, offsetof(StackLayout::Thunk, r[8]));
   STP(X11, X12, SP, offsetof(StackLayout::Thunk, r[10]));
   STP(X13, X14, SP, offsetof(StackLayout::Thunk, r[12]));
-  STP(X15, X30, SP, offsetof(StackLayout::Thunk, r[14]));
+  STR(X30, SP, offsetof(StackLayout::Thunk, lr));
+  STP(X15, XZR, SP, offsetof(StackLayout::Thunk, r[14]));
   // Preserve context/membase registers explicitly in case host code clobbers
   // them.
   STR(X27, SP, offsetof(StackLayout::Thunk, r[16]));
@@ -1502,6 +1521,7 @@ void A64ThunkEmitter::EmitLoadVolatileRegs() {
   LDP(X9, X10, SP, offsetof(StackLayout::Thunk, r[8]));
   LDP(X11, X12, SP, offsetof(StackLayout::Thunk, r[10]));
   LDP(X13, X14, SP, offsetof(StackLayout::Thunk, r[12]));
+  LDR(X30, SP, offsetof(StackLayout::Thunk, lr));
   LDP(X15, X30, SP, offsetof(StackLayout::Thunk, r[14]));
   LDR(X27, SP, offsetof(StackLayout::Thunk, r[16]));
   LDR(X28, SP, offsetof(StackLayout::Thunk, r[17]));
