@@ -22,65 +22,38 @@ namespace a64 {
 class StackLayout {
  public:
   /**
-   * Stack Layout
-   * ----------------------------
-   * NOTE: stack must always be 16b aligned.
+   * Thunk stack layout (host ↔ guest transitions).
+   * NOTE: must stay 16-byte aligned at all times.
    *
-   * Thunk stack:
-   *      Non-Volatile         Volatile
-   *  +------------------+------------------+
-   *  | arg temp, 4 * 8  | arg temp, 4 * 8  | sp + 0x000
-   *  |                  |                  |
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | rbx              | (unused)         | sp + 0x018
-   *  +------------------+------------------+
-   *  | rbp              | X1               | sp + 0x020
-   *  +------------------+------------------+
-   *  | rcx (Win32)      | X2               | sp + 0x028
-   *  +------------------+------------------+
-   *  | rsi (Win32)      | X3               | sp + 0x030
-   *  +------------------+------------------+
-   *  | rdi (Win32)      | X4               | sp + 0x038
-   *  +------------------+------------------+
-   *  | r12              | X5               | sp + 0x040
-   *  +------------------+------------------+
-   *  | r13              | X6               | sp + 0x048
-   *  +------------------+------------------+
-   *  | r14              | X7               | sp + 0x050
-   *  +------------------+------------------+
-   *  | r15              | X8               | sp + 0x058
-   *  +------------------+------------------+
-   *  | xmm6 (Win32)     | X9               | sp + 0x060
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm7 (Win32)     | X10              | sp + 0x070
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm8 (Win32)     | X11              | sp + 0x080
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm9 (Win32)     | X12              | sp + 0x090
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm10 (Win32)    | X13              | sp + 0x0A0
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm11 (Win32)    | X14              | sp + 0x0B0
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm12 (Win32)    | X15              | sp + 0x0C0
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm13 (Win32)    | X16              | sp + 0x0D0
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm14 (Win32)    | X17              | sp + 0x0E0
-   *  |                  |                  |
-   *  +------------------+------------------+
-   *  | xmm15 (Win32)    | X18              | sp + 0x0F0
-   *  |                  |                  |
-   *  +------------------+------------------+
+   * Memory map (offsets from post-allocation SP):
+   *
+   *   sp+0x000  arg_temp[0..3]   4 × uint64_t = 32 bytes  (scratch)
+   *   sp+0x020  r[0..17]        18 × uint64_t = 144 bytes
+   *   sp+0x0B0  xmm[0..30]      31 × vec128_t = 496 bytes
+   *   ─────────────────────────────────────────────────────
+   *   Total: 672 bytes  (16-byte aligned)
+   *
+   * Non-volatile register save (EmitSaveNonvolatileRegs):
+   *   r[0..1]   = x19, x20   sp+0x020
+   *   r[2..3]   = x21, x22   sp+0x030
+   *   r[4..5]   = x23, x24   sp+0x040
+   *   r[6..7]   = x25, x26   sp+0x050
+   *   r[8..9]   = x27, x28   sp+0x060
+   *   r[10..11] = x29, x30   sp+0x070   ← x30 (LR) lives at sp+0x078
+   *   r[12]     = x17        sp+0x080
+   *   xmm[0..3] = d8..d15               sp+0x0B0
+   *
+   * Volatile register save (EmitSaveVolatileRegs):
+   *   r[0..1]   = x1,  x2    sp+0x020
+   *   r[2..3]   = x3,  x4    sp+0x030
+   *   r[4..5]   = x5,  x6    sp+0x040
+   *   r[6..7]   = x7,  x8    sp+0x050
+   *   r[8..9]   = x9,  x10   sp+0x060
+   *   r[10..11] = x11, x12   sp+0x070
+   *   r[12..13] = x13, x14   sp+0x080
+   *   r[14..15] = x15, x30   sp+0x090   ← x30 (LR) lives at sp+0x098
+   *   r[16..17] = x27, x28   sp+0x0A0
+   *   xmm[0..30]= q1..q31               sp+0x0B0
    */
   XEPACKEDSTRUCT(Thunk, {
     uint64_t arg_temp[4];
@@ -91,34 +64,44 @@ class StackLayout {
                 "sizeof(Thunk) must be a multiple of 16!");
   static const size_t THUNK_STACK_SIZE = sizeof(Thunk);
 
+  // SP-relative byte offset where x30 (LR) is stored by each save path.
+  // Used by EmitFunctionInfo::lr_save_offset so the DWARF encoder can
+  // tell libunwind where the host return address lives in thunk frames.
+  //
+  //   Non-volatile: STP(X29, X30, SP, offsetof(Thunk, r[10]))
+  //     → x30 at SP + offsetof(r[10]) + 8
+  //     = SP + (32 + 10*8) + 8 = SP + 0x78
+  static const size_t THUNK_LR_NONVOLATILE = 0x78;  // used by h2g & resolve
+
+  //   Volatile:     STP(X15, X30, SP, offsetof(Thunk, r[14]))
+  //     → x30 at SP + offsetof(r[14]) + 8
+  //     = SP + (32 + 14*8) + 8 = SP + 0x98
+  static const size_t THUNK_LR_VOLATILE = 0x98;  // used by g2h
+
   /**
+   * Guest stack layout.
    *
+   *   sp+0x000  arg temp, 3 × 8 = 24 bytes
+   *   sp+0x020  scratch, 48 bytes  (kStashOffset)
+   *   sp+0x050  X0 / context ptr   (GUEST_CTX_HOME)
+   *   sp+0x058  guest return addr  (GUEST_RET_ADDR)
+   *   sp+0x060  call return addr   (GUEST_CALL_RET_ADDR)
+   *   sp+0x068  host x30 / LR      (HOST_RET_ADDR)
+   *   sp+0x070  locals ...
+   *   ─────────────────────────────────────────────────────
+   *   Total: 112 bytes  (16-byte aligned)
    *
-   * Guest stack:
-   *  +------------------+
-   *  | arg temp, 3 * 8  | sp + 0
-   *  |                  |
-   *  |                  |
-   *  +------------------+
-   *  | scratch, 48b     | sp + 32(kStashOffset)
-   *  |                  |
-   *  +------------------+
-   *  | X0  / context    | sp + 80
-   *  +------------------+
-   *  | guest ret addr   | sp + 88
-   *  +------------------+
-   *  | call ret addr    | sp + 96
-   *  +------------------+
-   *    ... locals ...
-   *  +------------------+
-   *  | (return address) |
-   *  +------------------+
-   *
+   * HOST_RET_ADDR: the guest prolog stores x30 here so the host call-chain
+   * can be unwound by libunwind through guest frames. The DWARF encoder in
+   * a64_code_cache_posix.cc references this constant to generate the correct
+   * DW_CFA_offset rule for the LR register.
    */
-  static const size_t GUEST_STACK_SIZE = 96 + 16;
-  static const size_t GUEST_CTX_HOME = 80;
-  static const size_t GUEST_RET_ADDR = 88;
+  static const size_t GUEST_STACK_SIZE    = 96 + 16;
+  static const size_t GUEST_CTX_HOME      = 80;
+  static const size_t GUEST_RET_ADDR      = 88;
   static const size_t GUEST_CALL_RET_ADDR = 96;
+  // Offset from post-allocation SP where the guest prolog saves x30.
+  static const size_t HOST_RET_ADDR       = 104;
 };
 
 }  // namespace a64
