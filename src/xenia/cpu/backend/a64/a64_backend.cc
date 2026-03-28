@@ -44,6 +44,7 @@
 #include "xenia/cpu/processor.h"
 #include "xenia/cpu/stack_walker.h"
 #include "xenia/cpu/xex_module.h"
+#include "xenia/cpu/hir/label.h"
 
 DECLARE_bool(record_mmio_access_exceptions);
 DECLARE_bool(log_mmio_recording);
@@ -1443,7 +1444,6 @@ StackSyncThunk A64ThunkEmitter::EmitStackSyncHelper() {
   ADD(X7, X3, X7);
   LDR(X13, X7, offsetof(A64BackendStackpoint, host_sp));
   LDR(X14, X7, offsetof(A64BackendStackpoint, host_fp));
-  LDR(X30, X7, offsetof(A64BackendStackpoint, host_lr));
   MOV(SP, X13);
   MOV(X29, X14);
   // Adjust for caller stack size.
@@ -1521,8 +1521,8 @@ void A64ThunkEmitter::EmitLoadVolatileRegs() {
   LDP(X9, X10, SP, offsetof(StackLayout::Thunk, r[8]));
   LDP(X11, X12, SP, offsetof(StackLayout::Thunk, r[10]));
   LDP(X13, X14, SP, offsetof(StackLayout::Thunk, r[12]));
-  LDR(X30, SP, offsetof(StackLayout::Thunk, lr));
-  LDP(X15, X30, SP, offsetof(StackLayout::Thunk, r[14]));
+  LDP(X15, X16, SP, offsetof(StackLayout::Thunk, r[14]));
+  MOV(X30, X16);
   LDR(X27, SP, offsetof(StackLayout::Thunk, r[16]));
   LDR(X28, SP, offsetof(StackLayout::Thunk, r[17]));
 
