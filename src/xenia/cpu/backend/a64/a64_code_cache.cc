@@ -473,7 +473,7 @@ bool A64CodeCache::InitializeLegacyJit() {
                 return false;
   }
   // Writes use W^X toggles at the page level via mprotect.
-  generated_code_write_base_         = generated_code_execute_base_;
+  generated_code_execute_base_ = generated_code_write_base_;
   generated_code_uses_mprotect_flip_ = true;
 
   XELOGI("Legacy JIT initialized: RX={:X} (W^X toggles enabled)",
