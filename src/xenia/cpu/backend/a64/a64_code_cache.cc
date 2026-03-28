@@ -417,6 +417,8 @@ bool A64CodeCache::RegionSetExec(void* address, size_t length) {
 }
 
 
+#endif  // XE_PLATFORM_IOS
+
 // ===========================================================================
 // A64CodeCache::Initialize
 //
@@ -431,10 +433,6 @@ bool A64CodeCache::Initialize() {
   generated_code_uses_mprotect_flip_     = false;
 
 #ifdef XE_PLATFORM_IOS
-  if (!InitializeJitType()) {
-    XELOGE("Failed to initialize iOS JIT");
-    return false;
-  }
   if (xe::memory::IsFastmemAvailable()) {
     XELOGI("Using fastmem for optimized guest memory access");
   } else {
