@@ -11,7 +11,6 @@ jobs:
 
   build-ios:
     name: Build iOS arm64
-    needs: lint
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
