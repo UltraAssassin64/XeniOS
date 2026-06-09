@@ -51,11 +51,12 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
       
       - name: Fetch MoltenVK
-        run: ./tools/fetch_moltenvk.py --platform=ios
+        run: |
+          ./tools/fetch_moltenvk.py --platform=ios
       
       - name: Building app
-      - shell: bash
-      - run: |
+        shell: bash
+        run: |
           args=(--skip-macos-arm64 --skip-macos-x86_64 --skip-macos-universal --ios-min VERSION 16.0 --config release --ios-bundle-id com.UltraAssassin64.notxenios)
           ./tools/build_apple_release.sh "${args[@]}" 
 
