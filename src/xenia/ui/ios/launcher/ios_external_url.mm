@@ -322,7 +322,10 @@ NSURL* xe_stikdebug_enable_jit_url_for_bundle_identifier(
     return nil;
   }
   NSURLComponents* components = [[[NSURLComponents alloc] init] autorelease];
-  components.scheme = @"stikjit";
+  if (@available(iOS 18, *)){
+    components.scheme = @"stikjit";
+  }
+  else{ components.scheme = @"apple-magnifier";}
   components.host = @"enable-jit";
   components.queryItems = @[ [NSURLQueryItem queryItemWithName:@"bundle-id"
                                                          value:bundle_identifier] ];

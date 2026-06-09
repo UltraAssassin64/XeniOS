@@ -483,10 +483,10 @@ static std::vector<IOSConfigSection> BuildSystemSections() {
       "These options are stored locally in the iOS frontend rather than xenios.config.toml.";
   AddUserDefaultBoolSetting(
       automation.items, kXeniaAutoOpenStikDebugOnLaunchPreferenceKey,
-      "Auto-Enable JIT via StikDebug",
+      "Auto-Enable JIT via StikDebug/TrollStore",
       "On app open, jump into StikDebug with XeniOS's bundle ID so it can enable JIT and "
       "relaunch XeniOS. Requires StikDebug, a valid pairing file, and your normal VPN / loopback "
-      "setup.",
+      "setup. If on iOS < 18, will default to TrollStore.",
       false);
   PushIfNotEmpty(sections, std::move(automation));
 

@@ -1,0 +1,67 @@
+name: Build iPhone Release
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup
+        run: |
+          pipx install clang-format==21.1.8
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Lint
+        run: ./xenia-build.py lint --all
+  build-ios:
+    name: Build iOS arm64
+    needs: lint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Apple build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          retry() {
+            local attempts=0
+            until "$@"; do
+              attempts=$((attempts + 1))
+              if [ "$attempts" -ge 5 ]; then
+                return 1
+              fi
+              sleep 5
+            done
+          }
+
+          brew install ninja
+
+          retry git submodule update --init --depth=1 --recursive -j"$(sysctl -n hw.ncpu)"
+          retry git -C third_party/DirectXShaderCompiler submodule update --init --depth=1 \
+            external/SPIRV-Headers external/SPIRV-Tools
+
+          ./xenia-build.py fetchdata
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+      
+      - name: Fetch MoltenVK
+        run: ./tools/fetch_moltenvk.py --platform=ios
+      
+      - name: Building app
+      - shell: bash
+          args=(--skip-macos-arm64 --skip-macos-x86_64 --skip-macos-universal --ios-min VERSION 16.0 --config release --ios-bundle-id com.UltraAssassin64.notxenios)
+          ./tools/build_apple_release.sh "${args[@]}" 
+
+      - name: Upload published artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ xenios_ios_iphone_ipad }}"
+          path: "${{ scratch/artifacts/xenios_ios_iphone_ipad.ipa }}"
+          if-no-files-found: error
+          overwrite: true

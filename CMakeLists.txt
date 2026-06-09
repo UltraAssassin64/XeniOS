@@ -17,7 +17,7 @@ endif()
 # Must be set before project() so the toolchain bakes the deployment target into
 # every compile/link; setting it later only updates the variable.
 if(XE_PLATFORM_IOS)
-  set(CMAKE_OSX_DEPLOYMENT_TARGET "18.0" CACHE STRING "Minimum iOS version")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "16.0" CACHE STRING "Minimum iOS version")
 elseif(XE_PLATFORM_MACOS)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS version")
 endif()
@@ -97,7 +97,7 @@ option(XENIA_ENABLE_PROFILER "Enable profiler (UI is Debug-only)" OFF)
 option(XENIA_ENABLE_ITRACE "Enable JIT per-instruction tracing to the log (slow)" OFF)
 option(XENIA_ENABLE_DTRACE "Enable JIT per-operation data tracing to the log (very slow)" OFF)
 option(XENIA_ENABLE_FTRACE "Enable JIT per-function-call tracing to the log" OFF)
-option(XENIA_ENABLE_IOS_MOLTENVK "Enable the optional MoltenVK backend in iOS builds" OFF)
+option(XENIA_ENABLE_IOS_MOLTENVK "Enable the optional MoltenVK backend in iOS builds" ON)
 
 if(XENIA_ENABLE_PROFILER)
   # UI is Debug-only — shutdown dump spams the log otherwise.
