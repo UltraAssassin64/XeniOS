@@ -50,7 +50,7 @@ jobs:
       - name: Building app
         shell: bash
         run: |
-          args=(--skip-macos-arm64 --skip-macos-x86_64 --skip-macos-universal --ios-min VERSION 16.0 --config release --ios-bundle-id com.UltraAssassin64.notxenios)
+          args=(--skip-macos-arm64 --skip-macos-x86_64 --skip-macos-universal --ios-min 16.0 --config release --ios-bundle-id com.UltraAssassin64.notxenios)
           ./tools/build_apple_release.sh "${args[@]}" 
 
       - name: Upload published artifact
