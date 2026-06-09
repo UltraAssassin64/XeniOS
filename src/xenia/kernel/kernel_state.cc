@@ -11,13 +11,6 @@
 #include <ranges>
 #include <cstdlib>
 
-extern "C" {
-    __attribute__((weak, visibility("default")))
-    [[noreturn]] void quick_exit(int status) noexcept {
-        _Exit(status);
-    }
-}
-
 #include "xenia/kernel/kernel_state.h"
 
 #include "xenia/base/byte_stream.h"
@@ -26,6 +19,7 @@ extern "C" {
 #include "xenia/base/threading.h"
 #if XE_PLATFORM_IOS
 #include "xenia/cpu/processor.h"
+#include "xenia/compat_shims.h"
 #endif  // XE_PLATFORM_IOS
 #include "xenia/emulator.h"
 #include "xenia/hid/input_system.h"

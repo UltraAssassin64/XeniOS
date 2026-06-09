@@ -13,12 +13,7 @@
 #include <memory>
 #include <string>
 #include <thread>
-extern "C" {
-    __attribute__((weak, visibility("default")))
-    [[noreturn]] void quick_exit(int status) noexcept {
-        _Exit(status);
-    }
-}
+
 
 #include "xenia/app/discord/discord_presence.h"
 #include "xenia/app/emulator_window.h"
@@ -40,7 +35,7 @@ extern "C" {
 #include "xenia/ui/windowed_app.h"
 #include "xenia/ui/windowed_app_context.h"
 #include "xenia/ui/wx_locale.h"
-
+#include "xenia/compat_shims.h"
 // Available audio systems:
 #include "xenia/apu/nop/nop_audio_system.h"
 #if !XE_PLATFORM_ANDROID

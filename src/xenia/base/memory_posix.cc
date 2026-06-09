@@ -24,15 +24,11 @@
 #include <sstream>
 #include <string>
 
-extern "C" {
-    __attribute__((weak, visibility("default")))
-    [[noreturn]] void quick_exit(int status) noexcept {
-        _Exit(status);
-    }
-}
+
 
 #if XE_PLATFORM_APPLE
 #include <mach/mach.h>
+#include "xenia/compat_shims.h"
 #if XE_PLATFORM_MAC
 #include <mach/mach_vm.h>
 #endif
