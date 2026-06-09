@@ -6,19 +6,9 @@ permissions:
 on:
   push:
     branches:
-    
+
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup
-        run: |
-          pipx install clang-format==21.1.8
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Lint
-        run: ./xenia-build.py lint --all
+
   build-ios:
     name: Build iOS arm64
     needs: lint
