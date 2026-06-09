@@ -13,6 +13,12 @@
 #include <memory>
 #include <string>
 #include <thread>
+extern "C" {
+    __attribute__((weak, visibility("default")))
+    [[noreturn]] void quick_exit(int status) noexcept {
+        _Exit(status);
+    }
+}
 
 #include "xenia/app/discord/discord_presence.h"
 #include "xenia/app/emulator_window.h"

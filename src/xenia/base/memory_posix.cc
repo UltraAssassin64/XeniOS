@@ -24,6 +24,13 @@
 #include <sstream>
 #include <string>
 
+extern "C" {
+    __attribute__((weak, visibility("default")))
+    [[noreturn]] void quick_exit(int status) noexcept {
+        _Exit(status);
+    }
+}
+
 #if XE_PLATFORM_APPLE
 #include <mach/mach.h>
 #if XE_PLATFORM_MAC
