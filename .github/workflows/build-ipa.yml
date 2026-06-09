@@ -55,14 +55,14 @@ jobs:
       
       - name: Building app
       - shell: bash
-      - run:
+      - run: |
           args=(--skip-macos-arm64 --skip-macos-x86_64 --skip-macos-universal --ios-min VERSION 16.0 --config release --ios-bundle-id com.UltraAssassin64.notxenios)
           ./tools/build_apple_release.sh "${args[@]}" 
 
       - name: Upload published artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ xenios_ios_iphone_ipad }}"
-          path: "${{ scratch/artifacts/xenios_ios_iphone_ipad.ipa }}"
+          name: "xenios_ios_iphone_ipad"
+          path: "scratch/artifacts/xenios_ios_iphone_ipad.ipa"
           if-no-files-found: error
           overwrite: true
