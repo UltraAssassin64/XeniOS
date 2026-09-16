@@ -16,7 +16,7 @@ project("xbyak_aarch64")
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_label.h",
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_meta_mnemonic.h",
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_mnemonic_def.h",
-    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_perf.h,
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_perf.h",
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_reg.h",
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_util.h",
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_version.h",
