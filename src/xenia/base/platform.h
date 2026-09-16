@@ -27,18 +27,15 @@
 #include <TargetConditionals.h>
 #endif
 
-// Apple platform hierarchy:
-//   XE_PLATFORM_APPLE  - all Apple platforms (macOS, iOS, etc.)
-//   XE_PLATFORM_MAC    - macOS only
-//   XE_PLATFORM_IOS    - iOS/iPadOS only
-// Note: TARGET_OS_MAC is 1 on ALL Apple platforms (including iOS), so we must
-// check TARGET_OS_IOS / TARGET_OS_IPHONE first and explicitly exclude them.
 #if defined(__APPLE__)
 #define XE_PLATFORM_APPLE 1
-#if TARGET_OS_IOS || TARGET_OS_IPHONE
+#if (defined(TARGET_OS_IOS) && TARGET_OS_IOS) || \
+    (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 #define XE_PLATFORM_IOS 1
-#elif TARGET_OS_MAC && !TARGET_OS_IOS && !TARGET_OS_IPHONE
+#elif defined(TARGET_OS_MAC) && TARGET_OS_MAC
 #define XE_PLATFORM_MAC 1
+#else
+#error Unsupported Apple target OS.
 #endif
 #elif defined(WIN32) || defined(_WIN32)
 #define XE_PLATFORM_WIN32 1
@@ -201,5 +198,7 @@ constexpr char kGuestPathSeparator = '\\';
 }  // namespace xe
 #if XE_ARCH_AMD64 == 1
 #include "platform_amd64.h"
+#elif XE_ARCH_ARM64 == 1
+#include "platform_arm64.h"
 #endif
 #endif  // XENIA_BASE_PLATFORM_H_
