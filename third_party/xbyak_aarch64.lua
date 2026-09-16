@@ -1,6 +1,6 @@
 group("third_party")
 project("xbyak_aarch64")
-  uuid("aa9321a-4bc6-54c3-6a4c-15zz538ba2c7")
+  uuid("595f3f3e-f5e8-489a-bd0f-289d0495bc08")
   kind("StaticLib")
   language("C++")
   includedirs {
