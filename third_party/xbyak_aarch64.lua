@@ -1,0 +1,21 @@
+group("third_party")
+project("xbyak_aarch64")
+  uuid("aa9321a-4bc6-54c3-6a4c-15zz538ba2c7")
+  kind("StaticLib")
+  language("C++")
+
+  files({
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_adr.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_code_array.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_err.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_gen.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_inner.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_label.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_meta_mnemonic.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_mnemonic_def.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_perf.h,
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_reg.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_util.h",
+    "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_version.h",
+  })

@@ -255,6 +255,7 @@ project("xenia-app")
       "CoreHaptics.framework",
       "CoreGraphics.framework",
       "CoreBluetooth.framework",
+      "xbyak_aarch64",
     })
     xcodebuildsettings({
       ["INFOPLIST_FILE"] = path.getabsolute("Info_ios.plist"),

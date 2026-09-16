@@ -494,6 +494,9 @@ if is_ios_target() then
       'src/xenia/ios/FastmemManager.h',
       'src/xenia/ios/FastmemManager.mm',
     })
+    links({
+      "xbyak_aarch64",
+    })
     removefatalwarnings("All")
   filter({})
 end
