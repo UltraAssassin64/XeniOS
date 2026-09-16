@@ -3,7 +3,9 @@ project("xbyak_aarch64")
   uuid("aa9321a-4bc6-54c3-6a4c-15zz538ba2c7")
   kind("StaticLib")
   language("C++")
-
+  includedirs {
+    "xbyak_aarch64",
+  }
   files({
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64.h",
     "xbyak_aarch64/xbyak_aarch64/xbyak_aarch64_adr.h",

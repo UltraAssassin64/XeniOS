@@ -494,9 +494,6 @@ if is_ios_target() then
       'src/xenia/ios/FastmemManager.h',
       'src/xenia/ios/FastmemManager.mm',
     })
-    links({
-      "xbyak_aarch64",
-    })
     removefatalwarnings("All")
   filter({})
 end
@@ -826,6 +823,7 @@ workspace("xenia")
   include("third_party/mspack.lua")
   include("third_party/snappy.lua")
   include("third_party/xxhash.lua")
+  include("third_party/xbyak_aarch64.lua")
   include("third_party/zarchive.lua")
   include("third_party/zstd.lua")
   include("third_party/zlib-ng.lua")
