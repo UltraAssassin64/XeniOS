@@ -478,7 +478,7 @@ if is_ios_target() then
   filter("platforms:iOS-*")
     system("ios")
     xcodebuildsettings({
-      ["IPHONEOS_DEPLOYMENT_TARGET"] = "17.0",
+      ["IPHONEOS_DEPLOYMENT_TARGET"] = "16.0",
       ["SDKROOT"] = "iphoneos",
       ["TARGETED_DEVICE_FAMILY"] = "1,2",  -- iPhone and iPad
     })

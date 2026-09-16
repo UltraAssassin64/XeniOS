@@ -19,6 +19,7 @@ project("xenia-cpu-backend-a64")
   })
   sysincludedirs({
     project_root.."/third_party/oaknut/include",
+    project_root.."/third_party/xbyak_aarch64/xbyak_aarch64",
   })
   defines({
   })
@@ -27,6 +28,7 @@ project("xenia-cpu-backend-a64")
   filter("toolset:clang or toolset:gcc")
     externalincludedirs({
       project_root.."/third_party/oaknut/include",
+      project_root.."/third_party/xbyak_aarch64",
     })
     -- Also explicitly disable the warning for third-party code
     buildoptions({
@@ -35,6 +37,7 @@ project("xenia-cpu-backend-a64")
   filter("toolset:msc")
     includedirs({
       project_root.."/third_party/oaknut/include",
+      project_root.."/third_party/xbyak_aarch64/xbyak_aarch64",
     })
     -- Disable warnings for oaknut third-party code
     disablewarnings({
