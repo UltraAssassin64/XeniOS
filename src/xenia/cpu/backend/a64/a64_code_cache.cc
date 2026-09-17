@@ -12,6 +12,9 @@
 #include <cstdint>
 
 #include "xenia/base/platform.h"
+#if XE_PLATFORM_APPLE
+#include <libkern/OSCacheControl.h>
+#endif
 #if XE_PLATFORM_WIN32
 #include "xenia/base/platform_win.h"
 #endif
@@ -35,6 +38,8 @@ void A64CodeCache::FillCode(void* write_address, size_t size) {
 void A64CodeCache::FlushCodeRange(void* address, size_t size) {
 #if XE_PLATFORM_WIN32
   FlushInstructionCache(GetCurrentProcess(), address, size);
+#elif XE_PLATFORM_APPLE
+  sys_icache_invalidate(address, size);
 #else
   __builtin___clear_cache(
       reinterpret_cast<char*>(address),
