@@ -237,7 +237,7 @@ project("xenia-app")
       "metal-cpp",
       "SDL2",
       "iconv",
-      "xbyak_aarch64"
+      "xbyak_aarch64",
       "CoreFoundation.framework",
       "Foundation.framework",
       "Metal.framework",
