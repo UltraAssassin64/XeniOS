@@ -11,6 +11,7 @@
 #define XENIA_MEMORY_H_
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -204,6 +205,7 @@ class BaseHeap {
   // range.
   xe::memory::PageAccess QueryRangeAccess(uint32_t low_address,
                                           uint32_t high_address);
+
   bool Save(ByteStream* stream);
   bool Restore(ByteStream* stream);
 
@@ -216,6 +218,15 @@ class BaseHeap {
                   uint32_t heap_base, uint32_t heap_size, uint32_t page_size,
                   uint32_t host_address_offset = 0);
 
+  // Rebuilds free_blocks_ by scanning page_table_. Used after Restore.
+  void RebuildFreeBlocks();
+
+  // Removes (or splits) the free block covering the given page range.
+  void RemoveFreeBlock(uint32_t start_page, uint32_t page_count);
+
+  // Inserts a free block and coalesces with adjacent free blocks.
+  void InsertFreeBlock(uint32_t start_page, uint32_t page_count);
+
   Memory* memory_;
   uint8_t* membase_;
   HeapType heap_type_;
@@ -227,6 +238,10 @@ class BaseHeap {
   uint32_t unreserved_page_count_;
   xe::global_critical_region global_critical_region_;
   std::vector<PageEntry> page_table_;
+
+  // Auxiliary free block tracker: maps start_page -> count of contiguous free
+  // pages. Kept in sync with page_table_ mutations. Not serialized.
+  std::map<uint32_t, uint32_t> free_blocks_;
 };
 
 // Normal heap allowing allocations from guest virtual address ranges.
@@ -537,6 +552,7 @@ class Memory {
 
   // Gets the physical base heap.
   VirtualHeap* GetPhysicalHeap();
+
   void GetHeapsPageStatsSummary(const BaseHeap* const* provided_heaps,
                                 size_t heaps_count, uint32_t& unreserved_pages,
                                 uint32_t& reserved_pages, uint32_t& used_pages,
@@ -566,6 +582,7 @@ class Memory {
   static bool AccessViolationCallbackThunk(
       global_unique_lock_type global_lock_locked_once, void* context,
       void* host_address, bool is_write);
+
   std::filesystem::path file_name_;
   uint32_t system_page_size_ = 0;
   uint32_t system_allocation_granularity_ = 0;
