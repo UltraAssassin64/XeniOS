@@ -16,6 +16,7 @@ project("xenia-cpu-backend-a64")
     "xenia-base",
     "xenia-cpu",
     "UIKit.framework",
+    "xbyak_aarch64",
   })
   sysincludedirs({
     project_root.."/third_party/oaknut/include",

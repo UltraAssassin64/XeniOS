@@ -32,6 +32,7 @@ project("xenia-app")
     "xenia-patcher",
     "xenia-ui",
     "xenia-vfs",
+    "xbyak_aarch64",
   })
   links({
     "aes_128",
