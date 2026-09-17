@@ -48,10 +48,10 @@ project("xenia-app")
     "xxhash",
   })
   sysincludedirs({
-    project_root../"third_party/xbyak_aarch64/xbyak_aarch64",
+    project_root.."third_party/xbyak_aarch64/xbyak_aarch64",
   })
   externalincludedirs({
-    project_root../"third_party/xbyak_aarch64/xbyak_aarch64",
+    project_root.."third_party/xbyak_aarch64/xbyak_aarch64",
   })
   defines({
     "XBYAK_NO_OP_NAMES",
