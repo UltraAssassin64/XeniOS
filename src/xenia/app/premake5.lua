@@ -46,6 +46,7 @@ project("xenia-app")
     "mspack",
     "snappy",
     "xxhash",
+    "xbyak_aarch64",
   })
   defines({
     "XBYAK_NO_OP_NAMES",
@@ -237,7 +238,6 @@ project("xenia-app")
       "metal-cpp",
       "SDL2",
       "iconv",
-      "xbyak_aarch64",
       "CoreFoundation.framework",
       "Foundation.framework",
       "Metal.framework",
