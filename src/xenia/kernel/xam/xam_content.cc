@@ -7,6 +7,8 @@
  ******************************************************************************
  */
 
+#include <atomic>
+
 #include "xenia/base/logging.h"
 #include "xenia/base/math.h"
 #include "xenia/base/string_util.h"
@@ -75,60 +77,100 @@ dword_result_t XamContentGetLicenseMask_entry(lpdword_t mask_ptr,
 }
 DECLARE_XAM_EXPORT2(XamContentGetLicenseMask, kContent, kStub, kHighFrequency);
 
-dword_result_t XamContentResolve_entry(
-    dword_t user_index, pointer_t<XCONTENT_DATA> content_data_ptr,
-    lpvoid_t buffer_ptr, dword_t buffer_size, dword_t create_directory,
-    lpdword_t root_name_ptr, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
-  uint64_t xuid = 0;
-  const auto profile =
-      kernel_state()->xam_state()->profile_manager()->GetProfile(
-          static_cast<uint8_t>(user_index));
-  if (profile && content_data_ptr->content_type == XContentType::kSavedGame) {
-    xuid = profile->xuid();
-  }
-
-  std::string root_device_path = "";
-
-  if (root_name_ptr) {
-    // Check if root_name is valid.
-    // root_device_path = std::string(root_name_ptr);
-    // Unsupported for now.
-    return X_ERROR_INVALID_PARAMETER;
-  } else {
-    if (content_data_ptr->device_id ==
-        static_cast<uint32_t>(DummyDeviceId::HDD)) {
-      root_device_path = "\\Device\\Harddisk0\\Partition1\\Content\\";
-    } else if (content_data_ptr->device_id ==
-               static_cast<uint32_t>(DummyDeviceId::ODD)) {
-      // Or GAME, but D: usually means DVD drive meanwhile GAME always pinpoints
-      // to game, even if it is running from HDD
-      root_device_path = "D:\\content\\";
+dword_result_t xeXamContentResolve(
+    dword_t user_index, lpvoid_t content_data_ptr, dword_t content_data_size,
+    lpstring_t path_ptr, dword_t path_size, dword_t create_directory,
+    lpstring_t root_name_ptr, pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  auto run = [user_index, content_data_ptr, content_data_size, path_ptr,
+              path_size, create_directory, root_name_ptr](
+                 uint32_t& extended_error, uint32_t& length) -> X_RESULT {
+    XCONTENT_AGGREGATE_DATA content_data;
+    if (content_data_size == sizeof(XCONTENT_DATA)) {
+      content_data = *content_data_ptr.as<XCONTENT_DATA*>();
+    } else if (content_data_size == sizeof(XCONTENT_DATA_INTERNAL)) {
+      // Due to the current implementation of content data we can't use
+      // XCONTENT_DATA_INTERNAL
+      content_data = *content_data_ptr.as<XCONTENT_AGGREGATE_DATA*>();
     } else {
+      assert_always();
       return X_ERROR_INVALID_PARAMETER;
     }
+    uint64_t xuid = 0;
+    if (user_index < XUserMaxUserCount) {
+      const auto profile =
+          kernel_state()->xam_state()->profile_manager()->GetProfile(
+              static_cast<uint8_t>(user_index));
+      if (profile && content_data.content_type == XContentType::kSavedGame) {
+        xuid = profile->xuid();
+      }
+    }
+
+    std::string root_device_path = "";
+
+    if (root_name_ptr) {
+      // Check if root_name is valid.
+      // root_device_path = std::string(root_name_ptr);
+      // Unsupported for now.
+      return X_ERROR_INVALID_PARAMETER;
+    } else {
+      if (content_data.device_id == static_cast<uint32_t>(DummyDeviceId::HDD)) {
+        root_device_path = "\\Device\\Harddisk0\\Partition1\\Content\\";
+      } else if (content_data.device_id ==
+                 static_cast<uint32_t>(DummyDeviceId::ODD)) {
+        // Or GAME, but D: usually means DVD drive meanwhile GAME always
+        // pinpoints to game, even if it is running from HDD
+        root_device_path = "D:\\content\\";
+      } else {
+        return X_ERROR_INVALID_PARAMETER;
+      }
+    }
+
+    const std::string relative_path = fmt::format(
+        "{:016X}\\{:08X}\\{:08X}\\{}", xuid, kernel_state()->title_id(),
+        static_cast<uint32_t>(content_data.content_type.get()),
+        content_data.file_name());
+
+    string_util::copy_truncating(path_ptr, root_device_path + relative_path,
+                                 path_size);
+
+    // Check if it exists and try to mount that package
+    // Result of buffer_ptr is sent to RtlInitAnsiString.
+    // buffer_size is usually 260 (max path).
+    return X_ERROR_SUCCESS;
+  };
+
+  if (!overlapped_ptr) {
+    uint32_t extended_error, length;
+    return run(extended_error, length);
+  } else {
+    kernel_state()->CompleteOverlappedDeferredEx(run, overlapped_ptr);
+    return X_ERROR_IO_PENDING;
   }
+}
 
-  const std::string relative_path = fmt::format(
-      "{:016X}\\{:08X}\\{:08X}\\{}", xuid, kernel_state()->title_id(),
-      static_cast<uint32_t>(content_data_ptr->content_type.get()),
-      content_data_ptr->file_name());
-
-  char* buffer =
-      kernel_memory()->TranslateVirtual<char*>(buffer_ptr.guest_address());
-
-  string_util::copy_truncating(buffer, root_device_path + relative_path,
-                               buffer_size);
-
-  // Check if it exists and try to mount that package
-  // Result of buffer_ptr is sent to RtlInitAnsiString.
-  // buffer_size is usually 260 (max path).
-  return X_ERROR_SUCCESS;
+dword_result_t XamContentResolve_entry(
+    dword_t user_index, lpvoid_t content_data_ptr, lpstring_t path_ptr,
+    dword_t path_size, dword_t create_directory, lpstring_t root_name_ptr,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  return xeXamContentResolve(user_index, content_data_ptr,
+                             sizeof(XCONTENT_DATA), path_ptr, path_size,
+                             create_directory, root_name_ptr, overlapped_ptr);
 }
 DECLARE_XAM_EXPORT1(XamContentResolve, kContent, kSketchy);
 
+dword_result_t XamContentResolveInternal_entry(
+    lpvoid_t content_data_ptr, lpstring_t path_ptr, dword_t path_size,
+    dword_t create_directory, lpstring_t root_name_ptr,
+    pointer_t<XAM_OVERLAPPED> overlapped_ptr) {
+  return xeXamContentResolve(
+      XUserIndexNone, content_data_ptr, sizeof(XCONTENT_DATA_INTERNAL),
+      path_ptr, path_size, create_directory, root_name_ptr, overlapped_ptr);
+}
+DECLARE_XAM_EXPORT1(XamContentResolveInternal, kContent, kSketchy);
+
 // https://github.com/MrColdbird/gameservice/blob/master/ContentManager.cpp
-dword_result_t XamContentCreateEnumerator_entry(
-    dword_t user_index, dword_t device_id, dword_t content_type,
+dword_result_t XamContentCreateEnumeratorInternal_entry(
+    qword_t xuid, dword_t device_id, dword_t content_type, dword_t title_id,
     dword_t content_flags, dword_t items_per_enumerate,
     lpdword_t buffer_size_ptr, lpdword_t handle_out) {
   assert_not_null(handle_out);
@@ -147,25 +189,22 @@ dword_result_t XamContentCreateEnumerator_entry(
     *buffer_size_ptr = sizeof(XCONTENT_DATA) * items_per_enumerate;
   }
 
-  uint64_t xuid = 0;
-  if (user_index != XUserIndexNone) {
-    const auto& user = kernel_state()->xam_state()->GetUserProfile(user_index);
+  auto e = object_ref<ContentEnumerator>(
+      new ContentEnumerator(kernel_state(), items_per_enumerate));
 
-    if (!user) {
-      return X_ERROR_NO_SUCH_USER;
-    }
-
-    xuid = user->xuid();
-  }
-
-  auto e = make_object<XStaticEnumerator<XCONTENT_DATA>>(kernel_state(),
-                                                         items_per_enumerate);
-  auto result = e->Initialize(XUserIndexAny, 0xFE, 0x20005, 0x20007, 0);
+  auto result =
+      e->Initialize(XUserIndexAny, 0xFE, 0x20005, 0x20007, 0, 0x98, nullptr);
   if (XFAILED(result)) {
     return result;
   }
 
-  std::vector<XCONTENT_AGGREGATE_DATA> enumerated_content = {};
+  uint32_t title = title_id;
+  if (!title) {
+    title = kernel_state()->title_id();
+  }
+
+  std::vector<XCONTENT_AGGREGATE_DATA> enumerated_content =
+      {};  // XCONTENT_DATA_INTERNAL
 
   if (!device_info || device_info->device_id == DummyDeviceId::HDD) {
     std::vector<uint64_t> xuids_to_enumerate = {};
@@ -180,8 +219,7 @@ dword_result_t XamContentCreateEnumerator_entry(
     for (const auto& xuid : xuids_to_enumerate) {
       auto user_enumerated_data =
           kernel_state()->content_manager()->ListContent(
-              static_cast<uint32_t>(DummyDeviceId::HDD), xuid,
-              kernel_state()->title_id(),
+              static_cast<uint32_t>(DummyDeviceId::HDD), xuid, title,
               static_cast<XContentType>(content_type.value()));
 
       enumerated_content.insert(enumerated_content.end(),
@@ -198,8 +236,8 @@ dword_result_t XamContentCreateEnumerator_entry(
   if (!device_info || device_info->device_id == DummyDeviceId::ODD) {
     auto disc_enumerated_data =
         kernel_state()->content_manager()->ListContentODD(
-            static_cast<uint32_t>(DummyDeviceId::ODD), 0,
-            kernel_state()->title_id(), XContentType(uint32_t(content_type)));
+            static_cast<uint32_t>(DummyDeviceId::ODD), 0, title,
+            XContentType(uint32_t(content_type)));
 
     enumerated_content.insert(enumerated_content.end(),
                               disc_enumerated_data.cbegin(),
@@ -207,17 +245,37 @@ dword_result_t XamContentCreateEnumerator_entry(
   }
 
   for (const auto& content_data : enumerated_content) {
-    auto item = e->AppendItem();
-    *item = content_data;
+    e->AppendItem(content_data);
     XELOGI("{}: Adding: {} (Filename: {}) to enumerator result", __func__,
            xe::to_utf8(content_data.display_name()), content_data.file_name());
   }
 
-  XELOGD("XamContentCreateEnumerator: added {} items to enumerator",
+  XELOGD("XamContentCreateEnumeratorInternal: added {} items to enumerator",
          e->item_count());
 
   *handle_out = e->handle();
   return X_ERROR_SUCCESS;
+}
+DECLARE_XAM_EXPORT1(XamContentCreateEnumeratorInternal, kContent, kImplemented);
+
+dword_result_t XamContentCreateEnumerator_entry(
+    dword_t user_index, dword_t device_id, dword_t content_type,
+    dword_t content_flags, dword_t items_per_enumerate,
+    lpdword_t buffer_size_ptr, lpdword_t handle_out) {
+  uint64_t xuid = 0;
+  if (user_index < XUserMaxUserCount) {
+    const auto& user = kernel_state()->xam_state()->GetUserProfile(user_index);
+
+    if (!user) {
+      return X_ERROR_NO_SUCH_USER;
+    }
+
+    xuid = user->xuid();
+  }
+
+  return XamContentCreateEnumeratorInternal_entry(
+      xuid, device_id, content_type, 0, content_flags, items_per_enumerate,
+      buffer_size_ptr, handle_out);
 }
 DECLARE_XAM_EXPORT1(XamContentCreateEnumerator, kContent, kImplemented);
 
@@ -243,6 +301,16 @@ dword_result_t xeXamContentCreate(dword_t user_index, lpstring_t root_name,
 
   if (!root_name || *root_name == '\0') {
     return X_ERROR_INVALID_NAME;
+  }
+
+  // Check if we have something under provided symlink.
+  std::string symlink_path = root_name.value();
+  if (!symlink_path.ends_with(':')) {
+    symlink_path += ':';
+  }
+
+  if (kernel_state()->file_system()->IsSymbolicLinkRegistered(symlink_path)) {
+    return X_ERROR_INVALID_PARAMETER;
   }
 
   XCONTENT_AGGREGATE_DATA content_data;
@@ -764,15 +832,12 @@ dword_result_t XamSwapDisc_entry(
             uint8_t(exec_info.disc_number), uint8_t(exec_info.disc_count),
             uint32_t(exec_info.title_id), uint32_t(exec_info.media_id));
 
-        // Add the disc path to all tracked users' GPDs with proper label
-        auto xam_state = kernel_state()->xam_state();
-        if (xam_state) {
-          auto user_tracker = xam_state->user_tracker();
-          if (user_tracker) {
-            user_tracker->AddDiscPathToAllTrackedUsers(info->title_id,
-                                                       new_disc_path);
-          }
+        std::string disc_label;
+        if (exec_info.disc_count > 1 && exec_info.disc_number > 0) {
+          disc_label = fmt::format("Disc {}", uint8_t(exec_info.disc_number));
         }
+        kernel_state()->emulator()->RecordDisc(info->title_id, disc_label,
+                                               new_disc_path);
 
         // Update the host_path in loader_data so title restarts use the new
         // disc
@@ -837,6 +902,13 @@ DECLARE_XAM_EXPORT1(XamLoaderGetMediaInfo, kNone, kStub);
 
 dword_result_t XamContentLaunchImageFromFileInternal_entry(
     lpstring_t image_location, lpstring_t xex_name, dword_t unk) {
+#if XE_PLATFORM_IOS
+  if (kernel_state()->IsTitleStopRequestedIOS()) {
+    kernel_state()->TerminateTitle();
+    return X_ERROR_FUNCTION_FAILED;
+  }
+#endif  // XE_PLATFORM_IOS
+
   const std::string image_path = static_cast<std::string>(image_location);
   const std::string xex_name_ = static_cast<std::string>(xex_name);
 
@@ -849,7 +921,7 @@ dword_result_t XamContentLaunchImageFromFileInternal_entry(
   const std::filesystem::path host_path =
       kernel_state()->emulator()->content_root() / entry->name();
   if (!std::filesystem::exists(host_path)) {
-    uint64_t progress = 0;
+    std::atomic<uint64_t> progress{0};
 
     vfs::VirtualFileSystem::ExtractContentFile(
         entry, kernel_state()->emulator()->content_root(), progress, true);
@@ -859,7 +931,6 @@ dword_result_t XamContentLaunchImageFromFileInternal_entry(
   if (on_launch_new_title) {
     XELOGI("XamContentLaunchImageFromFileInternal: spawning new title process");
     on_launch_new_title(xe::path_to_utf8(host_path), xex_name_, 0, "");
-    // Callback calls quick_exit, so we don't reach here
   }
 
   kernel_state()->TerminateTitle();
@@ -870,6 +941,13 @@ DECLARE_XAM_EXPORT1(XamContentLaunchImageFromFileInternal, kContent, kStub);
 
 dword_result_t XamContentLaunchImageInternal_entry(lpvoid_t content_data_ptr,
                                                    lpstring_t xex_path) {
+#if XE_PLATFORM_IOS
+  if (kernel_state()->IsTitleStopRequestedIOS()) {
+    kernel_state()->TerminateTitle();
+    return X_ERROR_FUNCTION_FAILED;
+  }
+#endif  // XE_PLATFORM_IOS
+
   XCONTENT_AGGREGATE_DATA content_data = *content_data_ptr.as<XCONTENT_DATA*>();
 
   // title_id is written into first 8 characters of filename
@@ -893,7 +971,7 @@ dword_result_t XamContentLaunchImageInternal_entry(lpvoid_t content_data_ptr,
       kernel_state()->emulator()->content_root() / entry->name();
 
   if (!std::filesystem::exists(host_path)) {
-    uint64_t progress = 0;
+    std::atomic<uint64_t> progress{0};
     kernel_state()->file_system()->ExtractContentFile(
         entry, kernel_state()->emulator()->content_root(), progress, true);
   }
@@ -902,7 +980,6 @@ dword_result_t XamContentLaunchImageInternal_entry(lpvoid_t content_data_ptr,
   if (on_launch_new_title) {
     XELOGI("XamContentLaunchImageInternal: spawning new title process");
     on_launch_new_title(xe::path_to_utf8(host_path), xex_path.value(), 0, "");
-    // Callback calls quick_exit, so we don't reach here
   }
 
   kernel_state()->TerminateTitle();
