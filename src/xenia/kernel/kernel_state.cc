@@ -7,14 +7,21 @@
  ******************************************************************************
  */
 
+#include <chrono>
 #include <ranges>
 
 #include "xenia/kernel/kernel_state.h"
 
 #include "xenia/base/byte_stream.h"
 #include "xenia/base/logging.h"
+#include "xenia/base/platform.h"
+#include "xenia/base/threading.h"
+#if XE_PLATFORM_IOS
+#include "xenia/cpu/processor.h"
+#endif  // XE_PLATFORM_IOS
 #include "xenia/emulator.h"
 #include "xenia/hid/input_system.h"
+#include "xenia/kernel/guest_scheduler.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_memory.h"
@@ -25,6 +32,9 @@
 #include "xenia/kernel/xmodule.h"
 #include "xenia/kernel/xnotifylistener.h"
 #include "xenia/kernel/xobject.h"
+#if XE_PLATFORM_IOS
+#include "xenia/kernel/xsocket.h"
+#endif  // XE_PLATFORM_IOS
 #include "xenia/kernel/xthread.h"
 #include "xenia/ui/imgui_host_notification.h"
 
@@ -63,7 +73,9 @@ KernelState::KernelState(Emulator* emulator)
   processor_ = emulator->processor();
   file_system_ = emulator->file_system();
   xam_state_ = std::make_unique<xam::XamState>(emulator, this);
+  guest_scheduler_ = std::make_unique<GuestScheduler>(this);
   smc_ = std::make_unique<SystemManagementController>();
+  xconfig_ = std::make_unique<XConfig>();
 
   InitializeKernelGuestGlobals();
   kernel_version_ = KernelVersion(cvars::kernel_build_version);
@@ -78,9 +90,25 @@ KernelState::KernelState(Emulator* emulator)
 }
 
 KernelState::~KernelState() {
+#if XE_PLATFORM_IOS
+  const bool ios_title_stop = IsTitleStopRequestedIOS();
+#endif  // XE_PLATFORM_IOS
   SetExecutableModule(nullptr);
 
   ShutdownDispatchThread();
+#if XE_PLATFORM_IOS
+  if (ios_title_stop) {
+    guest_scheduler()->Shutdown();
+    if (!WaitForTitleThreadsToExitIOS(500)) {
+      TerminateTitleThreadsIOS();
+      if (!WaitForTitleThreadsToExitIOS(500)) {
+        XELOGW(
+            "iOS: kernel reset continuing with guest thread(s) still marked "
+            "running");
+      }
+    }
+  }
+#endif  // XE_PLATFORM_IOS
 
   executable_module_.reset();
   user_modules_.clear();
@@ -95,11 +123,50 @@ KernelState::~KernelState() {
   shared_kernel_state_ = nullptr;
 }
 
+#if XE_PLATFORM_IOS
+bool KernelState::IsTitleStopRequestedIOS() const {
+  return processor_ && processor_->title_stop_requested_ios();
+}
+#endif  // XE_PLATFORM_IOS
+
 void KernelState::ShutdownDispatchThread() {
-  if (dispatch_thread_running_) {
-    dispatch_thread_running_ = false;
+  if (dispatch_thread_running_ && dispatch_thread_) {
+#if XE_PLATFORM_IOS
+    const bool ios_title_stop = IsTitleStopRequestedIOS();
+#endif  // XE_PLATFORM_IOS
+    {
+      auto global_lock = global_critical_region_.Acquire();
+      dispatch_thread_running_ = false;
+#if XE_PLATFORM_IOS
+      if (ios_title_stop) {
+        dispatch_queue_.clear();
+      }
+#endif  // XE_PLATFORM_IOS
+    }
     dispatch_cond_.notify_all();
+#if XE_PLATFORM_IOS
+    if (ios_title_stop) {
+      uint64_t timeout = static_cast<uint64_t>(-500LL * 10000LL);
+      X_STATUS wait_status = dispatch_thread_->Wait(0, 0, 0, &timeout);
+      if (wait_status == X_STATUS_TIMEOUT) {
+        XELOGW(
+            "iOS: kernel dispatch thread did not exit during title stop; "
+            "terminating");
+        dispatch_thread_->Terminate(0);
+        timeout = static_cast<uint64_t>(-500LL * 10000LL);
+        wait_status = dispatch_thread_->Wait(0, 0, 0, &timeout);
+        if (wait_status == X_STATUS_TIMEOUT) {
+          XELOGW(
+              "iOS: kernel dispatch thread still did not exit after "
+              "termination request; continuing title teardown");
+        }
+      }
+    } else {
+      dispatch_thread_->Wait(0, 0, 0, nullptr);
+    }
+#else
     dispatch_thread_->Wait(0, 0, 0, nullptr);
+#endif  // XE_PLATFORM_IOS
   }
 }
 
@@ -430,11 +497,6 @@ object_ref<XThread> KernelState::LaunchModule(object_ref<UserModule> module) {
   // Waits for a debugger client, if desired.
   emulator()->processor()->PreLaunch();
 
-  // Resume the thread now.
-  // If the debugger has requested a suspend this will just decrement the
-  // suspend count without resuming it until the debugger wants.
-  thread->Resume();
-
   return thread;
 }
 
@@ -522,6 +584,9 @@ void KernelState::SetExecutableModule(object_ref<UserModule> module) {
         xboxkrnl::XboxkrnlModule::kExLoadedCommandLineSize);
   }
 
+  // Initialize file I/O hooks for XMP volume title-specific patches.
+  InitXmpVolumePatch();
+
   // Spin up deferred dispatch worker.
   // TODO(benvanik): move someplace more appropriate (out of ctor, but around
   // here).
@@ -536,11 +601,27 @@ void KernelState::SetExecutableModule(object_ref<UserModule> module) {
           auto global_lock = global_critical_region_.AcquireDeferred();
           while (dispatch_thread_running_) {
             global_lock.lock();
+#if XE_PLATFORM_IOS
+            if (!dispatch_thread_running_ || IsTitleStopRequestedIOS()) {
+              global_lock.unlock();
+              break;
+            }
+#endif  // XE_PLATFORM_IOS
             if (dispatch_queue_.empty()) {
               dispatch_cond_.wait(global_lock);
               if (!dispatch_thread_running_) {
                 global_lock.unlock();
                 break;
+              }
+#if XE_PLATFORM_IOS
+              if (IsTitleStopRequestedIOS()) {
+                global_lock.unlock();
+                break;
+              }
+#endif  // XE_PLATFORM_IOS
+              if (dispatch_queue_.empty()) {
+                global_lock.unlock();
+                continue;
               }
             }
             auto fn = std::move(dispatch_queue_.front());
@@ -564,6 +645,12 @@ void KernelState::LoadKernelModule(object_ref<KernelModule> kernel_module) {
 
 object_ref<UserModule> KernelState::LoadUserModule(
     const std::string_view raw_name, bool call_entry) {
+#if XE_PLATFORM_IOS
+  if (IsTitleStopRequestedIOS()) {
+    return nullptr;
+  }
+#endif  // XE_PLATFORM_IOS
+
   // Some games try to load relative to launch module, others specify full path.
   auto name = xe::utf8::find_name_from_guest_path(raw_name);
   std::string path(raw_name);
@@ -609,6 +696,12 @@ object_ref<UserModule> KernelState::LoadUserModule(
 
 object_ref<UserModule> KernelState::LoadUserModuleFromMemory(
     const std::string_view raw_name, const void* addr, const size_t length) {
+#if XE_PLATFORM_IOS
+  if (IsTitleStopRequestedIOS()) {
+    return nullptr;
+  }
+#endif  // XE_PLATFORM_IOS
+
   auto name = xe::utf8::find_base_name_from_guest_path(raw_name);
 
   object_ref<UserModule> module;
@@ -642,11 +735,22 @@ object_ref<UserModule> KernelState::LoadUserModuleFromMemory(
 
 X_RESULT KernelState::FinishLoadingUserModule(
     const object_ref<UserModule> module, bool call_entry) {
+#if XE_PLATFORM_IOS
+  if (IsTitleStopRequestedIOS()) {
+    return X_STATUS_PROCESS_IS_TERMINATING;
+  }
+#endif  // XE_PLATFORM_IOS
+
   // TODO(Gliniak): Apply custom patches here
   X_RESULT result = module->LoadContinue();
   if (XFAILED(result)) {
     return result;
   }
+#if XE_PLATFORM_IOS
+  if (IsTitleStopRequestedIOS()) {
+    return X_STATUS_PROCESS_IS_TERMINATING;
+  }
+#endif  // XE_PLATFORM_IOS
   module->Dump();
   emulator_->patcher()->ApplyPatchesForTitle(memory_, module->title_id(),
                                              module->hash());
@@ -675,6 +779,12 @@ X_RESULT KernelState::FinishLoadingUserModule(
 
 X_RESULT KernelState::ApplyTitleUpdate(
     const object_ref<UserModule> title_module) {
+#if XE_PLATFORM_IOS
+  if (IsTitleStopRequestedIOS()) {
+    return X_STATUS_PROCESS_IS_TERMINATING;
+  }
+#endif  // XE_PLATFORM_IOS
+
   const auto title_updates = FindTitleUpdate(title_module->title_id());
   if (title_updates.empty()) {
     return X_STATUS_SUCCESS;
@@ -700,19 +810,13 @@ X_RESULT KernelState::ApplyTitleUpdate(
     // First module that is loaded is always main executable. That way we can
     // prevent random message spam in case of loading/unloading.
     if (!GetExecutableModule()) {
-      if (emulator_->imgui_drawer()) {
-        emulator_->display_window()->app_context().CallInUIThread([&]() {
-          new xe::ui::HostNotificationWindow(
-              emulator_->imgui_drawer(), "Warning!",
-              "Title Update signature doesn't match. This can cause unexpected "
-              "issues or crashes!",
-              0);
-        });
-      } else {
-        XELOGW(
+      emulator_->display_window()->app_context().CallInUIThread([&]() {
+        new xe::ui::HostNotificationWindow(
+            emulator_->imgui_drawer(), "Warning!",
             "Title Update signature doesn't match. This can cause unexpected "
-            "issues or crashes!");
-      }
+            "issues or crashes!",
+            0);
+      });
     }
   }
 
@@ -742,7 +846,7 @@ const object_ref<UserModule> KernelState::LoadTitleUpdate(
       "UPDATE", 0, *title_update, content_license, disc_number);
 
   std::string mount_path = "";
-  if (!file_system()->FindSymbolicLink("game:", mount_path)) {
+  if (!file_system()->FindSymbolicLink(kDefaultGameSymbolicLink, mount_path)) {
     return nullptr;
   }
 
@@ -751,7 +855,8 @@ const object_ref<UserModule> KernelState::LoadTitleUpdate(
   }
 
   std::string resolved_path = "";
-  if (!file_system()->FindSymbolicLink("UPDATE:", resolved_path)) {
+  if (!file_system()->FindSymbolicLink(kDefaultUpdateSymbolicLink,
+                                       resolved_path)) {
     return nullptr;
   }
 
@@ -858,85 +963,142 @@ void KernelState::UnloadUserModule(const object_ref<UserModule>& module,
   object_table()->ReleaseHandleInLock(module->handle());
 }
 
+void KernelState::InitXmpVolumePatch() {
+  xmp_volume_patch_ = XmpVolumePatch::CreateForTitle(title_id(), this);
+}
+
 void KernelState::TerminateTitle() {
-#if XE_PLATFORM_IOS
-  XELOGD("KernelState::TerminateTitle");
-  auto global_lock = global_critical_region_.Acquire();
-
-  // Call terminate routines.
-  // TODO(benvanik): these might take arguments.
-  // FIXME: Calling these will send some threads into kernel code and they'll
-  // hold the lock when terminated! Do we need to wait for all threads to exit?
-  /*
-  if (from_guest_thread) {
-    for (auto routine : terminate_notifications_) {
-      auto thread_state = XThread::GetCurrentThread()->thread_state();
-      processor()->Execute(thread_state, routine.guest_routine);
-    }
-  }
-  terminate_notifications_.clear();
-  */
-
-  // Kill all guest threads.
-  for (auto it = threads_by_id_.begin(); it != threads_by_id_.end();) {
-    if (!XThread::IsInThread(it->second) && it->second->is_guest_thread()) {
-      auto thread = it->second;
-
-      if (thread->is_running()) {
-        // Need to step the thread to a safe point (returns it to guest code
-        // so it's guaranteed to not be holding any locks / in host kernel
-        // code / etc). Can't do that properly if we have the lock.
-        if (!emulator_->is_paused()) {
-          thread->thread()->Suspend();
-        }
-
-        global_lock.unlock();
-        // On iOS ARM64, stepping to a guest safe point during forced title
-        // termination can fault while the thread is in host/JIT transition
-        // code. Terminate directly after suspension for shutdown stability.
-        thread->Terminate(0);
-        global_lock.lock();
-      }
-
-      // Erase it from the thread list.
-      it = threads_by_id_.erase(it);
-    } else {
-      ++it;
-    }
-  }
-
-  // Third: Unload all user modules (including the executable).
-  for (size_t i = 0; i < user_modules_.size(); i++) {
-    X_STATUS status = user_modules_[i]->Unload();
-    assert_true(XSUCCEEDED(status));
-
-    object_table_.RemoveHandle(user_modules_[i]->handle());
-  }
-  user_modules_.clear();
-
-  // Release all objects in the object table.
-  object_table_.PurgeAllObjects();
-
-  // Unregister all notify listeners.
-  notify_listeners_.clear();
-
-  // Unset the executable module.
-  executable_module_ = nullptr;
-
-  if (XThread::IsInThread()) {
-    threads_by_id_.erase(XThread::GetCurrentThread()->thread_id());
-
-    // Now commit suicide (using Terminate, because we can't call into guest
-    // code anymore).
-    global_lock.unlock();
-    XThread::GetCurrentThread()->Terminate(0);
-  }
-#else
   XELOGI("KernelState::TerminateTitle");
+#if XE_PLATFORM_IOS
+  if (processor_) {
+    processor_->RequestTitleStopIOS();
+  }
+  auto* title_process =
+      memory()->TranslateVirtual<X_KPROCESS*>(GetTitleProcess());
+  if (title_process) {
+    title_process->is_terminating = 1;
+  }
+  auto sockets = object_table()->GetObjectsByType<XSocket>();
+  size_t closed_socket_count = 0;
+  for (auto& socket : sockets) {
+    if (socket && XSUCCEEDED(socket->Close())) {
+      ++closed_socket_count;
+    }
+  }
+  if (closed_socket_count) {
+    XELOGI("iOS: closed {} socket(s) for title stop", closed_socket_count);
+  }
+
+  auto threads = object_table()->GetObjectsByType<XThread>();
+  for (auto& thread : threads) {
+    if (!thread || !thread->is_guest_thread() ||
+        XThread::IsInThread(thread.get())) {
+      continue;
+    }
+    if (thread->guest_object()) {
+      for (uint32_t i = 0; i < 256 && thread->suspend_count() > 0; ++i) {
+        thread->Resume(nullptr);
+      }
+    }
+  }
+  if (XThread::IsInThread()) {
+    auto* current_thread = XThread::GetCurrentThread();
+    if (current_thread && current_thread->is_guest_thread()) {
+      current_thread->Exit(0);
+    }
+  }
+  return;
+#else
   xe::FlushLog();
   std::quick_exit(EXIT_SUCCESS);
-#endif
+#endif  // XE_PLATFORM_IOS
 }
+
+#if XE_PLATFORM_IOS
+bool KernelState::WaitForTitleThreadsToExitIOS(uint32_t timeout_ms) {
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+
+  while (true) {
+    size_t running_guest_threads = 0;
+    auto threads = object_table()->GetObjectsByType<XThread>();
+    for (auto& thread : threads) {
+      if (!thread || !thread->is_guest_thread()) {
+        continue;
+      }
+
+      bool guest_thread_signaled = false;
+      if (thread->guest_object()) {
+        auto* guest_thread = thread->guest_object<X_KTHREAD>();
+        guest_thread_signaled =
+            guest_thread->terminated || guest_thread->header.signal_state;
+      }
+
+      bool thread_active = thread->is_running() || !guest_thread_signaled;
+      if (auto* native_thread = thread->thread()) {
+        thread_active |=
+            xe::threading::Wait(native_thread, false,
+                                std::chrono::milliseconds::zero()) ==
+            xe::threading::WaitResult::kTimeout;
+      }
+      if (thread_active) {
+        ++running_guest_threads;
+      }
+    }
+
+    if (!running_guest_threads) {
+      return true;
+    }
+
+    if (std::chrono::steady_clock::now() >= deadline) {
+      XELOGW("iOS: timed out waiting for {} guest thread(s) to exit",
+             running_guest_threads);
+      return false;
+    }
+
+    xe::threading::Sleep(std::chrono::milliseconds(10));
+  }
+}
+
+void KernelState::TerminateTitleThreadsIOS() {
+  size_t terminated_guest_threads = 0;
+  auto threads = object_table()->GetObjectsByType<XThread>();
+  for (auto& thread : threads) {
+    if (!thread || !thread->is_guest_thread() ||
+        XThread::IsInThread(thread.get())) {
+      continue;
+    }
+
+    bool guest_thread_signaled = false;
+    if (thread->guest_object()) {
+      auto* guest_thread = thread->guest_object<X_KTHREAD>();
+      guest_thread_signaled =
+          guest_thread->terminated || guest_thread->header.signal_state;
+    }
+
+    bool native_thread_running = false;
+    if (auto* native_thread = thread->thread()) {
+      native_thread_running =
+          xe::threading::Wait(native_thread, false,
+                              std::chrono::milliseconds::zero()) ==
+          xe::threading::WaitResult::kTimeout;
+    }
+
+    if (!thread->is_running() && guest_thread_signaled &&
+        !native_thread_running) {
+      continue;
+    }
+
+    thread->Terminate(0);
+    ++terminated_guest_threads;
+  }
+
+  if (terminated_guest_threads) {
+    XELOGW("iOS: force-terminated {} guest thread(s) after title stop timeout",
+           terminated_guest_threads);
+  }
+}
+#endif  // XE_PLATFORM_IOS
 
 void KernelState::RegisterThread(XThread* thread) {
   auto global_lock = global_critical_region_.Acquire();
@@ -956,6 +1118,12 @@ void KernelState::OnThreadExecute(XThread* thread) {
 
   // Must be called on executing thread.
   assert_true(XThread::GetCurrentThread() == thread);
+
+#if XE_PLATFORM_IOS
+  if (IsTitleStopRequestedIOS()) {
+    return;
+  }
+#endif  // XE_PLATFORM_IOS
 
   // Call DllMain(DLL_THREAD_ATTACH) for each user module:
   // https://msdn.microsoft.com/en-us/library/windows/desktop/ms682583%28v=vs.85%29.aspx
@@ -985,6 +1153,13 @@ void KernelState::OnThreadExit(XThread* thread) {
 
   // Must be called on executing thread.
   assert_true(XThread::GetCurrentThread() == thread);
+
+#if XE_PLATFORM_IOS
+  if (IsTitleStopRequestedIOS()) {
+    emulator()->processor()->OnThreadExit(thread->thread_id());
+    return;
+  }
+#endif  // XE_PLATFORM_IOS
 
   // Call DllMain(DLL_THREAD_DETACH) for each user module:
   // https://msdn.microsoft.com/en-us/library/windows/desktop/ms682583%28v=vs.85%29.aspx
@@ -1156,6 +1331,11 @@ void KernelState::CompleteOverlappedDeferredEx(
     std::function<X_RESULT(uint32_t&, uint32_t&)> completion_callback,
     uint32_t overlapped_ptr, std::function<void()> pre_callback,
     std::function<void()> post_callback) {
+#if XE_PLATFORM_IOS
+  if (IsTitleStopRequestedIOS()) {
+    return;
+  }
+#endif  // XE_PLATFORM_IOS
   auto ptr = memory()->TranslateVirtual(overlapped_ptr);
   XOverlappedSetResult(ptr, X_ERROR_IO_PENDING);
   XOverlappedSetContext(ptr, XThread::GetCurrentThreadHandle());
@@ -1171,11 +1351,21 @@ void KernelState::CompleteOverlappedDeferredEx(
   auto global_lock = global_critical_region_.Acquire();
   dispatch_queue_.push_back([this, completion_callback, overlapped_ptr,
                              pre_callback, post_callback]() {
+#if XE_PLATFORM_IOS
+    if (IsTitleStopRequestedIOS()) {
+      return;
+    }
+#endif  // XE_PLATFORM_IOS
     if (pre_callback) {
       pre_callback();
     }
     // 5454082B infinitely loads free roam in netplay without sleep.
     xe::threading::Sleep(kDeferredOverlappedDelayMillis);
+#if XE_PLATFORM_IOS
+    if (IsTitleStopRequestedIOS()) {
+      return;
+    }
+#endif  // XE_PLATFORM_IOS
     uint32_t extended_error, length;
     auto result = completion_callback(extended_error, length);
     CompleteOverlappedEx(overlapped_ptr, result, extended_error, length);
@@ -1402,15 +1592,16 @@ void KernelState::EmulateCPInterruptDPC(uint32_t interrupt_callback,
 }
 
 void KernelState::InitializeProcess(X_KPROCESS* process, uint32_t type,
-                                    char unk_18, char unk_19, char unk_1A) {
+                                    char priority_class, char default_priority,
+                                    char max_dynamic_priority) {
   uint32_t guest_kprocess = memory()->HostToGuestVirtual(process);
 
   uint32_t thread_list_guest_ptr =
       guest_kprocess + offsetof(X_KPROCESS, thread_list);
 
-  process->unk_18 = unk_18;
-  process->unk_19 = unk_19;
-  process->unk_1A = unk_1A;
+  process->process_priority_class = priority_class;
+  process->default_thread_priority = default_priority;
+  process->max_dynamic_priority = max_dynamic_priority;
   util::XeInitializeListHead(&process->thread_list, thread_list_guest_ptr);
   process->quantum = 60;
   // doubt any guest code uses this ptr, which i think probably has something to
@@ -1418,7 +1609,7 @@ void KernelState::InitializeProcess(X_KPROCESS* process, uint32_t type,
   process->clrdataa_masked_ptr = 0;
   // clrdataa_ & ~(1U << 31);
   process->thread_count = 0;
-  process->unk_1B = 0x06;
+  process->disable_quantum_decay = 0x06;
   process->kernel_stack_size = 16 * 1024;
   process->tls_slot_size = 0x80;
 
@@ -1442,15 +1633,18 @@ void KernelState::SetProcessTLSVars(X_KPROCESS* process, int num_slots,
   }
 
   // set remainder of bitset
-  if (((num_slots + 3) & 0x1C) != 0)
+  if (((num_slots + 3) & 0x1C) != 0) {
     process->tls_slot_bitmap[count_div32] = -1
                                             << (32 - ((num_slots + 3) & 0x1C));
+  }
 }
 void AllocateThread(PPCContext* context) {
   uint32_t thread_mem_size = static_cast<uint32_t>(context->r[3]);
   uint32_t a2 = static_cast<uint32_t>(context->r[4]);
   uint32_t a3 = static_cast<uint32_t>(context->r[5]);
-  if (thread_mem_size <= 0xFD8) thread_mem_size += 8;
+  if (thread_mem_size <= 0xFD8) {
+    thread_mem_size += 8;
+  }
   uint32_t result =
       xboxkrnl::xeAllocatePoolTypeWithTag(context, thread_mem_size, a2, a3);
   if (((unsigned short)result & 0xFFF) != 0) {
@@ -1520,15 +1714,17 @@ void KernelState::InitializeKernelGuestGlobals() {
   SetProcessTLSVars(system_process, 32, 0, 0);
 
   uint32_t oddobject_offset =
-      kernel_guest_globals_ + offsetof(KernelGuestGlobals, OddObj);
+      kernel_guest_globals_ +
+      offsetof(KernelGuestGlobals, XboxKernelDefaultObject);
 
   // init unknown object
 
-  block->OddObj.field0 = 0x1000000;
-  block->OddObj.field4 = 1;
-  block->OddObj.points_to_self =
-      oddobject_offset + offsetof(X_UNKNOWN_TYPE_REFED, points_to_self);
-  block->OddObj.points_to_prior = block->OddObj.points_to_self;
+  block->XboxKernelDefaultObject.type = DISPATCHER_AUTO_RESET_EVENT;
+  block->XboxKernelDefaultObject.signal_state = 1;
+  block->XboxKernelDefaultObject.wait_list.flink_ptr =
+      oddobject_offset + offsetof(X_DISPATCH_HEADER, wait_list.flink_ptr);
+  block->XboxKernelDefaultObject.wait_list.blink_ptr =
+      block->XboxKernelDefaultObject.wait_list.flink_ptr;
 
   // init thread object
   block->ExThreadObjectType.pool_tag = 0x65726854;
