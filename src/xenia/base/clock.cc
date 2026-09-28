@@ -26,8 +26,9 @@ DEFINE_bool(clock_no_scaling, false,
             "Guest system time is directly pulled from host.",
             "CPU");
 DEFINE_bool(clock_source_raw, false,
-            "Use the RDTSC instruction as the time source. "
-            "Host CPU must support invariant TSC.",
+            "On x64, Use the RDTSC instruction as the time source. Requires "
+            "invariant TSC. "
+            "On a64, Use the CNTVCT_EL0 register as the time source",
             "CPU");
 
 namespace xe {
@@ -50,10 +51,9 @@ uint64_t last_host_tick_count_ = Clock::QueryHostTickCount();
 
 using tick_mutex_type = std::mutex;
 
-// Mutex to ensure last_host_tick_count_ and last_guest_tick_count_ are in sync.
-// Heap-allocated and intentionally leaked to avoid static destruction order
-// issues where threads may outlive static destructors.
-static tick_mutex_type* tick_mutex_ = new tick_mutex_type();
+// Mutex to ensure last_host_tick_count_ and last_guest_tick_count_ are in sync
+// std::mutex tick_mutex_;
+static tick_mutex_type tick_mutex_;
 
 void RecomputeGuestTickScalar() {
   // Create a rational number with numerator (first) and denominator (second)
@@ -71,7 +71,7 @@ void RecomputeGuestTickScalar() {
   // Keep this a rational calculation and reduce the fraction
   reduce_fraction(frac);
 
-  std::lock_guard<tick_mutex_type> lock(*tick_mutex_);
+  std::lock_guard<tick_mutex_type> lock(tick_mutex_);
   guest_tick_ratio_ = frac;
 }
 
@@ -85,7 +85,7 @@ uint64_t UpdateGuestClock() {
     return host_tick_count * guest_tick_ratio_.first / guest_tick_ratio_.second;
   }
 
-  std::unique_lock<tick_mutex_type> lock(*tick_mutex_, std::defer_lock);
+  std::unique_lock<tick_mutex_type> lock(tick_mutex_, std::defer_lock);
   if (lock.try_lock()) {
     // Translate host tick count to guest tick count.
     uint64_t host_tick_delta = host_tick_count > last_host_tick_count_
@@ -146,7 +146,7 @@ void Clock::set_guest_time_scalar(double scalar) {
 }
 
 std::pair<uint64_t, uint64_t> Clock::guest_tick_ratio() {
-  std::lock_guard<tick_mutex_type> lock(*tick_mutex_);
+  std::lock_guard<tick_mutex_type> lock(tick_mutex_);
   return guest_tick_ratio_;
 }
 
