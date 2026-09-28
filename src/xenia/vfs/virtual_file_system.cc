@@ -66,6 +66,15 @@ Device* VirtualFileSystem::GetDevice(const std::string_view path) {
 bool VirtualFileSystem::RegisterSymbolicLink(const std::string_view path,
                                              const std::string_view target) {
   auto global_lock = global_critical_region_.Acquire();
+  auto it = std::find_if(
+      symlinks_.cbegin(), symlinks_.cend(),
+      [&](const auto& s) { return xe::utf8::equal_case(path, s.first); });
+  if (it != symlinks_.end()) {
+    XELOGE("Trying to re-register already registered symbolic link: {} => {}",
+           path, target);
+    return false;
+  }
+
   symlinks_.insert({std::string(path), std::string(target)});
   XELOGD("Registered symbolic link: {} => {}", path, target);
 
@@ -84,6 +93,14 @@ bool VirtualFileSystem::UnregisterSymbolicLink(const std::string_view path) {
 
   symlinks_.erase(it);
   return true;
+}
+
+bool VirtualFileSystem::IsSymbolicLinkRegistered(const std::string_view path) {
+  auto it = std::find_if(
+      symlinks_.cbegin(), symlinks_.cend(),
+      [&](const auto& s) { return xe::utf8::equal_case(path, s.first); });
+
+  return it != symlinks_.cend();
 }
 
 bool VirtualFileSystem::FindSymbolicLink(const std::string_view path,
@@ -223,7 +240,7 @@ X_STATUS VirtualFileSystem::OpenFile(Entry* root_entry,
                                : root_entry->ResolvePath(base_path);
     if (!parent_entry) {
       *out_action = FileAction::kDoesNotExist;
-      return X_STATUS_NO_SUCH_FILE;
+      return X_STATUS_OBJECT_PATH_NOT_FOUND;
     }
 
     auto file_name = xe::utf8::find_name_from_guest_path(path);
@@ -239,11 +256,11 @@ X_STATUS VirtualFileSystem::OpenFile(Entry* root_entry,
 
     // If the entry does not exist on the host then remove the cached entry
     if (parent_entry) {
-      const xe::vfs::HostPathEntry* host_Path =
+      const xe::vfs::HostPathEntry* host_path =
           dynamic_cast<const xe::vfs::HostPathEntry*>(parent_entry);
 
-      if (host_Path) {
-        auto const file_path = host_Path->host_path() / entry->name();
+      if (host_path) {
+        auto const file_path = host_path->host_path() / entry->name();
 
         if (!std::filesystem::exists(file_path)) {
           // Remove cached entry
@@ -261,7 +278,7 @@ X_STATUS VirtualFileSystem::OpenFile(Entry* root_entry,
       // Must exist.
       if (!entry) {
         *out_action = FileAction::kDoesNotExist;
-        return X_STATUS_NO_SUCH_FILE;
+        return X_STATUS_OBJECT_NAME_NOT_FOUND;
       }
       break;
     case FileDisposition::kCreate:
@@ -344,7 +361,7 @@ X_STATUS VirtualFileSystem::OpenFile(Entry* root_entry,
 
 X_STATUS VirtualFileSystem::ExtractContentFile(Entry* entry,
                                                std::filesystem::path base_path,
-                                               uint64_t& progress,
+                                               std::atomic<uint64_t>& progress,
                                                bool extract_to_root) {
   // Allocate a buffer when needed.
   size_t buffer_size = 0;
@@ -421,8 +438,8 @@ X_STATUS VirtualFileSystem::ExtractContentFile(Entry* entry,
 }
 
 X_STATUS VirtualFileSystem::ExtractContentFiles(
-    Device* device, std::filesystem::path base_path, uint64_t& progress,
-    std::function<bool()> should_cancel) {
+    Device* device, std::filesystem::path base_path,
+    std::atomic<uint64_t>& progress, std::function<bool()> should_cancel) {
   // Run through all the files, breadth-first style.
   std::queue<vfs::Entry*> queue;
   auto root = device->ResolvePath("/");
