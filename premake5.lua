@@ -759,6 +759,7 @@ workspace("xenia")
 
   include("third_party/aes_128.lua")
   include("third_party/asio.lua")
+  include("third_party/boost_context.lua")
   include("third_party/capstone.lua")
   include("third_party/dxbc.lua")
   include("third_party/dxilconv.lua")

@@ -109,7 +109,8 @@ DECLARE_bool(allow_plugins);
 
 DECLARE_bool(mount_scratch);
 DECLARE_bool(mount_cache);
-DECLARE_bool(mount_memory_unit);
+DEFINE_bool(mount_memory_unit, false, "Enable memory unit (MU) mount",
+            "Storage");
 DECLARE_bool(force_mount_devkit);
 
 DEFINE_int32(priority_class, 0,

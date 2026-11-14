@@ -36,6 +36,7 @@ project("xenia-app")
   })
   links({
     "aes_128",
+    "boost_context",
     "capstone",
     "fmt",
     "dxbc",
