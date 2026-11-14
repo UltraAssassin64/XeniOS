@@ -206,6 +206,12 @@ static void ExceptionHandlerCallback(int signal_number, siginfo_t* signal_info,
       return;
     }
   }
+
+  // Nobody handled it. The faulting instruction is retried when we return, so
+  // a genuine host crash shows up as a hang; record where it happened.
+  XELOGE("Unhandled host exception: signal={} pc=0x{:016X} address=0x{:016X}",
+         signal_number, uint64_t(ex.pc()),
+         reinterpret_cast<uint64_t>(signal_info->si_addr));
 }
 
 void ExceptionHandler::Install(Handler fn, void* data) {

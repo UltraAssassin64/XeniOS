@@ -707,6 +707,27 @@ void EmulatorAppIOS::EmulatorThread(const std::filesystem::path& game_path,
     }
 
     emulator_->MountStandardDrives();
+
+    // Emulator::Setup only stores the audio/graphics factories; the systems
+    // themselves are created by SetupSubsystems. Without this the first Vd*
+    // kernel call dereferences a null graphics system.
+    if (require_cpu_backend) {
+      setup_result = emulator_->SetupSubsystems();
+      if (XFAILED(setup_result)) {
+        XELOGE("iOS: Emulator::SetupSubsystems failed with status {:08X}", setup_result);
+        emulator_initialized_.store(false, std::memory_order_release);
+        emulator_cpu_initialized_.store(false, std::memory_order_release);
+        if (launched_with_game) {
+          app_context().CallInUIThread([this]() {
+            auto& ios_context =
+                static_cast<ui::IOSWindowedAppContext&>(app_context());
+            ios_context.NotifyGameExited();
+          });
+        }
+        return;
+      }
+    }
+
     if (auto* fs = emulator_->file_system()) {
       std::string cache_target;
       if (fs->FindSymbolicLink("cache:", cache_target)) {
