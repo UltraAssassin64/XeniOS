@@ -13,9 +13,11 @@
 #include <mutex>
 #include <queue>
 #include <stack>
+#include <vector>
 
 #include "SDL.h"
 #include "xenia/apu/audio_driver.h"
+#include "xenia/base/platform.h"
 #include "xenia/base/threading.h"
 
 namespace xe {
@@ -39,6 +41,16 @@ class SDLAudioDriver : public AudioDriver {
 
  protected:
   static void SDLCallback(void* userdata, Uint8* stream, int len);
+  // Writes this driver's next queued frame (or silence) to stream.
+  void RenderFrame(Uint8* stream, int len);
+
+#if XE_PLATFORM_IOS
+  // iOS exposes one output device and SDL refuses to open it twice, so every
+  // guest audio client shares the first driver's device and SDLCallback mixes
+  // them. Guarded by shared_drivers_mutex_.
+  static std::mutex shared_drivers_mutex_;
+  static std::vector<SDLAudioDriver*> shared_drivers_;
+#endif  // XE_PLATFORM_IOS
 
   xe::threading::Semaphore* semaphore_ = nullptr;
 

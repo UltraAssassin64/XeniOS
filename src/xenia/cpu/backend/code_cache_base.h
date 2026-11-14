@@ -328,6 +328,20 @@ class CodeCacheBase : public CodeCache {
         } else {
           XELOGI("iOS JIT: non-TXM path; using non-broker W^X defaults");
         }
+
+        // Without TXM a second RW view of the RX cache is permitted once JIT
+        // is enabled. Prefer it: the mprotect-flip fallback below has to
+        // page-align every function, which exhausts the cache after roughly
+        // 16k functions and dirties a full page for each one.
+        if (AcquireIOSPersistentGeneratedCodeMapping(
+                generated_code_execute_base_, generated_code_write_base_)) {
+          generated_code_uses_vm_remap_fallback_ = true;
+          generated_code_uses_ios_persistent_mapping_ = true;
+        } else {
+          generated_code_execute_base_ = nullptr;
+          generated_code_write_base_ = nullptr;
+          XELOGW("iOS JIT persistent dual-map setup failed");
+        }
       }
 
       if (!generated_code_execute_base_ || !generated_code_write_base_) {
@@ -848,7 +862,8 @@ class CodeCacheBase : public CodeCache {
       return false;
     }
 
-    if (!MaybeRequestExternalJitPrepare(execute, kGeneratedCodeSize)) {
+    if (IOSUseTXMBrokerPath() &&
+        !MaybeRequestExternalJitPrepare(execute, kGeneratedCodeSize)) {
       XELOGW("iOS JIT TXM: persistent external prepare request failed");
     }
 
@@ -1234,6 +1249,12 @@ class CodeCacheBase : public CodeCache {
 
   void EnsureCommitted(size_t high_mark) {
     using namespace xe::literals;
+    if (high_mark > kGeneratedCodeSize) {
+      xe::FatalError(fmt::format(
+          "JIT code cache is full ({} MiB). Please report this game to Xenia "
+          "developers.",
+          (kGeneratedCodeSize + 1) >> 20));
+    }
     size_t old_commit_mark, new_commit_mark;
     do {
       old_commit_mark = generated_code_commit_mark_;

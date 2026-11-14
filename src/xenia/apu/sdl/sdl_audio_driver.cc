@@ -22,6 +22,11 @@ namespace xe {
 namespace apu {
 namespace sdl {
 
+#if XE_PLATFORM_IOS
+std::mutex SDLAudioDriver::shared_drivers_mutex_;
+std::vector<SDLAudioDriver*> SDLAudioDriver::shared_drivers_;
+#endif  // XE_PLATFORM_IOS
+
 SDLAudioDriver::SDLAudioDriver(xe::threading::Semaphore* semaphore,
                                uint32_t frequency, uint32_t channels,
                                bool need_format_conversion)
@@ -68,6 +73,25 @@ bool SDLAudioDriver::Initialize() {
   }
   sdl_initialized_ = true;
 
+#if XE_PLATFORM_IOS
+  std::lock_guard<std::mutex> shared_lock(shared_drivers_mutex_);
+  if (!shared_drivers_.empty()) {
+    // The device is already open for an earlier client; join its mix. Frames
+    // are summed as-is, so only clients with the same layout can share it.
+    if (frame_frequency_ != shared_drivers_.front()->frame_frequency_ ||
+        frame_channels_ != shared_drivers_.front()->frame_channels_ ||
+        need_format_conversion_ !=
+            shared_drivers_.front()->need_format_conversion_) {
+      XELOGE("SDLAudioDriver: shared iOS device has a different frame format");
+      return false;
+    }
+    sdl_device_id_ = shared_drivers_.front()->sdl_device_id_;
+    sdl_device_channels_ = shared_drivers_.front()->sdl_device_channels_;
+    shared_drivers_.push_back(this);
+    return true;
+  }
+#endif  // XE_PLATFORM_IOS
+
   SDL_AudioSpec desired_spec = {};
   SDL_AudioSpec obtained_spec;
   desired_spec.freq = frame_frequency_;
@@ -105,6 +129,9 @@ bool SDLAudioDriver::Initialize() {
     return false;
   }
   sdl_device_channels_ = obtained_spec.channels;
+#if XE_PLATFORM_IOS
+  shared_drivers_.push_back(this);
+#endif  // XE_PLATFORM_IOS
 
   SDL_PauseAudioDevice(sdl_device_id_, 0);
 
@@ -136,6 +163,23 @@ void SDLAudioDriver::Pause() { SDL_PauseAudioDevice(sdl_device_id_, 1); }
 void SDLAudioDriver::Resume() { SDL_PauseAudioDevice(sdl_device_id_, 0); }
 
 void SDLAudioDriver::Shutdown() {
+#if XE_PLATFORM_IOS
+  {
+    // Leave the mix. Only the last client closes the shared device, and it
+    // does so after dropping the lock because the close waits for a running
+    // SDLCallback, which takes the same lock.
+    std::lock_guard<std::mutex> shared_lock(shared_drivers_mutex_);
+    for (auto it = shared_drivers_.begin(); it != shared_drivers_.end(); ++it) {
+      if (*it == this) {
+        shared_drivers_.erase(it);
+        break;
+      }
+    }
+    if (!shared_drivers_.empty()) {
+      sdl_device_id_ = -1;
+    }
+  }
+#endif  // XE_PLATFORM_IOS
   if (sdl_device_id_ > 0) {
     SDL_CloseAudioDevice(sdl_device_id_);
     sdl_device_id_ = -1;
@@ -161,48 +205,64 @@ void SDLAudioDriver::SDLCallback(void* userdata, Uint8* stream, int len) {
     XELOGE("SDLAudioDriver::sdl_callback called with nullptr.");
     return;
   }
-  const auto driver = static_cast<SDLAudioDriver*>(userdata);
-  assert_true(len == sizeof(float) * driver->channel_samples_ *
-                         driver->sdl_device_channels_);
+#if XE_PLATFORM_IOS
+  // One device serves every client: render each and sum them.
+  std::lock_guard<std::mutex> shared_lock(shared_drivers_mutex_);
+  std::memset(stream, 0, len);
+  float mix_frame[kFrameSizeMax / sizeof(float)];
+  if (len < 0 || static_cast<size_t>(len) > sizeof(mix_frame)) {
+    return;
+  }
+  auto* mixed = reinterpret_cast<float*>(stream);
+  for (SDLAudioDriver* driver : shared_drivers_) {
+    driver->RenderFrame(reinterpret_cast<Uint8*>(mix_frame), len);
+    for (size_t i = 0; i < static_cast<size_t>(len) / sizeof(float); ++i) {
+      mixed[i] += mix_frame[i];
+    }
+  }
+#else
+  static_cast<SDLAudioDriver*>(userdata)->RenderFrame(stream, len);
+#endif  // XE_PLATFORM_IOS
+};
 
-  std::unique_lock<std::mutex> guard(driver->frames_mutex_);
-  if (driver->frames_queued_.empty()) {
+void SDLAudioDriver::RenderFrame(Uint8* stream, int len) {
+  assert_true(len == sizeof(float) * channel_samples_ * sdl_device_channels_);
+
+  std::unique_lock<std::mutex> guard(frames_mutex_);
+  if (frames_queued_.empty()) {
     std::memset(stream, 0, len);
   } else {
-    auto buffer = driver->frames_queued_.front();
-    driver->frames_queued_.pop();
+    auto buffer = frames_queued_.front();
+    frames_queued_.pop();
     if (cvars::mute) {
       std::memset(stream, 0, len);
-    } else if (driver->need_format_conversion_) {
-      switch (driver->sdl_device_channels_) {
+    } else if (need_format_conversion_) {
+      switch (sdl_device_channels_) {
         case 2:
           conversion::sequential_6_BE_to_interleaved_2_LE(
-              reinterpret_cast<float*>(stream), buffer,
-              driver->channel_samples_);
+              reinterpret_cast<float*>(stream), buffer, channel_samples_);
           break;
         case 6:
           conversion::sequential_6_BE_to_interleaved_6_LE(
-              reinterpret_cast<float*>(stream), buffer,
-              driver->channel_samples_);
+              reinterpret_cast<float*>(stream), buffer, channel_samples_);
           break;
         default:
-          assert_unhandled_case(driver->sdl_device_channels_);
+          assert_unhandled_case(sdl_device_channels_);
           break;
       }
     } else {
-      assert_true(driver->sdl_device_channels_ == driver->frame_channels_);
-      if (driver->volume_ != 1.0f) {
+      assert_true(sdl_device_channels_ == frame_channels_);
+      if (volume_ != 1.0f) {
         std::memset(stream, 0, len);
-        SDL_MixAudioFormat(
-            stream, reinterpret_cast<Uint8*>(buffer), AUDIO_F32, len,
-            static_cast<int>(driver->volume_ * SDL_MIX_MAXVOLUME));
+        SDL_MixAudioFormat(stream, reinterpret_cast<Uint8*>(buffer), AUDIO_F32,
+                           len, static_cast<int>(volume_ * SDL_MIX_MAXVOLUME));
       } else {
         std::memcpy(stream, buffer, len);
       }
     }
-    driver->frames_unused_.push(buffer);
+    frames_unused_.push(buffer);
 
-    auto ret = driver->semaphore_->Release(1, nullptr);
+    auto ret = semaphore_->Release(1, nullptr);
     assert_true(ret);
   }
 };

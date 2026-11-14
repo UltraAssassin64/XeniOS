@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -11325,8 +11326,18 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 
   // Create and initialize the Xenia app.
   app_ = xe::ui::GetWindowedAppCreator()(*app_context_);
-  if (cvars::log_file.empty()) {
-    cvars::log_file = xe_get_ios_documents_path() / "xenia.log";
+  // Give every launch its own log so an earlier run is never overwritten. A
+  // path saved in the config from a previous launch also lives in Documents,
+  // so replace that too; a custom location elsewhere is left alone.
+  if (cvars::log_file.empty() ||
+      cvars::log_file.parent_path() == xe_get_ios_documents_path()) {
+    std::time_t now = std::time(nullptr);
+    std::tm local_time = {};
+    localtime_r(&now, &local_time);
+    char log_name[40];
+    std::strftime(log_name, sizeof(log_name), "xenia_%Y-%m-%d_%H-%M-%S.log",
+                  &local_time);
+    cvars::log_file = xe_get_ios_documents_path() / log_name;
   }
   xe::InitializeLogging(app_->GetName(), true);
 

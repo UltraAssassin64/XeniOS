@@ -656,8 +656,15 @@ jobs:
             echo "::warning::Ad-hoc signing failed; packaging unsigned app bundle"
           fi
 
+          # Name the IPA and the uploaded artifact after the app version, build
+          # number and commit so builds can be told apart once downloaded.
+          app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_bundle/Info.plist")"
+          app_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_bundle/Info.plist")"
+          artifact_suffix="v${app_version}_b${app_build}_${GITHUB_SHA::9}"
+          echo "artifact_suffix=${artifact_suffix}" >> "$GITHUB_OUTPUT"
+
           mkdir -p artifacts/release
-          ipa_out="$PWD/artifacts/release/xenios_ios_iphone_ipad.ipa"
+          ipa_out="$PWD/artifacts/release/xenios_ios_iphone_ipad_${artifact_suffix}.ipa"
           tmp="$(mktemp -d "${TMPDIR:-/tmp}/xenios_ci_ipa.XXXXXX")"
           mkdir -p "$tmp/Payload"
           ditto "$app_bundle" "$tmp/Payload/$(basename "$app_bundle")"
@@ -671,7 +678,7 @@ jobs:
         if: steps.prepare_artifacts.outcome == 'success'
         uses: actions/upload-artifact@main
         with:
-          name: xenios_ios_arm64
+          name: xenios_ios_arm64_${{ steps.prepare_artifacts.outputs.artifact_suffix }}
           path: artifacts/release
           if-no-files-found: error
 
