@@ -49,6 +49,9 @@ project("xenia-ui")
       "windowed_app_context_qt.cc",
       "windowed_app_context_qt.h",
       "windowed_app_main_qt.cc",
+      -- wxWidgets is a desktop-only toolkit and is not used on iOS.
+      "*_wx.cc",
+      "*_wx.h",
     })
   filter({})
   if os.istarget("android") then

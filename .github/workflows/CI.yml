@@ -637,7 +637,8 @@ jobs:
             DEVELOPMENT_TEAM= \
             PROVISIONING_PROFILE_SPECIFIER= \
             CODE_SIGN_IDENTITY= \
-            IPHONEOS_DEPLOYMENT_TARGET=${IPHONEOS_DEPLOYMENT_TARGET}
+            IPHONEOS_DEPLOYMENT_TARGET=${IPHONEOS_DEPLOYMENT_TARGET} \
+            -IDEBuildingContinueBuildingAfterErrors=YES
 
       - name: Prepare artifacts
         id: prepare_artifacts

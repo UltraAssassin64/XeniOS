@@ -487,6 +487,9 @@ if is_ios_target() then
       -- Prevent #include <dispatch/dispatch.h> (used by metal-cpp) from
       -- triggering implicit module imports that pull in Foundation (ObjC).
       "-fno-modules",
+      -- "-w" above hides warnings, so promote use of any API newer than
+      -- IPHONEOS_DEPLOYMENT_TARGET without an @available guard to an error.
+      "-Werror=unguarded-availability-new",
     })
     files({
       'src/xenia/base/memory_fastmem_ios.h',
@@ -709,7 +712,7 @@ workspace("xenia")
         architecture("ARM64")
         xcodebuildsettings({
           ["ARCHS"] = "arm64",
-          ["IPHONEOS_DEPLOYMENT_TARGET"] = "17.0",
+          ["IPHONEOS_DEPLOYMENT_TARGET"] = "16.0",
           ["SDKROOT"] = "iphoneos",
         })
       filter({})
