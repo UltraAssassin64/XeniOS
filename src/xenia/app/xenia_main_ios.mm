@@ -21,6 +21,7 @@
 #include <thread>
 #include <vector>
 
+#include "build/version.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/filesystem.h"
 #include "xenia/base/logging.h"
@@ -560,6 +561,8 @@ bool EmulatorAppIOS::OnInitialize() {
     return profile_manager->GetProfile(xuid) != nullptr;
   });
 
+  XELOGI("iOS: Build {}@{} #{} on {}", XE_BUILD_BRANCH, XE_BUILD_COMMIT_SHORT,
+         XE_BUILD_NUMBER, XE_BUILD_DATE);
   XELOGI("iOS: EmulatorAppIOS initialized successfully");
   return true;
 }
