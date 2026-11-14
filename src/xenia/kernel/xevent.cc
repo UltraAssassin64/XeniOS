@@ -55,6 +55,7 @@ void XEvent::InitializeNative(void* native_ptr, X_DISPATCH_HEADER* header) {
     event_ = xe::threading::Event::CreateAutoResetEvent(initial_state);
   }
   assert_not_null(event_);
+  SetNativePointer(memory()->HostToGuestVirtual(native_ptr), true);
 }
 
 int32_t XEvent::Set(uint32_t priority_increment, bool wait) {

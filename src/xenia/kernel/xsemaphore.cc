@@ -37,7 +37,11 @@ bool XSemaphore::InitializeNative(void* native_ptr, X_DISPATCH_HEADER* header) {
   maximum_count_ = semaphore->limit;
   semaphore_ = xe::threading::Semaphore::Create(semaphore->header.signal_state,
                                                 semaphore->limit);
-  return !!semaphore_;
+  if (!semaphore_) {
+    return false;
+  }
+  SetNativePointer(memory()->HostToGuestVirtual(native_ptr), true);
+  return true;
 }
 
 bool XSemaphore::ReleaseSemaphore(int32_t release_count,
