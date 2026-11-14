@@ -65,6 +65,11 @@ DEFINE_path(
 DEFINE_bool(mount_scratch, false, "Enable scratch mount", "Storage");
 DEFINE_bool(mount_cache, true, "Enable cache mount", "Storage");
 
+// Read by Emulator::SetupSubsystems to record the active backends. On desktop
+// these live in xenia_main.cc (excluded on iOS); iOS only has these backends.
+DEFINE_string(apu, "sdl", "Audio system. Use: [sdl, nop]", "APU");
+DEFINE_string(gpu, "metal", "Graphics system. Use: [metal]", "GPU");
+
 // CVar normally defined in windowed_app_main_qt.cc (excluded on iOS).
 DEFINE_transient_path(target, "", "Specifies the target file to run.",
                       "General");
