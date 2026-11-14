@@ -1198,11 +1198,27 @@ std::string ChoiceTitleForItem(const IOSConfigItem& item) {
   return item.choices.empty() ? std::string() : item.choices.front().title;
 }
 
+// The log file for this launch. Decided once, on first use at startup, and
+// remembered here because loading the config afterwards resets
+// cvars::log_file. Every launch gets its own xenia_<date>_<time>.log so an
+// earlier run is never overwritten; a path saved in the config by a previous
+// launch also lives in Documents, so that is replaced too, while a custom
+// location elsewhere is kept.
 std::filesystem::path GetLogFilePath() {
-  if (!cvars::log_file.empty()) {
-    return cvars::log_file;
-  }
-  return xe_get_ios_documents_path() / "xenia.log";
+  static const std::filesystem::path session_log_path = []() {
+    if (!cvars::log_file.empty() &&
+        cvars::log_file.parent_path() != xe_get_ios_documents_path()) {
+      return std::filesystem::path(cvars::log_file);
+    }
+    std::time_t now = std::time(nullptr);
+    std::tm local_time = {};
+    localtime_r(&now, &local_time);
+    char log_name[40];
+    std::strftime(log_name, sizeof(log_name), "xenia_%Y-%m-%d_%H-%M-%S.log",
+                  &local_time);
+    return xe_get_ios_documents_path() / log_name;
+  }();
+  return session_log_path;
 }
 
 std::string ReadFileTail(const std::filesystem::path& path, size_t max_bytes) {
@@ -7504,7 +7520,7 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
   if (![[NSFileManager defaultManager] fileExistsAtPath:log_path_ns]) {
     UIAlertController* alert =
         [UIAlertController alertControllerWithTitle:@"Log Not Found"
-                                            message:@"No xenia.log file exists yet."
+                                            message:@"No log file exists yet for this session."
                                      preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"OK"
                                               style:UIAlertActionStyleDefault
@@ -11326,19 +11342,7 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 
   // Create and initialize the Xenia app.
   app_ = xe::ui::GetWindowedAppCreator()(*app_context_);
-  // Give every launch its own log so an earlier run is never overwritten. A
-  // path saved in the config from a previous launch also lives in Documents,
-  // so replace that too; a custom location elsewhere is left alone.
-  if (cvars::log_file.empty() ||
-      cvars::log_file.parent_path() == xe_get_ios_documents_path()) {
-    std::time_t now = std::time(nullptr);
-    std::tm local_time = {};
-    localtime_r(&now, &local_time);
-    char log_name[40];
-    std::strftime(log_name, sizeof(log_name), "xenia_%Y-%m-%d_%H-%M-%S.log",
-                  &local_time);
-    cvars::log_file = xe_get_ios_documents_path() / log_name;
-  }
+  cvars::log_file = GetLogFilePath();
   xe::InitializeLogging(app_->GetName(), true);
 
   if (!app_->OnInitialize()) {

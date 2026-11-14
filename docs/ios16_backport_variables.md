@@ -2,7 +2,8 @@
 
 Every identifier introduced by the backport work that does not already exist in
 `xenios-jp/XeniOS` (upstream) under the same name and role. Identifiers copied
-verbatim from upstream files are not listed.
+from upstream code (for example the locals in `SDLInputDriver::EnumerateDevices`)
+are not listed.
 
 Line numbers are as of the commit that last touched this file; regenerate after
 further edits.
@@ -18,9 +19,10 @@ further edits.
 | `shared_lock` | local (lock guard) | Holds shared_drivers_mutex_. | `src/xenia/apu/sdl/sdl_audio_driver.cc` | 77, 171, 210 | 3 |
 | `mix_frame` | local in SDLCallback (iOS only) | Scratch buffer one driver is rendered into before being summed. | `src/xenia/apu/sdl/sdl_audio_driver.cc` | 212, 213, 218, 220 | 4 |
 | `mixed` | local in SDLCallback (iOS only) | The output stream viewed as float samples. | `src/xenia/apu/sdl/sdl_audio_driver.cc` | 216, 220 | 2 |
-| `now` | local in xe_ios_main startup | Current time used to name the log file. | `src/xenia/ui/windowed_app_main_ios.mm` | 11334, 11336 | 2 |
-| `local_time` | local in xe_ios_main startup | now broken down in the device's time zone. | `src/xenia/ui/windowed_app_main_ios.mm` | 11335, 11336, 11339 | 3 |
-| `log_name` | local in xe_ios_main startup | File name xenia_<date>_<time>.log. | `src/xenia/ui/windowed_app_main_ios.mm` | 11337, 11338, 11340 | 4 |
+| `session_log_path` | function-local static in GetLogFilePath | The log file chosen for this launch; read by the logger setup and the in-app log viewer. | `src/xenia/ui/windowed_app_main_ios.mm` | 1208, 1221 | 2 |
+| `now` | local in GetLogFilePath | Current time used to name the log file. | `src/xenia/ui/windowed_app_main_ios.mm` | 1213, 1215 | 2 |
+| `local_time` | local in GetLogFilePath | now broken down in the device's time zone. | `src/xenia/ui/windowed_app_main_ios.mm` | 1214, 1215, 1218 | 3 |
+| `log_name` | local in GetLogFilePath | File name xenia_<date>_<time>.log. | `src/xenia/ui/windowed_app_main_ios.mm` | 1216, 1217, 1219 | 4 |
 | `app_version` | shell variable, CI Prepare artifacts step | CFBundleShortVersionString of the built app. | `.github/workflows/CI.yml` | 661, 663 | 2 |
 | `app_build` | shell variable, CI Prepare artifacts step | CFBundleVersion of the built app. | `.github/workflows/CI.yml` | 662, 663 | 2 |
 | `artifact_suffix` | shell variable and step output, CI | v<version>_b<build>_<commit>, appended to the IPA and artifact names. | `.github/workflows/CI.yml` | 663, 664, 667, 681 | 5 |
@@ -38,6 +40,7 @@ further edits.
 | `shared_lock` | 3 |
 | `mix_frame` | 4 |
 | `mixed` | 2 |
+| `session_log_path` | 2 |
 | `now` | 2 |
 | `local_time` | 3 |
 | `log_name` | 4 |

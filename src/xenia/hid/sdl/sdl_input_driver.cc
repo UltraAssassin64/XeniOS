@@ -417,6 +417,31 @@ X_RESULT SDLInputDriver::GetKeystroke(uint32_t users, uint32_t flags,
 
 InputType SDLInputDriver::GetInputType() const { return InputType::Controller; }
 
+// InputSystem binds guest controller slots from this list; without it no
+// connected pad is ever assigned to a player.
+std::vector<InputDeviceInfo> SDLInputDriver::EnumerateDevices() {
+  std::vector<InputDeviceInfo> out;
+  for (size_t i = 0; i < controllers_.size(); ++i) {
+    auto* sdl = controllers_.at(i).sdl;
+    if (!sdl) {
+      continue;
+    }
+    InputDeviceInfo info{};
+    info.driver_slot = static_cast<uint8_t>(i);
+    const char* name = SDL_GameControllerName(sdl);
+    auto* joystick = SDL_GameControllerGetJoystick(sdl);
+    if (joystick) {
+      char guid_buf[33] = {};
+      SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joystick), guid_buf,
+                                sizeof(guid_buf));
+      info.stable_id = guid_buf;
+    }
+    info.display_name = name ? name : "Controller";
+    out.push_back(std::move(info));
+  }
+  return out;
+}
+
 void SDLInputDriver::HandleEvent(const SDL_Event& event) {
   // This callback will likely run on the thread that posts the event, which
   // may be a dedicated thread SDL has created for the joystick subsystem.
@@ -518,6 +543,7 @@ void SDLInputDriver::OnControllerDeviceAdded(const SDL_Event& event) {
     XELOGI("SDL OnControllerDeviceAdded: Added at index {}.", user_id);
     XELOGI("SDL Controller {}: {}", user_id,
            SDL_GameControllerMapping(controller));
+    NotifyDevicesChanged();
   } else {
     // No more controllers needed, close it.
     SDL_GameControllerClose(controller);
@@ -533,6 +559,7 @@ void SDLInputDriver::OnControllerDeviceRemoved(const SDL_Event& event) {
     controllers_.at(*idx) = {};
     keystroke_states_.at(*idx) = {};
     XELOGI("SDL OnControllerDeviceRemoved: Removed at player index {}.", *idx);
+    NotifyDevicesChanged();
   } else {
     // Can happen in case all slots where full previously.
     XELOGW("SDL OnControllerDeviceRemoved: Ignored. Unused device.");
