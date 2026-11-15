@@ -548,6 +548,7 @@ class MetalCommandProcessor : public CommandProcessor {
     uint32_t compile_pending = 0;   // Shader or pipeline still compiling.
     uint32_t encoded = 0;           // Reached a Metal draw call.
     uint64_t encoded_vertices = 0;
+    uint32_t probed = 0;  // Scene draws logged in this window.
   };
   DrawStats draw_stats_;
   std::unordered_map<uint64_t, MTL::RenderPipelineState*> msl_pipeline_cache_;

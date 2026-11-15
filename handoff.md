@@ -123,36 +123,61 @@ resolve to the 16F texture through the `kFull64bpp` copy shader. The path is
 render target -> `DumpRenderTargets` (compute, into the private EDRAM buffer)
 -> resolve compute shader -> shared memory buffer -> texture load.
 
+### Result of the resolve probe (build #9528)
+
+- Every resolve from a 2x MSAA source has `edram_nonzero=0` and
+  `dest_nonzero=0`: the scene colour (`source_format=3`, tiles 1024+64x16 and
+  1024+26x16) and the scene depth (`depth=1`, tiles 0+64x16 and 0+26x16).
+- Resolves of non-MSAA 8888 targets (the UI / final image) have matching,
+  non-zero `edram_nonzero` and `dest_nonzero`, so the dump and resolve paths
+  work in general.
+- So the multisampled scene colour **and** depth targets are empty (or dump as
+  empty) right after ~250 draws were encoded into them. Depth being all zero,
+  stencil included, means no draw wrote depth either. `native_2x_msaa=false`
+  (2x emulated with 4x, different dump shader) was tried earlier with no
+  change, which argues against a 2x-specific dump shader bug.
+- Render pass store actions are `Store` and the dump reads `rt->texture()`,
+  which is the multisampled texture, so those were checked and look right.
+
+Also noticed: the owner's config has drifted from defaults through their own
+experiments (`spirv_version_override="1.4"`, `metal_transfer_tile_instancing
+=true`, `metal_force_bc_decompress=true`, `async_shader_compilation=false`,
+`depth_bias_decal_clamp=5e-05`, `gpu_allow_invalid_upload_range=true`). The
+models were missing with defaults too, so these are not the cause, but ask
+the owner to reset them so runs are comparable. The log prints a full
+`CONFIG DUMP` at startup; check it on every log.
+
 ### Current step
 
-A **resolve probe** was added in `MetalRenderTargetCache::Resolve`
-(`src/xenia/gpu/metal/metal_render_target_cache.cc`). For every 97th resolve
-it snapshots the EDRAM buffer and the written range right after the copy and
-logs:
+A **scene draw probe** was added at the end of `IssueDrawMsl`
+(`src/xenia/gpu/metal/metal_command_processor.cc`). In the first frame of
+each 120-frame statistics window it logs up to 16 draws that target a
+multisampled surface:
 
 ```
-Metal resolve probe: #<n> shader=<copy shader index> depth=<0|1> source_format=<id> source_msaa=<0|1|2> edram_tiles=<base>+<rows>x<pitch> dest=0x<address> dest_format=<id> edram_nonzero=<n>/<total> dest_nonzero=<n>/<total>
+Metal scene draw probe: vertices=… primitive=… surface=0x… color0=0x… depth=0x… mode=0x… depth_control=0x… color_mask=0x… cull=0x… viewport=x,y WxH z=min..max ndc_scale=… ndc_offset=… scissor=x,y WxH
 ```
 
-The frame texture probe from commit `e3d763b26` is still in place.
+The resolve probe and frame texture probe are still in place.
 
-Check CI for the commit that added the resolve probe first (it also uses an
-Objective-C block in a `.cc`), then ask the owner for one log: boot to the
-title screen, wait about a minute, press Start, wait about ten seconds.
+Check CI for that commit first, then ask the owner for one log (title screen
+for about a minute, press Start, ten seconds).
 
 ### How to read the result
 
-Look at the lines with `source_format=3` (2_10_10_10_FLOAT) and
-`dest=0x15540000`, and the `depth=1` lines.
-
-- `edram_nonzero` is 0: the render target itself is empty, or the dump is.
-  The scene is lost in rendering (depth test, render target binding,
-  ownership transfers, clears). Look at `PerformTransfersAndResolveClears`
-  and at upstream's later fixes for MSAA depth transfers and first-use clears.
-- `edram_nonzero` is large but `dest_nonzero` is 0: the resolve copy shader
-  (`resolve_full_64bpp`) is failing for this format on this device.
-- Both are large: the resolve works and the texture load of the 16F data is
-  what returns zeros; look at the load shader for `k_16_16_16_16_FLOAT`.
+- Viewport or scissor empty, off the target, or `z` range inverted or
+  degenerate: the viewport/scissor math is wrong for the tiled 2x MSAA
+  surface (compare with `draw_util::GetHostViewportInfo` callers in the
+  Vulkan backend).
+- `depth_control` shows a depth test that can never pass against the cleared
+  value (decode `RB_DEPTHCONTROL` in `src/xenia/gpu/registers.h`; the
+  first-use clear is 1.0 at `metal_render_target_cache.cc` ~3580 and the
+  resolve clear is computed near line 6680): the depth clear value or the
+  reversed-Z handling is wrong.
+- `color_mask` 0 on all draws: only depth is being written, look at depth.
+- Everything looks sane: the draws are not reaching the target for another
+  reason (pipeline sample count, sample mask in the translated shader); next
+  probe should read the multisampled target directly.
 
 ### Other observations, unverified as causes
 

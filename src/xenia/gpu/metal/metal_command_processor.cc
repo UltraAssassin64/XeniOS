@@ -5596,6 +5596,32 @@ bool MetalCommandProcessor::IssueDrawMsl(
   ++draw_stats_.encoded;
   draw_stats_.encoded_vertices +=
       primitive_processing_result.host_draw_vertex_count;
+  // Scene draw diagnostics: in the first frame of each statistics window, log
+  // the state of the first draws that target a multisampled surface.
+  if (!draw_stats_.frames && draw_stats_.probed < 16 &&
+      regs.Get<reg::RB_SURFACE_INFO>().msaa_samples !=
+          xenos::MsaaSamples::k1X) {
+    ++draw_stats_.probed;
+    XELOGI(
+        "Metal scene draw probe: vertices={} primitive={} surface=0x{:08X} "
+        "color0=0x{:08X} depth=0x{:08X} mode=0x{:08X} "
+        "depth_control=0x{:08X} color_mask=0x{:X} cull=0x{:08X} "
+        "viewport={},{} {}x{} z={}..{} ndc_scale={},{},{} "
+        "ndc_offset={},{},{} scissor={},{} {}x{}",
+        primitive_processing_result.host_draw_vertex_count,
+        uint32_t(primitive_processing_result.host_primitive_type),
+        regs[XE_GPU_REG_RB_SURFACE_INFO], regs[XE_GPU_REG_RB_COLOR_INFO],
+        regs[XE_GPU_REG_RB_DEPTH_INFO], regs[XE_GPU_REG_RB_MODECONTROL],
+        normalized_depth_control.value, normalized_color_mask,
+        regs[XE_GPU_REG_PA_SU_SC_MODE_CNTL], viewport_info.xy_offset[0],
+        viewport_info.xy_offset[1], viewport_info.xy_extent[0],
+        viewport_info.xy_extent[1], viewport_info.z_min, viewport_info.z_max,
+        viewport_info.ndc_scale[0], viewport_info.ndc_scale[1],
+        viewport_info.ndc_scale[2], viewport_info.ndc_offset[0],
+        viewport_info.ndc_offset[1], viewport_info.ndc_offset[2],
+        uint32_t(msl_scissor_.x), uint32_t(msl_scissor_.y),
+        uint32_t(msl_scissor_.width), uint32_t(msl_scissor_.height));
+  }
 
   // Handle memexport.
   if (memexport_used && shared_memory_) {

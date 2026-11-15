@@ -65,6 +65,8 @@ further edits.
 | `probe_edram_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the dumped EDRAM span. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4903, 4907, 4930 | 3 |
 | `probe_dest_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4904, 4911, 4930 | 3 |
 | `probe_source` | local, resolve probe in MetalRenderTargetCache::Resolve | EDRAM info (format, MSAA, depth flag) of the resolve source. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4915, 4925, 4926, 4927 | 4 |
+| `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.h` | 551 | 1 |
+| `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5601, 5604 | 2 |
 
 ## Total references per name
 
@@ -112,6 +114,7 @@ further edits.
 | `probe_edram_nonzero` | 3 |
 | `probe_dest_nonzero` | 3 |
 | `probe_source` | 4 |
+| `probed` | 3 |
 
 ## Checks
 
