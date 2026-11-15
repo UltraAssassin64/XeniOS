@@ -52,6 +52,19 @@ further edits.
 | `probe_nonzero` | local, frame texture probe | How many of the bytes are non-zero. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1379, 1383, 1399 | 3 |
 | `probe_texels` | local, frame texture probe | Eight bytes from the middle column at 1/4, 1/2 and 3/4 of the image height. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1380, 1390, 1400 | 5 |
 | `probe_row` | local, frame texture probe | Bytes per image row, used to locate the sampled texels. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1387, 1391 | 3 |
+| `probe_count` | function-local static in MetalRenderTargetCache::Resolve (separate from the one in the texture cache) | Counts resolves so the resolve probe samples every 97th. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4872, 4873 | 2 |
+| `probe_index` | local, resolve probe in MetalRenderTargetCache::Resolve | Value of `probe_count` for this resolve. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4873, 4876, 4877, 4924 | 4 |
+| `probe_edram_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Size in bytes of the EDRAM buffer. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4874, 4881, 4887, 4890, 4897, 4899, 4902, 4912 | 8 |
+| `probe_dest_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Size in bytes of the range the resolve wrote. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4875, 4878, 4881, 4890, 4910, 4931 | 6 |
+| `probe_buffer` | local, resolve probe in MetalRenderTargetCache::Resolve | Temporary CPU-readable buffer holding the snapshot of EDRAM and of the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4880, 4884, 4886, 4890, 4894, 4932, 4934, 4935 | 8 |
+| `probe_blit` | local, resolve probe in MetalRenderTargetCache::Resolve | Blit encoder that copies the snapshot. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4883, 4885, 4886, 4888, 4891 | 5 |
+| `probe_data` | local, resolve probe in MetalRenderTargetCache::Resolve | Pointer to the snapshot bytes. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4893, 4905, 4908, 4912 | 4 |
+| `probe_tile_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Bytes per EDRAM tile. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4896, 4899, 4901 | 3 |
+| `probe_span_start` | local, resolve probe in MetalRenderTargetCache::Resolve | Byte offset in EDRAM of the first dumped tile. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4898, 4902, 4908 | 3 |
+| `probe_span_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Byte length of the dumped tile span. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4900, 4906, 4930 | 3 |
+| `probe_edram_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the dumped EDRAM span. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4903, 4907, 4930 | 3 |
+| `probe_dest_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4904, 4911, 4930 | 3 |
+| `probe_source` | local, resolve probe in MetalRenderTargetCache::Resolve | EDRAM info (format, MSAA, depth flag) of the resolve source. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4915, 4925, 4926, 4927 | 4 |
 
 ## Total references per name
 
@@ -80,20 +93,33 @@ further edits.
 | `app_build` | 2 |
 | `artifact_suffix` | 5 |
 | `boost_context` | 15 |
-| `probe_count` | 2 |
-| `probe_index` | 4 |
+| `probe_count` | 4 |
+| `probe_index` | 8 |
 | `probe_format` | 2 |
 | `probe_base` | 2 |
 | `probe_size` | 5 |
-| `probe_data` | 4 |
+| `probe_data` | 8 |
 | `probe_nonzero` | 3 |
 | `probe_texels` | 5 |
 | `probe_row` | 3 |
+| `probe_edram_size` | 8 |
+| `probe_dest_size` | 6 |
+| `probe_buffer` | 8 |
+| `probe_blit` | 5 |
+| `probe_tile_size` | 3 |
+| `probe_span_start` | 3 |
+| `probe_span_size` | 3 |
+| `probe_edram_nonzero` | 3 |
+| `probe_dest_nonzero` | 3 |
+| `probe_source` | 4 |
 
 ## Checks
 
 - None of these names is defined anywhere else in this repository, so there are
-  no conflicting or circular definitions.
+  no conflicting or circular definitions. `probe_count`, `probe_index` and
+  `probe_data` are each declared in two places (the texture cache probe and the
+  resolve probe); they are locals of separate functions in separate files and
+  do not refer to each other.
 - `shared_drivers_mutex_`, `shared_drivers_`, `shared_lock`, `mix_frame` and
   `mixed` only exist inside `#if XE_PLATFORM_IOS` blocks.
 - `artifact_suffix` is written to `$GITHUB_OUTPUT` in the `prepare_artifacts`

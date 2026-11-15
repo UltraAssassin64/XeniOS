@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -4864,6 +4865,76 @@ bool MetalRenderTargetCache::Resolve(Memory& memory, uint32_t& written_address,
                 MTL::Size::Make(8, 8, 1));
 
             encoder->endEncoding();
+            // Resolve diagnostics: for every 97th resolve, snapshot the EDRAM
+            // buffer and the destination range right after the copy and log
+            // how much of the dumped tiles and of the written range is
+            // non-zero, to tell an empty render target from a failed copy.
+            static std::atomic<uint32_t> probe_count{0};
+            const uint32_t probe_index = probe_count.fetch_add(1);
+            const size_t probe_edram_size = edram_buffer_->length();
+            const size_t probe_dest_size = resolve_info.copy_dest_extent_length;
+            if (!draw_resolution_scaled && probe_index % 97 == 0 &&
+                probe_index < 97 * 400 &&
+                resolve_info.copy_dest_extent_start + probe_dest_size <=
+                    dest_buffer->length()) {
+              MTL::Buffer* probe_buffer =
+                  device_->newBuffer(probe_edram_size + probe_dest_size,
+                                     MTL::ResourceStorageModeShared);
+              MTL::BlitCommandEncoder* probe_blit =
+                  probe_buffer ? cmd->blitCommandEncoder() : nullptr;
+              if (probe_blit) {
+                probe_blit->copyFromBuffer(edram_buffer_, 0, probe_buffer, 0,
+                                           probe_edram_size);
+                probe_blit->copyFromBuffer(
+                    dest_buffer, resolve_info.copy_dest_extent_start,
+                    probe_buffer, probe_edram_size, probe_dest_size);
+                probe_blit->endEncoding();
+                cmd->addCompletedHandler(^(MTL::CommandBuffer*) {
+                  const uint8_t* probe_data =
+                      static_cast<const uint8_t*>(probe_buffer->contents());
+                  // Bytes per EDRAM tile at 1x resolution scale.
+                  const size_t probe_tile_size =
+                      probe_edram_size / xenos::kEdramTileCount;
+                  const size_t probe_span_start = std::min(
+                      size_t(dump_base) * probe_tile_size, probe_edram_size);
+                  const size_t probe_span_size =
+                      std::min(size_t(dump_rows) * dump_pitch * probe_tile_size,
+                               probe_edram_size - probe_span_start);
+                  size_t probe_edram_nonzero = 0;
+                  size_t probe_dest_nonzero = 0;
+                  if (probe_data) {
+                    for (size_t i = 0; i < probe_span_size; ++i) {
+                      probe_edram_nonzero +=
+                          probe_data[probe_span_start + i] != 0;
+                    }
+                    for (size_t i = 0; i < probe_dest_size; ++i) {
+                      probe_dest_nonzero +=
+                          probe_data[probe_edram_size + i] != 0;
+                    }
+                  }
+                  const draw_util::ResolveEdramInfo probe_source =
+                      resolve_info.IsCopyingDepth()
+                          ? resolve_info.depth_edram_info
+                          : resolve_info.color_edram_info;
+                  XELOGI(
+                      "Metal resolve probe: #{} shader={} depth={} "
+                      "source_format={} source_msaa={} edram_tiles={}+{}x{} "
+                      "dest=0x{:08X} dest_format={} edram_nonzero={}/{} "
+                      "dest_nonzero={}/{}",
+                      probe_index, uint32_t(copy_shader),
+                      uint32_t(probe_source.is_depth),
+                      uint32_t(probe_source.format),
+                      uint32_t(probe_source.msaa_samples), dump_base, dump_rows,
+                      dump_pitch, resolve_info.copy_dest_extent_start,
+                      uint32_t(resolve_info.copy_dest_info.copy_dest_format),
+                      probe_edram_nonzero, probe_span_size, probe_dest_nonzero,
+                      probe_dest_size);
+                  probe_buffer->release();
+                });
+              } else if (probe_buffer) {
+                probe_buffer->release();
+              }
+            }
             if (owns_command_buffer) {
               cmd->commit();
               cmd->waitUntilCompleted();

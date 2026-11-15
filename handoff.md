@@ -109,41 +109,50 @@ behind them is black.
   `depth_float24_convert_in_pixel_shader`, `metal_transfer_msaa_sample_id`.
   (`metal_use_heaps=true` reduces stutter; leave it at its default.)
 
+### Result of the frame texture probe (build #9525)
+
+- The final image (`0x1F5F8000`, `k_8_8_8_8`) has data (the UI).
+- The resolved scene colour (`0x15540000`, `k_16_16_16_16_FLOAT`) is **all
+  zero in every sample**, including alpha, across 8 probes.
+- The depth texture (`0x15C78000`) was never sampled by that probe.
+
+So the scene is already empty when the game reads it back. Key decoding: the
+scene target `0x00C88400` is `k_2_10_10_10_FLOAT`, 2x MSAA, base tile 1024,
+pitch 16; `0x00C082D0` is the same format without MSAA at base 720. Both
+resolve to the 16F texture through the `kFull64bpp` copy shader. The path is
+render target -> `DumpRenderTargets` (compute, into the private EDRAM buffer)
+-> resolve compute shader -> shared memory buffer -> texture load.
+
 ### Current step
 
-Commit `e3d763b26` replaced the decode probe with a **frame texture probe** in
-`src/xenia/gpu/metal/metal_texture_cache.cc`. Every 512th load of an
-uncompressed 1280x720 texture it logs:
+A **resolve probe** was added in `MetalRenderTargetCache::Resolve`
+(`src/xenia/gpu/metal/metal_render_target_cache.cc`). For every 97th resolve
+it snapshots the EDRAM buffer and the written range right after the copy and
+logs:
 
 ```
-Metal frame texture probe: #<n> format=<id> base=0x<guest address> bytes=<n> nonzero=<n> texels=<a> <b> <c>
+Metal resolve probe: #<n> shader=<copy shader index> depth=<0|1> source_format=<id> source_msaa=<0|1|2> edram_tiles=<base>+<rows>x<pitch> dest=0x<address> dest_format=<id> edram_nonzero=<n>/<total> dest_nonzero=<n>/<total>
 ```
 
-`texels` are 8 bytes each from the middle column at 1/4, 1/2 and 3/4 of the
-image height. Match `base` against the addresses in "Established facts" to
-tell the stages apart.
+The frame texture probe from commit `e3d763b26` is still in place.
 
-- CI for this commit is run 259
-  (`https://github.com/UltraAssassin64/XeniOS/actions/runs/43672541314`). It
-  passed; the artifact is **`xenios_ios_arm64_0.2.9-9525`**. Later commits
-  that only touch `*.md` or `docs/` do not start a CI run, so this is still
-  the build to test.
-- Then ask the owner for one log: boot to the title screen, wait about a
-  minute, press Start, wait about ten seconds.
+Check CI for the commit that added the resolve probe first (it also uses an
+Objective-C block in a `.cc`), then ask the owner for one log: boot to the
+title screen, wait about a minute, press Start, wait about ten seconds.
 
 ### How to read the result
 
-- Scene colour (`0x15540000`) is all or nearly all zero: the scene is lost in
-  rendering or in the MSAA resolve. Look at the resolve path in
-  `metal_render_target_cache.cc` and at upstream's later fixes for 2x/4x float
-  resolve averaging and first-use clears.
-- Scene colour has data but depth (`0x15C78000`) is zero or constant: the depth
-  resolve / `k_24_8_FLOAT` texture load is wrong. UE3 samples that depth for
-  lighting and fog. Upstream has later fixes for MSAA depth transfers.
-- Both have data but the final image (`0x1F5F8000`) does not: the loss is in
-  the post-processing passes; probe the 640x360 and 322x182 stages next.
-- No probe lines at all: these loads do not go through the probed upload path;
-  move the probe to where they are handled.
+Look at the lines with `source_format=3` (2_10_10_10_FLOAT) and
+`dest=0x15540000`, and the `depth=1` lines.
+
+- `edram_nonzero` is 0: the render target itself is empty, or the dump is.
+  The scene is lost in rendering (depth test, render target binding,
+  ownership transfers, clears). Look at `PerformTransfersAndResolveClears`
+  and at upstream's later fixes for MSAA depth transfers and first-use clears.
+- `edram_nonzero` is large but `dest_nonzero` is 0: the resolve copy shader
+  (`resolve_full_64bpp`) is failing for this format on this device.
+- Both are large: the resolve works and the texture load of the 16F data is
+  what returns zeros; look at the load shader for `k_16_16_16_16_FLOAT`.
 
 ### Other observations, unverified as causes
 
