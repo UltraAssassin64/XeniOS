@@ -52,21 +52,36 @@ further edits.
 | `probe_nonzero` | local, frame texture probe | How many of the bytes are non-zero. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1379, 1383, 1399 | 3 |
 | `probe_texels` | local, frame texture probe | Eight bytes from the middle column at 1/4, 1/2 and 3/4 of the image height. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1380, 1390, 1400 | 5 |
 | `probe_row` | local, frame texture probe | Bytes per image row, used to locate the sampled texels. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1387, 1391 | 3 |
-| `probe_count` | function-local static in MetalRenderTargetCache::Resolve (separate from the one in the texture cache) | Counts resolves so the resolve probe samples every 97th. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4872, 4873 | 2 |
-| `probe_index` | local, resolve probe in MetalRenderTargetCache::Resolve | Value of `probe_count` for this resolve. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4873, 4876, 4877, 4924 | 4 |
-| `probe_edram_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Size in bytes of the EDRAM buffer. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4874, 4881, 4887, 4890, 4897, 4899, 4902, 4912 | 8 |
-| `probe_dest_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Size in bytes of the range the resolve wrote. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4875, 4878, 4881, 4890, 4910, 4931 | 6 |
-| `probe_buffer` | local, resolve probe in MetalRenderTargetCache::Resolve | Temporary CPU-readable buffer holding the snapshot of EDRAM and of the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4880, 4884, 4886, 4890, 4894, 4932, 4934, 4935 | 8 |
-| `probe_blit` | local, resolve probe in MetalRenderTargetCache::Resolve | Blit encoder that copies the snapshot. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4883, 4885, 4886, 4888, 4891 | 5 |
-| `probe_data` | local, resolve probe in MetalRenderTargetCache::Resolve | Pointer to the snapshot bytes. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4893, 4905, 4908, 4912 | 4 |
-| `probe_tile_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Bytes per EDRAM tile. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4896, 4899, 4901 | 3 |
-| `probe_span_start` | local, resolve probe in MetalRenderTargetCache::Resolve | Byte offset in EDRAM of the first dumped tile. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4898, 4902, 4908 | 3 |
-| `probe_span_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Byte length of the dumped tile span. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4900, 4906, 4930 | 3 |
-| `probe_edram_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the dumped EDRAM span. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4903, 4907, 4930 | 3 |
-| `probe_dest_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4904, 4911, 4930 | 3 |
-| `probe_source` | local, resolve probe in MetalRenderTargetCache::Resolve | EDRAM info (format, MSAA, depth flag) of the resolve source. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4915, 4925, 4926, 4927 | 4 |
+| `probe_count` | function-local static in MetalRenderTargetCache::Resolve (separate from the one in the texture cache) | Counts resolves so the resolve probe samples every 97th. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4948, 4949 | 2 |
+| `probe_index` | local, resolve probe in MetalRenderTargetCache::Resolve | Value of `probe_count` for this resolve. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4949, 4952, 4953, 5000 | 4 |
+| `probe_edram_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Size in bytes of the EDRAM buffer. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4950, 4957, 4963, 4966, 4973, 4975, 4978, 4988 | 8 |
+| `probe_dest_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Size in bytes of the range the resolve wrote. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4951, 4954, 4957, 4966, 4986, 5007 | 6 |
+| `probe_buffer` | local, resolve probe in MetalRenderTargetCache::Resolve | Temporary CPU-readable buffer holding the snapshot of EDRAM and of the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4956, 4960, 4962, 4966, 4970, 5008, 5010, 5011 | 8 |
+| `probe_blit` | local, resolve probe in MetalRenderTargetCache::Resolve | Blit encoder that copies the snapshot. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4959, 4961, 4962, 4964, 4967 | 5 |
+| `probe_data` | local, resolve probe in MetalRenderTargetCache::Resolve | Pointer to the snapshot bytes. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4969, 4981, 4984, 4988 | 4 |
+| `probe_tile_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Bytes per EDRAM tile. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4972, 4975, 4977 | 3 |
+| `probe_span_start` | local, resolve probe in MetalRenderTargetCache::Resolve | Byte offset in EDRAM of the first dumped tile. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4974, 4978, 4984 | 3 |
+| `probe_span_size` | local, resolve probe in MetalRenderTargetCache::Resolve | Byte length of the dumped tile span. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4976, 4982, 5006 | 3 |
+| `probe_edram_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the dumped EDRAM span. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4979, 4983, 5006 | 3 |
+| `probe_dest_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4980, 4987, 5006 | 3 |
+| `probe_source` | local, resolve probe in MetalRenderTargetCache::Resolve | EDRAM info (format, MSAA, depth flag) of the resolve source. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4991, 5001, 5002, 5003 | 4 |
 | `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.h` | 551 | 1 |
 | `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5601, 5604 | 2 |
+| `msaa_probe_count` | function-local static in MetalRenderTargetCache::DumpRenderTargets | Counts dumps of multisampled RGBA16Float targets so the multisample probe samples every 61st. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4121, 4131 | 2 |
+| `msaa_probe_rt` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Render target of the dump rectangle being considered. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4123, 4125, 4168 | 4 |
+| `msaa_probe_source` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Multisampled texture of that render target. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4124, 4126, 4127, 4128, 4137, 4138, 4156 | 7 |
+| `msaa_probe_index` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Value of `msaa_probe_count` for this dump. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4131, 4132, 4184 | 4 |
+| `msaa_probe_desc` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Descriptor of the temporary single-sample texture. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4135, 4137, 4138, 4139, 4140, 4141, 4142, 4143, 4144, 4145 | 10 |
+| `msaa_probe_texture` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Temporary CPU-readable texture Metal resolves the target into. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4144, 4148, 4149, 4150, 4157, 4164, 4170, 4171, 4174, 4187 | 10 |
+| `msaa_probe_pass` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Render pass descriptor that performs the resolve. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4146, 4148, 4155, 4162 | 4 |
+| `msaa_probe_attachment` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Colour attachment of that pass. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4154, 4156, 4157, 4158, 4159 | 5 |
+| `msaa_probe_encoder` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Encoder of the (empty) resolve pass. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4161, 4163, 4167 | 3 |
+| `msaa_probe_key` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Render target key, for the log line. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4168, 4184 | 2 |
+| `msaa_probe_width` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Width of the resolved texture. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4170, 4172, 4175, 4176, 4184 | 5 |
+| `msaa_probe_height` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Height of the resolved texture. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4171, 4173, 4176, 4184 | 4 |
+| `msaa_probe_bytes` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Resolved pixels copied to the CPU. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4172, 4175, 4178, 4186 | 4 |
+| `msaa_probe_nonzero` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Number of non-zero bytes in the resolved pixels. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4177, 4179, 4185 | 3 |
+| `msaa_probe_byte` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Loop variable over the resolved bytes. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4178, 4179 | 2 |
 
 ## Total references per name
 
@@ -115,6 +130,21 @@ further edits.
 | `probe_dest_nonzero` | 3 |
 | `probe_source` | 4 |
 | `probed` | 3 |
+| `msaa_probe_count` | 2 |
+| `msaa_probe_rt` | 4 |
+| `msaa_probe_source` | 7 |
+| `msaa_probe_index` | 4 |
+| `msaa_probe_desc` | 10 |
+| `msaa_probe_texture` | 10 |
+| `msaa_probe_pass` | 4 |
+| `msaa_probe_attachment` | 5 |
+| `msaa_probe_encoder` | 3 |
+| `msaa_probe_key` | 2 |
+| `msaa_probe_width` | 5 |
+| `msaa_probe_height` | 4 |
+| `msaa_probe_bytes` | 4 |
+| `msaa_probe_nonzero` | 3 |
+| `msaa_probe_byte` | 2 |
 
 ## Checks
 

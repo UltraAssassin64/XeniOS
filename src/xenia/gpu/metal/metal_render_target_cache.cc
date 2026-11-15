@@ -4113,6 +4113,82 @@ void MetalRenderTargetCache::DumpRenderTargets(
     owns_command_buffer = true;
   }
 
+  // Multisample diagnostics: the dump below reads multisampled render targets
+  // from a compute shader. For every 61st dump of a multisampled RGBA16Float
+  // target, also let Metal itself resolve the target into a CPU-readable
+  // texture and log how much of that is non-zero, to tell an empty target from
+  // a failing multisampled read.
+  static std::atomic<uint32_t> msaa_probe_count{0};
+  for (const ResolveCopyDumpRectangle& rect : rectangles) {
+    auto* msaa_probe_rt = static_cast<MetalRenderTarget*>(rect.render_target);
+    MTL::Texture* msaa_probe_source =
+        msaa_probe_rt ? msaa_probe_rt->texture() : nullptr;
+    if (!msaa_probe_source ||
+        msaa_probe_source->textureType() != MTL::TextureType2DMultisample ||
+        msaa_probe_source->pixelFormat() != MTL::PixelFormatRGBA16Float) {
+      continue;
+    }
+    const uint32_t msaa_probe_index = msaa_probe_count.fetch_add(1);
+    if (msaa_probe_index % 61 != 0 || msaa_probe_index >= 61 * 200) {
+      break;
+    }
+    MTL::TextureDescriptor* msaa_probe_desc =
+        MTL::TextureDescriptor::alloc()->init();
+    msaa_probe_desc->setWidth(msaa_probe_source->width());
+    msaa_probe_desc->setHeight(msaa_probe_source->height());
+    msaa_probe_desc->setPixelFormat(MTL::PixelFormatRGBA16Float);
+    msaa_probe_desc->setTextureType(MTL::TextureType2D);
+    msaa_probe_desc->setSampleCount(1);
+    msaa_probe_desc->setUsage(MTL::TextureUsageRenderTarget);
+    msaa_probe_desc->setStorageMode(MTL::StorageModeShared);
+    MTL::Texture* msaa_probe_texture = device_->newTexture(msaa_probe_desc);
+    msaa_probe_desc->release();
+    MTL::RenderPassDescriptor* msaa_probe_pass =
+        MTL::RenderPassDescriptor::renderPassDescriptor();
+    if (!msaa_probe_texture || !msaa_probe_pass) {
+      if (msaa_probe_texture) {
+        msaa_probe_texture->release();
+      }
+      break;
+    }
+    auto* msaa_probe_attachment =
+        msaa_probe_pass->colorAttachments()->object(0);
+    msaa_probe_attachment->setTexture(msaa_probe_source);
+    msaa_probe_attachment->setResolveTexture(msaa_probe_texture);
+    msaa_probe_attachment->setLoadAction(MTL::LoadActionLoad);
+    msaa_probe_attachment->setStoreAction(
+        MTL::StoreActionStoreAndMultisampleResolve);
+    MTL::RenderCommandEncoder* msaa_probe_encoder =
+        cmd->renderCommandEncoder(msaa_probe_pass);
+    if (!msaa_probe_encoder) {
+      msaa_probe_texture->release();
+      break;
+    }
+    msaa_probe_encoder->endEncoding();
+    const uint32_t msaa_probe_key = msaa_probe_rt->key().key;
+    cmd->addCompletedHandler(^(MTL::CommandBuffer*) {
+      const size_t msaa_probe_width = msaa_probe_texture->width();
+      const size_t msaa_probe_height = msaa_probe_texture->height();
+      std::vector<uint8_t> msaa_probe_bytes(msaa_probe_width * 8 *
+                                            msaa_probe_height);
+      msaa_probe_texture->getBytes(
+          msaa_probe_bytes.data(), msaa_probe_width * 8,
+          MTL::Region::Make2D(0, 0, msaa_probe_width, msaa_probe_height), 0);
+      size_t msaa_probe_nonzero = 0;
+      for (uint8_t msaa_probe_byte : msaa_probe_bytes) {
+        msaa_probe_nonzero += msaa_probe_byte != 0;
+      }
+      XELOGI(
+          "Metal multisample probe: #{} key=0x{:08X} {}x{} tiles={}+{}x{} "
+          "nonzero={}/{}",
+          msaa_probe_index, msaa_probe_key, msaa_probe_width, msaa_probe_height,
+          dump_base, dump_rows, dump_pitch, msaa_probe_nonzero,
+          msaa_probe_bytes.size());
+      msaa_probe_texture->release();
+    });
+    break;
+  }
+
   MTL::ComputeCommandEncoder* encoder = cmd->computeCommandEncoder();
   if (!encoder) {
     XELOGE("MetalRenderTargetCache::DumpRenderTargets: no compute encoder");

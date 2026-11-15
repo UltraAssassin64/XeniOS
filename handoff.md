@@ -147,37 +147,63 @@ models were missing with defaults too, so these are not the cause, but ask
 the owner to reset them so runs are comparable. The log prints a full
 `CONFIG DUMP` at startup; check it on every log.
 
+### Result of the scene draw probe (build #9529)
+
+The scene's draws look valid. Typical line:
+`surface=0x14010500` (pitch 1280, 2x MSAA), `color0=0x00030400` (base 1024,
+2_10_10_10_FLOAT), `depth=0x00010000` (base 0, D24FS8),
+`depth_control=0x00700766` (z test + write, GREATER_EQUAL, stencil off: the
+game uses reversed Z), `color_mask=0xF`, `viewport=0,0 1280x720 z=0..0.5`,
+`ndc_scale=1,1,-1 ndc_offset=…,…,1`, `scissor=0,0 1280x512` for the first
+band and `viewport=0,0 1280x208`, `scissor=0,0 1280x208` for the second.
+Vertex counts range from 1080 to 20550.
+
+Before the scene, the game clears the EDRAM areas with 4-vertex quads drawn to
+4x MSAA depth surfaces of pitch 640 (`surface=0x0A020280`, `color_mask=0x0`,
+`mode=5`, keys `00308400` at base 1024 and `00708000` at base 0). The scene
+colour and depth targets therefore start from ownership transfers out of
+those 4x depth targets (depth -> colour reinterpretation, and 4x -> 2x depth).
+
+A depth buffer of all zeros with a GREATER_EQUAL test should let every
+fragment pass and write non-zero depth, yet depth dumps as zero. So either no
+fragments are produced at all, or the targets do have content and the dump's
+compute-shader read of the multisampled textures (`texture2d_ms` /
+`depth2d_ms`) returns zeros on this device/OS. Every multisampled dump in the
+resolve probe was zero and every single-sample one was not.
+
+The owner's config was still non-default in both logs of that run (the reset
+did not take effect); check the `CONFIG DUMP` again.
+
 ### Current step
 
-A **scene draw probe** was added at the end of `IssueDrawMsl`
-(`src/xenia/gpu/metal/metal_command_processor.cc`). In the first frame of
-each 120-frame statistics window it logs up to 16 draws that target a
-multisampled surface:
+A **multisample probe** was added in
+`MetalRenderTargetCache::DumpRenderTargets`. For every 61st dump of a
+multisampled RGBA16Float target it has Metal resolve the target into a
+CPU-readable texture (`StoreActionStoreAndMultisampleResolve`) and logs:
 
 ```
-Metal scene draw probe: vertices=… primitive=… surface=0x… color0=0x… depth=0x… mode=0x… depth_control=0x… color_mask=0x… cull=0x… viewport=x,y WxH z=min..max ndc_scale=… ndc_offset=… scissor=x,y WxH
+Metal multisample probe: #<n> key=0x<rt key> <w>x<h> tiles=<base>+<rows>x<pitch> nonzero=<n>/<total>
 ```
 
-The resolve probe and frame texture probe are still in place.
-
-Check CI for that commit first, then ask the owner for one log (title screen
-for about a minute, press Start, ten seconds).
+All earlier probes are still in place. Check CI for that commit first, then
+ask the owner for one log (title screen about a minute, press Start, ten
+seconds).
 
 ### How to read the result
 
-- Viewport or scissor empty, off the target, or `z` range inverted or
-  degenerate: the viewport/scissor math is wrong for the tiled 2x MSAA
-  surface (compare with `draw_util::GetHostViewportInfo` callers in the
-  Vulkan backend).
-- `depth_control` shows a depth test that can never pass against the cleared
-  value (decode `RB_DEPTHCONTROL` in `src/xenia/gpu/registers.h`; the
-  first-use clear is 1.0 at `metal_render_target_cache.cc` ~3580 and the
-  resolve clear is computed near line 6680): the depth clear value or the
-  reversed-Z handling is wrong.
-- `color_mask` 0 on all draws: only depth is being written, look at depth.
-- Everything looks sane: the draws are not reaching the target for another
-  reason (pipeline sample count, sample mask in the translated shader); next
-  probe should read the multisampled target directly.
+Compare with the `Metal resolve probe` lines for the same target
+(`source_format=3 source_msaa=1`).
+
+- Multisample probe `nonzero` is large while the resolve probe's
+  `edram_nonzero` is 0: the scene **is** rendered and the compute dump cannot
+  read multisampled textures here. Fix: dump multisampled targets another way
+  (for example render each sample into a single-sample intermediate with a
+  fragment shader, which the transfer shaders already do successfully, then
+  run the existing 1x dump on it), for colour and depth.
+- Multisample probe `nonzero` is 0 too: the target really is empty. Then look
+  at the ownership transfers from the 4x depth clear targets into the scene
+  targets and at why fragments are not produced (a visibility-result counter
+  on the scene draws would settle it).
 
 ### Other observations, unverified as causes
 
