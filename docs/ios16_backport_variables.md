@@ -63,7 +63,7 @@ further edits.
 | `existing_keys` | 3 |
 | `by_category` | 3 |
 | `parsed` | 4 |
-| `editor` | 0 |
+| `editor` | 6 |
 | `DrawStats` | 2 |
 | `draw_stats_` | 26 |
 | `kDrawStatsFrames` | 3 |
