@@ -43,13 +43,15 @@ further edits.
 | `boost_context` | premake project name | Builds the fcontext assembly used by threading_fiber.cc. Same name as upstream's CMake target. | `third_party/boost_context.lua` | 2, 10, 11, 12, 16, 17, 18, 22, 23, 24, 28, 29, 30 | 13 |
 | `boost_context` | premake project name | Builds the fcontext assembly used by threading_fiber.cc. Same name as upstream's CMake target. | `premake5.lua` | 762 | 1 |
 | `boost_context` | premake project name | Builds the fcontext assembly used by threading_fiber.cc. Same name as upstream's CMake target. | `src/xenia/app/premake5.lua` | 39 | 1 |
-| `probe_count` | function-local static in LoadTextureDataFromResidentMemoryImpl | Limits the texture decode probe to the first 32 decompressed textures. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1367, 1368 | 2 |
-| `probe_format` | local, texture decode probe | Guest texture format of the probed texture. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1370, 1387 | 2 |
-| `probe_width` | local, texture decode probe | Width of the probed texture. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1371, 1387 | 2 |
-| `probe_height` | local, texture decode probe | Height of the probed texture. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1372, 1387 | 2 |
-| `probe_size` | local, texture decode probe | Number of decoded bytes inspected (up to 64 KB). | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1373, 1380, 1387, 1388, 1389, 1390, 1391 | 7 |
-| `probe_data` | local, texture decode probe | Pointer to the decoded bytes. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1376, 1379, 1381, 1388, 1389, 1390, 1391 | 11 |
-| `probe_nonzero` | local, texture decode probe | How many inspected bytes are non-zero. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1378, 1381, 1387 | 3 |
+| `probe_count` | function-local static in LoadTextureDataFromResidentMemoryImpl | Counts 1280x720 uncompressed texture loads so the frame texture probe samples every 512th. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1368, 1370 | 2 |
+| `probe_index` | local, frame texture probe | Value of `probe_count` for this load; selects which loads are probed. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1370, 1371, 1399 | 4 |
+| `probe_format` | local, frame texture probe | Guest texture format of the probed texture. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1373, 1399 | 2 |
+| `probe_base` | local, frame texture probe | Guest address of the probed texture. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1374, 1399 | 2 |
+| `probe_size` | local, frame texture probe | Size in bytes of the converted texture data. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1375, 1381, 1382, 1387, 1399 | 5 |
+| `probe_data` | local, frame texture probe | Pointer to the converted bytes. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1377, 1381, 1383, 1391 | 4 |
+| `probe_nonzero` | local, frame texture probe | How many of the bytes are non-zero. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1379, 1383, 1399 | 3 |
+| `probe_texels` | local, frame texture probe | Eight bytes from the middle column at 1/4, 1/2 and 3/4 of the image height. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1380, 1390, 1400 | 5 |
+| `probe_row` | local, frame texture probe | Bytes per image row, used to locate the sampled texels. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1387, 1391 | 3 |
 
 ## Total references per name
 
@@ -79,12 +81,14 @@ further edits.
 | `artifact_suffix` | 5 |
 | `boost_context` | 15 |
 | `probe_count` | 2 |
+| `probe_index` | 4 |
 | `probe_format` | 2 |
-| `probe_width` | 2 |
-| `probe_height` | 2 |
-| `probe_size` | 7 |
-| `probe_data` | 11 |
+| `probe_base` | 2 |
+| `probe_size` | 5 |
+| `probe_data` | 4 |
 | `probe_nonzero` | 3 |
+| `probe_texels` | 5 |
+| `probe_row` | 3 |
 
 ## Checks
 

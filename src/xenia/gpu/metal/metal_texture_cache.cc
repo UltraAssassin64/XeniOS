@@ -1360,37 +1360,47 @@ bool MetalTextureCache::TryGpuLoadTexture(Texture& texture, bool load_base,
     }
 
     blit->endEncoding();
-    // Decode diagnostics: for the first compressed textures that go through
-    // the GPU decompression path, read the decoded bytes back once the work
-    // has run and log whether anything was produced. An all-zero result means
-    // the decode itself is failing rather than the draws that sample it.
+    // Frame diagnostics: the scene is rendered, resolved to guest memory and
+    // read back as full-screen textures by each post-processing stage. Sample
+    // those loads periodically, read the converted bytes back once the work
+    // has run and log how much of each is non-zero along with three texels
+    // from the middle of the image, to find the stage where the scene is lost.
     static std::atomic<uint32_t> probe_count{0};
-    if (decompress && probe_count.fetch_add(1) < 32) {
-      dest_buffer->retain();
-      const uint32_t probe_format = uint32_t(key.format);
-      const uint32_t probe_width = key.GetWidth();
-      const uint32_t probe_height = key.GetHeight();
-      const size_t probe_size =
-          std::min(size_t(dest_buffer_size), size_t(65536));
-      cmd->addCompletedHandler(^(MTL::CommandBuffer*) {
-        const uint8_t* probe_data =
-            static_cast<const uint8_t*>(dest_buffer->contents());
-        size_t probe_nonzero = 0;
-        if (probe_data) {
-          for (size_t i = 0; i < probe_size; ++i) {
-            probe_nonzero += probe_data[i] != 0;
+    if (!decompress && key.GetWidth() == 1280 && key.GetHeight() == 720) {
+      const uint32_t probe_index = probe_count.fetch_add(1);
+      if (probe_index % 512 == 0 && probe_index < 512 * 120) {
+        dest_buffer->retain();
+        const uint32_t probe_format = uint32_t(key.format);
+        const uint32_t probe_base = uint32_t(key.base_page) << 12;
+        const size_t probe_size = size_t(dest_buffer_size);
+        cmd->addCompletedHandler(^(MTL::CommandBuffer*) {
+          const uint8_t* probe_data =
+              static_cast<const uint8_t*>(dest_buffer->contents());
+          size_t probe_nonzero = 0;
+          uint64_t probe_texels[3] = {};
+          if (probe_data && probe_size >= 64) {
+            for (size_t i = 0; i < probe_size; ++i) {
+              probe_nonzero += probe_data[i] != 0;
+            }
+            // Middle column of the rows a quarter, a half and three quarters
+            // of the way down.
+            const size_t probe_row = probe_size / 720;
+            for (size_t i = 0; i < 3; ++i) {
+              std::memcpy(
+                  &probe_texels[i],
+                  probe_data + ((probe_row * (180 * (i + 1)) + probe_row / 2) &
+                                ~size_t(7)),
+                  sizeof(uint64_t));
+            }
           }
-        }
-        XELOGI(
-            "Metal texture decode probe: format={} {}x{} bytes_checked={} "
-            "nonzero={} first_texel={:02X}{:02X}{:02X}{:02X}",
-            probe_format, probe_width, probe_height, probe_size, probe_nonzero,
-            probe_data && probe_size >= 4 ? probe_data[0] : 0,
-            probe_data && probe_size >= 4 ? probe_data[1] : 0,
-            probe_data && probe_size >= 4 ? probe_data[2] : 0,
-            probe_data && probe_size >= 4 ? probe_data[3] : 0);
-        dest_buffer->release();
-      });
+          XELOGI(
+              "Metal frame texture probe: #{} format={} base=0x{:08X} bytes={} "
+              "nonzero={} texels={:016X} {:016X} {:016X}",
+              probe_index, probe_format, probe_base, probe_size, probe_nonzero,
+              probe_texels[0], probe_texels[1], probe_texels[2]);
+          dest_buffer->release();
+        });
+      }
     }
     release_buffer_after(cmd, constants_buffer, constants_buffer_size);
     release_buffer_after(cmd, dest_buffer, size_t(dest_buffer_size));
