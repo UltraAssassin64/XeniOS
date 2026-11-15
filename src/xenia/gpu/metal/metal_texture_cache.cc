@@ -12,6 +12,7 @@
 #include "xenia/gpu/metal/metal_heap_pool.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cfloat>
 #include <cstdint>
 #include <cstdio>
@@ -1359,6 +1360,38 @@ bool MetalTextureCache::TryGpuLoadTexture(Texture& texture, bool load_base,
     }
 
     blit->endEncoding();
+    // Decode diagnostics: for the first compressed textures that go through
+    // the GPU decompression path, read the decoded bytes back once the work
+    // has run and log whether anything was produced. An all-zero result means
+    // the decode itself is failing rather than the draws that sample it.
+    static std::atomic<uint32_t> probe_count{0};
+    if (decompress && probe_count.fetch_add(1) < 32) {
+      dest_buffer->retain();
+      const uint32_t probe_format = uint32_t(key.format);
+      const uint32_t probe_width = key.GetWidth();
+      const uint32_t probe_height = key.GetHeight();
+      const size_t probe_size =
+          std::min(size_t(dest_buffer_size), size_t(65536));
+      cmd->addCompletedHandler(^(MTL::CommandBuffer*) {
+        const uint8_t* probe_data =
+            static_cast<const uint8_t*>(dest_buffer->contents());
+        size_t probe_nonzero = 0;
+        if (probe_data) {
+          for (size_t i = 0; i < probe_size; ++i) {
+            probe_nonzero += probe_data[i] != 0;
+          }
+        }
+        XELOGI(
+            "Metal texture decode probe: format={} {}x{} bytes_checked={} "
+            "nonzero={} first_texel={:02X}{:02X}{:02X}{:02X}",
+            probe_format, probe_width, probe_height, probe_size, probe_nonzero,
+            probe_data && probe_size >= 4 ? probe_data[0] : 0,
+            probe_data && probe_size >= 4 ? probe_data[1] : 0,
+            probe_data && probe_size >= 4 ? probe_data[2] : 0,
+            probe_data && probe_size >= 4 ? probe_data[3] : 0);
+        dest_buffer->release();
+      });
+    }
     release_buffer_after(cmd, constants_buffer, constants_buffer_size);
     release_buffer_after(cmd, dest_buffer, size_t(dest_buffer_size));
     if (use_upload_batch) {

@@ -43,6 +43,13 @@ further edits.
 | `boost_context` | premake project name | Builds the fcontext assembly used by threading_fiber.cc. Same name as upstream's CMake target. | `third_party/boost_context.lua` | 2, 10, 11, 12, 16, 17, 18, 22, 23, 24, 28, 29, 30 | 13 |
 | `boost_context` | premake project name | Builds the fcontext assembly used by threading_fiber.cc. Same name as upstream's CMake target. | `premake5.lua` | 762 | 1 |
 | `boost_context` | premake project name | Builds the fcontext assembly used by threading_fiber.cc. Same name as upstream's CMake target. | `src/xenia/app/premake5.lua` | 39 | 1 |
+| `probe_count` | function-local static in LoadTextureDataFromResidentMemoryImpl | Limits the texture decode probe to the first 32 decompressed textures. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1367, 1368 | 2 |
+| `probe_format` | local, texture decode probe | Guest texture format of the probed texture. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1370, 1387 | 2 |
+| `probe_width` | local, texture decode probe | Width of the probed texture. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1371, 1387 | 2 |
+| `probe_height` | local, texture decode probe | Height of the probed texture. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1372, 1387 | 2 |
+| `probe_size` | local, texture decode probe | Number of decoded bytes inspected (up to 64 KB). | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1373, 1380, 1387, 1388, 1389, 1390, 1391 | 7 |
+| `probe_data` | local, texture decode probe | Pointer to the decoded bytes. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1376, 1379, 1381, 1388, 1389, 1390, 1391 | 11 |
+| `probe_nonzero` | local, texture decode probe | How many inspected bytes are non-zero. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1378, 1381, 1387 | 3 |
 
 ## Total references per name
 
@@ -71,6 +78,13 @@ further edits.
 | `app_build` | 2 |
 | `artifact_suffix` | 5 |
 | `boost_context` | 15 |
+| `probe_count` | 2 |
+| `probe_format` | 2 |
+| `probe_width` | 2 |
+| `probe_height` | 2 |
+| `probe_size` | 7 |
+| `probe_data` | 11 |
+| `probe_nonzero` | 3 |
 
 ## Checks
 
