@@ -125,9 +125,9 @@ tell the stages apart.
 
 - CI for this commit is run 259
   (`https://github.com/UltraAssassin64/XeniOS/actions/runs/43672541314`). It
-  was still building when this file was written. **Check it first**; the probe
-  uses an Objective-C block inside a `.cc`, which could not be compiled
-  locally. If it failed, fix the build before anything else.
+  passed; the artifact is **`xenios_ios_arm64_0.2.9-9525`**. Later commits
+  that only touch `*.md` or `docs/` do not start a CI run, so this is still
+  the build to test.
 - Then ask the owner for one log: boot to the title screen, wait about a
   minute, press Start, wait about ten seconds.
 
