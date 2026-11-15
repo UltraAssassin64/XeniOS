@@ -534,6 +534,22 @@ class MetalCommandProcessor : public CommandProcessor {
   std::atomic<int64_t> msl_shader_compile_failure_last_log_ns_{0};
   std::atomic<int64_t> msl_pipeline_compile_failure_last_log_ns_{0};
   std::atomic<int64_t> msl_pipeline_pending_last_log_ns_{0};
+
+  // Draw-path diagnostics: what happened to every guest draw since the last
+  // report. Logged from IssueSwap every kDrawStatsFrames presented frames and
+  // only touched on the command processor thread.
+  static constexpr uint32_t kDrawStatsFrames = 120;
+  struct DrawStats {
+    uint32_t frames = 0;
+    uint32_t issued = 0;            // IssueDraw calls, resolves included.
+    uint32_t copies = 0;            // EDRAM resolves (IssueCopy).
+    uint32_t no_rasterization = 0;  // Guest state rasterizes nothing.
+    uint32_t no_vertices = 0;       // Primitive processing left no vertices.
+    uint32_t compile_pending = 0;   // Shader or pipeline still compiling.
+    uint32_t encoded = 0;           // Reached a Metal draw call.
+    uint64_t encoded_vertices = 0;
+  };
+  DrawStats draw_stats_;
   std::unordered_map<uint64_t, MTL::RenderPipelineState*> msl_pipeline_cache_;
 
   // SPIRV-Cross tessellation support.

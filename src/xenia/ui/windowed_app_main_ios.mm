@@ -537,6 +537,9 @@ enum class IOSConfigControlType {
   kChoiceInt32,
   kChoiceUInt64,
   kChoiceString,
+  // Free-form value edited as text; used for every non-bool config variable
+  // that has no curated control. string_value holds the TOML text.
+  kText,
   kAction,
 };
 
@@ -1187,6 +1190,51 @@ void AddActionSetting(std::vector<IOSConfigItem>& items, IOSConfigAction action,
   item.control_type = IOSConfigControlType::kAction;
   item.action = action;
   items.push_back(std::move(item));
+}
+
+// Appends one section per config category containing every config variable
+// that the curated sections above do not already expose, so the whole config
+// file can be edited in the app. Bools become toggles and everything else is a
+// text field holding the value exactly as it is written in the .toml. The
+// variable's description (the comment written above it in the .toml) is the
+// row's subtitle.
+void AddAllConfigVarSettings(std::vector<IOSConfigSection>& sections) {
+  if (!cvar::ConfigVars) {
+    return;
+  }
+  std::set<std::string> existing_keys;
+  for (const IOSConfigSection& section : sections) {
+    for (const IOSConfigItem& item : section.items) {
+      if (item.storage == IOSConfigStorage::kConfigVar) {
+        existing_keys.insert(item.key);
+      }
+    }
+  }
+  std::map<std::string, IOSConfigSection> by_category;
+  for (const auto& [key, var] : *cvar::ConfigVars) {
+    if (!var || var->is_transient() || existing_keys.count(key)) {
+      continue;
+    }
+    IOSConfigItem item;
+    item.key = key;
+    item.title = key;
+    item.subtitle = var->description();
+    item.string_value = TrimAscii(var->config_value());
+    if (item.string_value == "true" || item.string_value == "false") {
+      item.control_type = IOSConfigControlType::kToggle;
+      item.bool_value = item.string_value == "true";
+    } else {
+      item.control_type = IOSConfigControlType::kText;
+      // Remember the loaded value so only edited rows are written back.
+      item.choice_string_values.push_back(item.string_value);
+    }
+    IOSConfigSection& section = by_category[var->category()];
+    section.title = "All Options: " + var->category();
+    section.items.push_back(std::move(item));
+  }
+  for (auto& [category, section] : by_category) {
+    sections.push_back(std::move(section));
+  }
 }
 
 std::string ChoiceTitleForItem(const IOSConfigItem& item) {
@@ -3601,6 +3649,8 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
     sections.push_back(std::move(diagnostics));
   }
 
+  AddAllConfigVarSettings(sections);
+
   return sections;
 }
 
@@ -3648,6 +3698,38 @@ bool ApplyIOSConfigSections(const std::vector<IOSConfigSection>& sections) {
           ok &= SetConfigVarString(
               item.key, item.choice_string_values[static_cast<size_t>(item.choice_value)]);
           break;
+        case IOSConfigControlType::kText: {
+          if (item.choice_string_values.empty() ||
+              item.string_value == item.choice_string_values.front()) {
+            break;  // Not edited.
+          }
+          cvar::IConfigVar* var = GetConfigVar(item.key);
+          if (!var) {
+            XELOGW("iOS settings: missing config var '{}'", item.key);
+            ok = false;
+            break;
+          }
+          // Parse the text as the TOML value it would be in the config file so
+          // the variable receives a node of its own type. Text that is not
+          // valid TOML on its own is taken to be an unquoted string.
+          toml::parse_result parsed;
+          try {
+            parsed = toml::parse("value = " + item.string_value);
+          } catch (const toml::parse_error&) {
+            try {
+              parsed = toml::parse("value = '" + item.string_value + "'");
+            } catch (const toml::parse_error&) {
+              XELOGW("iOS settings: could not parse value for '{}'", item.key);
+              ok = false;
+              break;
+            }
+          }
+          if (const toml::node* node = parsed.get("value")) {
+            var->LoadConfigValue(node);
+          } else {
+            ok = false;
+          }
+        } break;
         case IOSConfigControlType::kAction:
           break;
       }
@@ -7958,7 +8040,9 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
   } else {
-    std::string value_title = ChoiceTitleForItem(*item);
+    std::string value_title = item->control_type == IOSConfigControlType::kText
+                                  ? item->string_value
+                                  : ChoiceTitleForItem(*item);
     std::string subtitle = item->subtitle;
     if (!value_title.empty()) {
       content.secondaryText = ToNSString(value_title + " · " + subtitle);
@@ -8006,6 +8090,40 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
       default:
         break;
     }
+    return;
+  }
+
+  if (item->control_type == IOSConfigControlType::kText) {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    // __block: under manual reference counting this keeps the OK handler from
+    // retaining the alert that owns it.
+    __block UIAlertController* editor =
+        [UIAlertController alertControllerWithTitle:ToNSString(item->title)
+                                            message:ToNSString(item->subtitle)
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [editor addTextFieldWithConfigurationHandler:^(UITextField* text_field) {
+      text_field.text = ToNSString(item->string_value);
+      text_field.autocorrectionType = UITextAutocorrectionTypeNo;
+      text_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+      text_field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+    [editor addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                               style:UIAlertActionStyleCancel
+                                             handler:nil]];
+    [editor addAction:[UIAlertAction actionWithTitle:@"OK"
+                                               style:UIAlertActionStyleDefault
+                                             handler:^(__unused UIAlertAction* action) {
+                                               NSString* text = editor.textFields.firstObject.text;
+                                               item->string_value =
+                                                   text ? std::string([text UTF8String])
+                                                        : std::string();
+                                               [self markPendingChanges];
+                                               [self.tableView
+                                                   reloadRowsAtIndexPaths:@[ indexPath ]
+                                                         withRowAnimation:
+                                                             UITableViewRowAnimationNone];
+                                             }]];
+    [self presentViewController:editor animated:YES completion:nil];
     return;
   }
 

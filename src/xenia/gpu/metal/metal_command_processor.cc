@@ -2522,6 +2522,22 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
                                       uint32_t frontbuffer_width,
                                       uint32_t frontbuffer_height) {
   ProcessCompletedSubmissions();
+  if (++draw_stats_.frames >= kDrawStatsFrames) {
+    // "other" is every draw that left the draw path for a reason not counted
+    // separately (errors are logged where they happen).
+    XELOGI(
+        "Metal draw stats over {} frames: issued={} copies={} "
+        "no_rasterization={} no_vertices={} compile_pending={} encoded={} "
+        "other={} encoded_vertices={}",
+        draw_stats_.frames, draw_stats_.issued, draw_stats_.copies,
+        draw_stats_.no_rasterization, draw_stats_.no_vertices,
+        draw_stats_.compile_pending, draw_stats_.encoded,
+        draw_stats_.issued - draw_stats_.copies - draw_stats_.no_rasterization -
+            draw_stats_.no_vertices - draw_stats_.compile_pending -
+            draw_stats_.encoded,
+        draw_stats_.encoded_vertices);
+    draw_stats_ = {};
+  }
   saw_swap_ = true;
   last_swap_ptr_ = frontbuffer_ptr;
   last_swap_width_ = frontbuffer_width;
@@ -2784,7 +2800,9 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
       EndCommandBuffer();
     }
   }
+  ++draw_stats_.issued;
   if (edram_mode == xenos::EdramMode::kCopy) {
+    ++draw_stats_.copies;
     return IssueCopy();
   }
 
@@ -2820,6 +2838,7 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
     }
   } else {
     if (!memexport_used_vertex) {
+      ++draw_stats_.no_rasterization;
       return true;
     }
   }
@@ -2844,6 +2863,7 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
     return false;
   }
   if (!primitive_processing_result.host_draw_vertex_count) {
+    ++draw_stats_.no_vertices;
     return true;
   }
   if (primitive_processing_result.host_vertex_shader_type ==
@@ -4208,6 +4228,7 @@ bool MetalCommandProcessor::IssueDrawMsl(
       ensure_msl_translation_ready(vertex_translation, 1);
   if (vertex_compile_status == MslShaderCompileStatus::kPending) {
     log_pending_compile(vertex_translation, "vertex");
+    ++draw_stats_.compile_pending;
     return true;
   }
   if (vertex_compile_status == MslShaderCompileStatus::kFailed) {
@@ -4231,6 +4252,7 @@ bool MetalCommandProcessor::IssueDrawMsl(
         ensure_msl_translation_ready(pixel_translation, 2);
     if (pixel_compile_status == MslShaderCompileStatus::kPending) {
       log_pending_compile(pixel_translation, "pixel");
+      ++draw_stats_.compile_pending;
       return true;
     }
     if (pixel_compile_status == MslShaderCompileStatus::kFailed) {
@@ -4265,6 +4287,7 @@ bool MetalCommandProcessor::IssueDrawMsl(
                               : 0,
             pixel_translation ? pixel_translation->modification() : 0);
       }
+      ++draw_stats_.compile_pending;
       return true;
     }
     XELOGE("SPIRV-Cross: Failed to create pipeline state");
@@ -5570,6 +5593,9 @@ bool MetalCommandProcessor::IssueDrawMsl(
           index_buffer, NS::UInteger(index_offset));
     }
   }
+  ++draw_stats_.encoded;
+  draw_stats_.encoded_vertices +=
+      primitive_processing_result.host_draw_vertex_count;
 
   // Handle memexport.
   if (memexport_used && shared_memory_) {

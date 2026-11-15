@@ -656,11 +656,12 @@ jobs:
             echo "::warning::Ad-hoc signing failed; packaging unsigned app bundle"
           fi
 
-          # Name the IPA and the uploaded artifact after the app version, build
-          # number and commit so builds can be told apart once downloaded.
+          # Name the IPA and the uploaded artifact after the app version and
+          # build number (e.g. 0.2.9-9520) so builds can be told apart once
+          # downloaded.
           app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_bundle/Info.plist")"
           app_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_bundle/Info.plist")"
-          artifact_suffix="v${app_version}_b${app_build}_${GITHUB_SHA::9}"
+          artifact_suffix="${app_version}-${app_build}"
           echo "artifact_suffix=${artifact_suffix}" >> "$GITHUB_OUTPUT"
 
           mkdir -p artifacts/release
