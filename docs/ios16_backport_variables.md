@@ -66,7 +66,7 @@ further edits.
 | `probe_dest_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4980, 4987, 5006 | 3 |
 | `probe_source` | local, resolve probe in MetalRenderTargetCache::Resolve | EDRAM info (format, MSAA, depth flag) of the resolve source. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4991, 5001, 5002, 5003 | 4 |
 | `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.h` | 551 | 1 |
-| `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5601, 5604 | 2 |
+| `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5541, 5545, 5614, 5621, 5635, 6119 | 6 |
 | `msaa_probe_count` | function-local static in MetalRenderTargetCache::DumpRenderTargets | Counts dumps of multisampled RGBA16Float targets so the multisample probe samples every 61st. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4121, 4131 | 2 |
 | `msaa_probe_rt` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Render target of the dump rectangle being considered. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4123, 4125, 4168 | 4 |
 | `msaa_probe_source` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Multisampled texture of that render target. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4124, 4126, 4127, 4128, 4137, 4138, 4156 | 7 |
@@ -82,6 +82,12 @@ further edits.
 | `msaa_probe_bytes` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Resolved pixels copied to the CPU. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4172, 4175, 4178, 4186 | 4 |
 | `msaa_probe_nonzero` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Number of non-zero bytes in the resolved pixels. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4177, 4179, 4185 | 3 |
 | `msaa_probe_byte` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Loop variable over the resolved bytes. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4178, 4179 | 2 |
+| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.h` | 555 | 1 |
+| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.cc` | 586, 587, 588, 5540, 5619, 6120, 6121, 6124 | 8 |
+| `probe_buffer` | local, scene pixel probe in IssueDrawMsl | Copy of `visibility_probe_buffer_` kept alive for the completion handler. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5619, 5620, 5627, 5632 | 4 |
+| `probe_slot` | local, scene pixel probe in IssueDrawMsl | Index of the 8-byte counter this draw used. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5621, 5628, 5631 | 3 |
+| `probe_vertices` | local, scene pixel probe in IssueDrawMsl | Vertex count of the probed draw, to pair the line with the scene draw probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5622, 5631 | 2 |
+| `probe_samples` | local, scene pixel probe in IssueDrawMsl | Number of samples the draw passed, read back from the buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5625, 5626, 5629, 5631 | 4 |
 
 ## Total references per name
 
@@ -129,7 +135,7 @@ further edits.
 | `probe_edram_nonzero` | 3 |
 | `probe_dest_nonzero` | 3 |
 | `probe_source` | 4 |
-| `probed` | 3 |
+| `probed` | 7 |
 | `msaa_probe_count` | 2 |
 | `msaa_probe_rt` | 4 |
 | `msaa_probe_source` | 7 |
@@ -145,6 +151,11 @@ further edits.
 | `msaa_probe_bytes` | 4 |
 | `msaa_probe_nonzero` | 3 |
 | `msaa_probe_byte` | 2 |
+| `visibility_probe_buffer_` | 9 |
+| `probe_buffer` | 4 |
+| `probe_slot` | 3 |
+| `probe_vertices` | 2 |
+| `probe_samples` | 4 |
 
 ## Checks
 

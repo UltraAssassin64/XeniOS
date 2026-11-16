@@ -583,6 +583,10 @@ MetalCommandProcessor::~MetalCommandProcessor() {
     null_buffer_->release();
     null_buffer_ = nullptr;
   }
+  if (visibility_probe_buffer_) {
+    visibility_probe_buffer_->release();
+    visibility_probe_buffer_ = nullptr;
+  }
   if (null_texture_) {
     null_texture_->release();
     null_texture_ = nullptr;
@@ -5531,6 +5535,15 @@ bool MetalCommandProcessor::IssueDrawMsl(
       }
     }
 
+    // Scene draw diagnostics: count the samples this draw passes if it is one
+    // of the draws the scene draw probe below logs.
+    if (visibility_probe_buffer_ && !draw_stats_.frames &&
+        draw_stats_.probed < 16 &&
+        regs.Get<reg::RB_SURFACE_INFO>().msaa_samples !=
+            xenos::MsaaSamples::k1X) {
+      current_render_encoder_->setVisibilityResultMode(
+          MTL::VisibilityResultModeCounting, draw_stats_.probed * 8);
+    }
     if (primitive_processing_result.index_buffer_type ==
         PrimitiveProcessor::ProcessedIndexBufferType::kNone) {
       // Non-indexed draw.
@@ -5601,6 +5614,24 @@ bool MetalCommandProcessor::IssueDrawMsl(
   if (!draw_stats_.frames && draw_stats_.probed < 16 &&
       regs.Get<reg::RB_SURFACE_INFO>().msaa_samples !=
           xenos::MsaaSamples::k1X) {
+    current_render_encoder_->setVisibilityResultMode(
+        MTL::VisibilityResultModeDisabled, 0);
+    if (MTL::Buffer* probe_buffer = visibility_probe_buffer_) {
+      probe_buffer->retain();
+      const uint32_t probe_slot = draw_stats_.probed;
+      const uint32_t probe_vertices =
+          primitive_processing_result.host_draw_vertex_count;
+      current_command_buffer_->addCompletedHandler(^(MTL::CommandBuffer*) {
+        uint64_t probe_samples = 0;
+        std::memcpy(&probe_samples,
+                    static_cast<const uint8_t*>(probe_buffer->contents()) +
+                        probe_slot * 8,
+                    sizeof(probe_samples));
+        XELOGI("Metal scene pixel probe: slot={} vertices={} samples_passed={}",
+               probe_slot, probe_vertices, probe_samples);
+        probe_buffer->release();
+      });
+    }
     ++draw_stats_.probed;
     XELOGI(
         "Metal scene draw probe: vertices={} primitive={} surface=0x{:08X} "
@@ -6084,6 +6115,13 @@ void MetalCommandProcessor::BeginCommandBuffer() {
     // If some path cleared the encoder without going through EndRenderEncoder,
     // avoid leaking cached binding state into the new encoder.
     ResetMslRenderEncoderStateCache();
+    // Scene draw diagnostics: every pass gets the buffer the scene pixel probe
+    // counts passed samples into (8 bytes for each of up to 16 probed draws).
+    if (!visibility_probe_buffer_ && device_) {
+      visibility_probe_buffer_ =
+          device_->newBuffer(16 * 8, MTL::ResourceStorageModeShared);
+    }
+    pass_descriptor->setVisibilityResultBuffer(visibility_probe_buffer_);
     // Note: renderCommandEncoder() returns an autoreleased object, we must
     // retain it.
     current_render_encoder_ =

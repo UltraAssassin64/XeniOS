@@ -551,6 +551,8 @@ class MetalCommandProcessor : public CommandProcessor {
     uint32_t probed = 0;  // Scene draws logged in this window.
   };
   DrawStats draw_stats_;
+  // Receives the passed-sample counts of the draws the scene probe logs.
+  MTL::Buffer* visibility_probe_buffer_ = nullptr;
   std::unordered_map<uint64_t, MTL::RenderPipelineState*> msl_pipeline_cache_;
 
   // SPIRV-Cross tessellation support.
