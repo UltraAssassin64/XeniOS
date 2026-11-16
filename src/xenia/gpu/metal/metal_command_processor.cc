@@ -5537,15 +5537,17 @@ bool MetalCommandProcessor::IssueDrawMsl(
 
     // Scene draw diagnostics: count the samples this draw passes if it is one
     // of the draws the scene draw probe below logs. A probed draw is encoded
-    // four times, each time with one more test taken away, to find the test
+    // six times, each time with one more test taken away, to find the test
     // that rejects it: as issued, with the depth and stencil tests off, also
-    // with culling off, also with depth clipping off.
+    // with culling off, also with depth clipping off, then with its vertices
+    // drawn as lines and as points, which still cover samples when the
+    // triangles are degenerate.
     for (uint32_t probe_pass = 0;
          probe_pass < (visibility_probe_buffer_ && !draw_stats_.frames &&
                                draw_stats_.probed < 16 &&
                                regs.Get<reg::RB_SURFACE_INFO>().msaa_samples !=
                                    xenos::MsaaSamples::k1X
-                           ? 4u
+                           ? 6u
                            : 1u);
          ++probe_pass) {
       if (visibility_probe_buffer_ && !draw_stats_.frames &&
@@ -5561,13 +5563,16 @@ bool MetalCommandProcessor::IssueDrawMsl(
         }
         current_render_encoder_->setVisibilityResultMode(
             MTL::VisibilityResultModeCounting,
-            (draw_stats_.probed * 4 + probe_pass) * 8);
+            (draw_stats_.probed * 6 + probe_pass) * 8);
       }
       if (primitive_processing_result.index_buffer_type ==
           PrimitiveProcessor::ProcessedIndexBufferType::kNone) {
         // Non-indexed draw.
         current_render_encoder_->drawPrimitives(
-            mtl_primitive, NS::UInteger(0),
+            probe_pass == 4   ? MTL::PrimitiveTypeLine
+            : probe_pass == 5 ? MTL::PrimitiveTypePoint
+                              : mtl_primitive,
+            NS::UInteger(0),
             NS::UInteger(primitive_processing_result.host_draw_vertex_count));
       } else {
         // Indexed draw.
@@ -5624,8 +5629,11 @@ bool MetalCommandProcessor::IssueDrawMsl(
         }
         UseRenderEncoderResource(index_buffer, MTL::ResourceUsageRead);
         current_render_encoder_->drawIndexedPrimitives(
-            mtl_primitive, NS::UInteger(draw_index_count), index_type,
-            index_buffer, NS::UInteger(index_offset));
+            probe_pass == 4   ? MTL::PrimitiveTypeLine
+            : probe_pass == 5 ? MTL::PrimitiveTypePoint
+                              : mtl_primitive,
+            NS::UInteger(draw_index_count), index_type, index_buffer,
+            NS::UInteger(index_offset));
       }
     }
   }
@@ -5647,16 +5655,18 @@ bool MetalCommandProcessor::IssueDrawMsl(
       const uint32_t probe_vertices =
           primitive_processing_result.host_draw_vertex_count;
       current_command_buffer_->addCompletedHandler(^(MTL::CommandBuffer*) {
-        uint64_t probe_samples[4] = {};
+        uint64_t probe_samples[6] = {};
         std::memcpy(probe_samples,
                     static_cast<const uint8_t*>(probe_buffer->contents()) +
-                        probe_slot * 4 * 8,
+                        probe_slot * 6 * 8,
                     sizeof(probe_samples));
         XELOGI(
             "Metal scene pixel probe: slot={} vertices={} samples_passed={} "
-            "depth_test_off={} cull_off={} depth_clip_off={}",
+            "depth_test_off={} cull_off={} depth_clip_off={} as_lines={} "
+            "as_points={}",
             probe_slot, probe_vertices, probe_samples[0], probe_samples[1],
-            probe_samples[2], probe_samples[3]);
+            probe_samples[2], probe_samples[3], probe_samples[4],
+            probe_samples[5]);
         probe_buffer->release();
       });
     }
@@ -5667,7 +5677,9 @@ bool MetalCommandProcessor::IssueDrawMsl(
         "depth_control=0x{:08X} color_mask=0x{:X} cull=0x{:08X} "
         "viewport={},{} {}x{} z={}..{} ndc_scale={},{},{} "
         "ndc_offset={},{},{} scissor={},{} {}x{} clip=0x{:08X} "
-        "vte=0x{:08X} color_control=0x{:08X} alpha_ref={}",
+        "vte=0x{:08X} color_control=0x{:08X} alpha_ref={} "
+        "guest_viewport_scale={},{},{} guest_viewport_offset={},{},{} "
+        "window_offset=0x{:08X} vtx_cntl=0x{:08X}",
         primitive_processing_result.host_draw_vertex_count,
         uint32_t(primitive_processing_result.host_primitive_type),
         regs[XE_GPU_REG_RB_SURFACE_INFO], regs[XE_GPU_REG_RB_COLOR_INFO],
@@ -5683,7 +5695,14 @@ bool MetalCommandProcessor::IssueDrawMsl(
         uint32_t(msl_scissor_.width), uint32_t(msl_scissor_.height),
         regs[XE_GPU_REG_PA_CL_CLIP_CNTL], regs[XE_GPU_REG_PA_CL_VTE_CNTL],
         regs[XE_GPU_REG_RB_COLORCONTROL],
-        regs.Get<float>(XE_GPU_REG_RB_ALPHA_REF));
+        regs.Get<float>(XE_GPU_REG_RB_ALPHA_REF),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_XSCALE),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_YSCALE),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_ZSCALE),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_XOFFSET),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_YOFFSET),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_ZOFFSET),
+        regs[XE_GPU_REG_PA_SC_WINDOW_OFFSET], regs[XE_GPU_REG_PA_SU_VTX_CNTL]);
     // Scene draw diagnostics: what the vertex shader of a probed scene draw
     // reads. Every scene draw passes no samples with all tests off, so either
     // its inputs or its transform are wrong.
@@ -5704,16 +5723,74 @@ bool MetalCommandProcessor::IssueDrawMsl(
               probe_memory[primitive_processing_result.guest_index_base +
                            probe_byte]);
         }
+        // Smallest and largest index of the draw, read as big-endian 16-bit
+        // values (only meaningful when index_format is 0).
+        uint32_t probe_index_min = UINT32_MAX;
+        uint32_t probe_index_max = 0;
+        for (uint32_t probe_byte = 0;
+             probe_byte <
+                 primitive_processing_result.host_draw_vertex_count * 2 &&
+             primitive_processing_result.guest_index_base + probe_byte + 1 <
+                 SharedMemory::kBufferSize;
+             probe_byte += 2) {
+          probe_index_min = std::min(
+              probe_index_min,
+              uint32_t(
+                  probe_memory[primitive_processing_result.guest_index_base +
+                               probe_byte])
+                      << 8 |
+                  probe_memory[primitive_processing_result.guest_index_base +
+                               probe_byte + 1]);
+          probe_index_max = std::max(
+              probe_index_max,
+              uint32_t(
+                  probe_memory[primitive_processing_result.guest_index_base +
+                               probe_byte])
+                      << 8 |
+                  probe_memory[primitive_processing_result.guest_index_base +
+                               probe_byte + 1]);
+        }
+        probe_text += fmt::format(" index16_min={} index16_max={}",
+                                  probe_index_min, probe_index_max);
+      }
+      // The textures the pass really renders into.
+      if (current_render_pass_descriptor_) {
+        if (MTL::Texture* probe_target =
+                current_render_pass_descriptor_->colorAttachments()
+                    ->object(0)
+                    ->texture()) {
+          probe_text += fmt::format(" color_target={}x{} samples={} format={}",
+                                    uint32_t(probe_target->width()),
+                                    uint32_t(probe_target->height()),
+                                    uint32_t(probe_target->sampleCount()),
+                                    uint32_t(probe_target->pixelFormat()));
+        }
+        if (MTL::Texture* probe_target =
+                current_render_pass_descriptor_->depthAttachment()->texture()) {
+          probe_text += fmt::format(" depth_target={}x{} samples={} format={}",
+                                    uint32_t(probe_target->width()),
+                                    uint32_t(probe_target->height()),
+                                    uint32_t(probe_target->sampleCount()),
+                                    uint32_t(probe_target->pixelFormat()));
+        }
       }
       for (const Shader::VertexBinding& probe_binding :
            vertex_shader->vertex_bindings()) {
         xenos::xe_gpu_vertex_fetch_t probe_fetch =
             regs.GetVertexFetch(probe_binding.fetch_constant);
         probe_text += fmt::format(
-            " stream{}: address=0x{:08X} size={} endian={} stride={} data=",
+            " stream{}: address=0x{:08X} size={} endian={} stride={} "
+            "guest_match={} data=",
             probe_binding.fetch_constant, uint32_t(probe_fetch.address) << 2,
             uint32_t(probe_fetch.size) << 2, uint32_t(probe_fetch.endian),
-            probe_binding.stride_words * 4);
+            probe_binding.stride_words * 4,
+            (uint32_t(probe_fetch.address) << 2) <=
+                    SharedMemory::kBufferSize - 48 &&
+                !std::memcmp(
+                    probe_memory + (uint32_t(probe_fetch.address) << 2),
+                    memory_->TranslatePhysical(uint32_t(probe_fetch.address)
+                                               << 2),
+                    48));
         for (uint32_t probe_byte = 0;
              probe_byte < 48 &&
              probe_byte < (uint32_t(probe_fetch.size) << 2) &&
@@ -6223,11 +6300,11 @@ void MetalCommandProcessor::BeginCommandBuffer() {
     // avoid leaking cached binding state into the new encoder.
     ResetMslRenderEncoderStateCache();
     // Scene draw diagnostics: every pass gets the buffer the scene pixel probe
-    // counts passed samples into (four 8-byte counters for each of up to 16
+    // counts passed samples into (six 8-byte counters for each of up to 16
     // probed draws).
     if (!visibility_probe_buffer_ && device_) {
       visibility_probe_buffer_ =
-          device_->newBuffer(16 * 4 * 8, MTL::ResourceStorageModeShared);
+          device_->newBuffer(16 * 6 * 8, MTL::ResourceStorageModeShared);
     }
     pass_descriptor->setVisibilityResultBuffer(visibility_probe_buffer_);
     // Note: renderCommandEncoder() returns an autoreleased object, we must

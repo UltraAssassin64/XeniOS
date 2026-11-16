@@ -248,6 +248,23 @@ The bytes are read from the contents of the shared memory Metal buffer, which
 is what the shader fetches from. `constants` are the first four packed vertex
 float constants as uploaded.
 
+Added in the following commit, at the owner's request for more data while
+CI runners were unavailable:
+
+- The pixel probe has two more passes: `as_lines=` and `as_points=` encode the
+  same vertices as lines and as points (all tests still off). Non-zero there
+  with zero for the triangle passes means the vertices are on screen but the
+  triangles are degenerate (bad indices, or positions collapsed onto a line
+  or point). Points have no point size output, so treat a point count as
+  "some" or "none" only.
+- The draw probe line has the guest viewport registers
+  (`guest_viewport_scale=`, `guest_viewport_offset=`), `window_offset=` and
+  `vtx_cntl=`.
+- The data probe line has `index16_min=` / `index16_max=` (compare with
+  stream size / stride), `guest_match=` per stream (the Metal buffer bytes
+  equal guest memory) and `color_target=` / `depth_target=` (size, sample
+  count and Metal pixel format of the textures the pass renders into).
+
 ### How to read the result
 
 - Stream or index bytes all zero while the game is clearly running: the
