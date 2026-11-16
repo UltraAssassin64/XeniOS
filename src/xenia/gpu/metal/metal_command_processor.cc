@@ -5536,74 +5536,97 @@ bool MetalCommandProcessor::IssueDrawMsl(
     }
 
     // Scene draw diagnostics: count the samples this draw passes if it is one
-    // of the draws the scene draw probe below logs.
-    if (visibility_probe_buffer_ && !draw_stats_.frames &&
-        draw_stats_.probed < 16 &&
-        regs.Get<reg::RB_SURFACE_INFO>().msaa_samples !=
-            xenos::MsaaSamples::k1X) {
-      current_render_encoder_->setVisibilityResultMode(
-          MTL::VisibilityResultModeCounting, draw_stats_.probed * 8);
-    }
-    if (primitive_processing_result.index_buffer_type ==
-        PrimitiveProcessor::ProcessedIndexBufferType::kNone) {
-      // Non-indexed draw.
-      current_render_encoder_->drawPrimitives(
-          mtl_primitive, NS::UInteger(0),
-          NS::UInteger(primitive_processing_result.host_draw_vertex_count));
-    } else {
-      // Indexed draw.
-      MTL::IndexType index_type =
-          (primitive_processing_result.host_index_format ==
-           xenos::IndexFormat::kInt16)
-              ? MTL::IndexTypeUInt16
-              : MTL::IndexTypeUInt32;
-      MTL::Buffer* index_buffer = nullptr;
-      uint64_t index_offset = 0;
-      switch (primitive_processing_result.index_buffer_type) {
-        case PrimitiveProcessor::ProcessedIndexBufferType::kGuestDMA:
-          index_buffer = shared_memory_ ? shared_memory_->GetBuffer() : nullptr;
-          index_offset = primitive_processing_result.guest_index_base;
-          if (!request_guest_index_range(index_offset, draw_index_count,
-                                         index_type)) {
-            XELOGE("SPIRV-Cross: Failed to validate guest index buffer range");
-            return false;
-          }
-          break;
-        case PrimitiveProcessor::ProcessedIndexBufferType::kHostConverted:
-          if (primitive_processor_) {
-            index_buffer = primitive_processor_->GetConvertedIndexBuffer(
-                primitive_processing_result.host_index_buffer_handle,
-                index_offset);
-          }
-          break;
-        case PrimitiveProcessor::ProcessedIndexBufferType::kHostBuiltinForAuto:
-        case PrimitiveProcessor::ProcessedIndexBufferType::kHostBuiltinForDMA:
-          if (primitive_processor_) {
-            if (use_expansion_triangle_list_fallback) {
-              index_buffer =
-                  primitive_processor_->GetExpansionTriangleListIndexBuffer();
-              index_offset = 0;
-              index_type = MTL::IndexTypeUInt32;
-            } else {
-              index_buffer = primitive_processor_->GetBuiltinIndexBuffer();
-              index_offset =
-                  primitive_processing_result.host_index_buffer_handle;
+    // of the draws the scene draw probe below logs. A probed draw is encoded
+    // four times, each time with one more test taken away, to find the test
+    // that rejects it: as issued, with the depth and stencil tests off, also
+    // with culling off, also with depth clipping off.
+    for (uint32_t probe_pass = 0;
+         probe_pass < (visibility_probe_buffer_ && !draw_stats_.frames &&
+                               draw_stats_.probed < 16 &&
+                               regs.Get<reg::RB_SURFACE_INFO>().msaa_samples !=
+                                   xenos::MsaaSamples::k1X
+                           ? 4u
+                           : 1u);
+         ++probe_pass) {
+      if (visibility_probe_buffer_ && !draw_stats_.frames &&
+          draw_stats_.probed < 16 &&
+          regs.Get<reg::RB_SURFACE_INFO>().msaa_samples !=
+              xenos::MsaaSamples::k1X) {
+        if (probe_pass == 1) {
+          ApplyDepthStencilState(primitive_polygonal, reg::RB_DEPTHCONTROL{});
+        } else if (probe_pass == 2) {
+          current_render_encoder_->setCullMode(MTL::CullModeNone);
+        } else if (probe_pass == 3) {
+          current_render_encoder_->setDepthClipMode(MTL::DepthClipModeClamp);
+        }
+        current_render_encoder_->setVisibilityResultMode(
+            MTL::VisibilityResultModeCounting,
+            (draw_stats_.probed * 4 + probe_pass) * 8);
+      }
+      if (primitive_processing_result.index_buffer_type ==
+          PrimitiveProcessor::ProcessedIndexBufferType::kNone) {
+        // Non-indexed draw.
+        current_render_encoder_->drawPrimitives(
+            mtl_primitive, NS::UInteger(0),
+            NS::UInteger(primitive_processing_result.host_draw_vertex_count));
+      } else {
+        // Indexed draw.
+        MTL::IndexType index_type =
+            (primitive_processing_result.host_index_format ==
+             xenos::IndexFormat::kInt16)
+                ? MTL::IndexTypeUInt16
+                : MTL::IndexTypeUInt32;
+        MTL::Buffer* index_buffer = nullptr;
+        uint64_t index_offset = 0;
+        switch (primitive_processing_result.index_buffer_type) {
+          case PrimitiveProcessor::ProcessedIndexBufferType::kGuestDMA:
+            index_buffer =
+                shared_memory_ ? shared_memory_->GetBuffer() : nullptr;
+            index_offset = primitive_processing_result.guest_index_base;
+            if (!request_guest_index_range(index_offset, draw_index_count,
+                                           index_type)) {
+              XELOGE(
+                  "SPIRV-Cross: Failed to validate guest index buffer range");
+              return false;
             }
-          }
-          break;
-        default:
-          XELOGE("SPIRV-Cross: Unsupported index buffer type {}",
-                 uint32_t(primitive_processing_result.index_buffer_type));
+            break;
+          case PrimitiveProcessor::ProcessedIndexBufferType::kHostConverted:
+            if (primitive_processor_) {
+              index_buffer = primitive_processor_->GetConvertedIndexBuffer(
+                  primitive_processing_result.host_index_buffer_handle,
+                  index_offset);
+            }
+            break;
+          case PrimitiveProcessor::ProcessedIndexBufferType::
+              kHostBuiltinForAuto:
+          case PrimitiveProcessor::ProcessedIndexBufferType::kHostBuiltinForDMA:
+            if (primitive_processor_) {
+              if (use_expansion_triangle_list_fallback) {
+                index_buffer =
+                    primitive_processor_->GetExpansionTriangleListIndexBuffer();
+                index_offset = 0;
+                index_type = MTL::IndexTypeUInt32;
+              } else {
+                index_buffer = primitive_processor_->GetBuiltinIndexBuffer();
+                index_offset =
+                    primitive_processing_result.host_index_buffer_handle;
+              }
+            }
+            break;
+          default:
+            XELOGE("SPIRV-Cross: Unsupported index buffer type {}",
+                   uint32_t(primitive_processing_result.index_buffer_type));
+            return false;
+        }
+        if (!index_buffer) {
+          XELOGE("SPIRV-Cross: Index buffer is null");
           return false;
+        }
+        UseRenderEncoderResource(index_buffer, MTL::ResourceUsageRead);
+        current_render_encoder_->drawIndexedPrimitives(
+            mtl_primitive, NS::UInteger(draw_index_count), index_type,
+            index_buffer, NS::UInteger(index_offset));
       }
-      if (!index_buffer) {
-        XELOGE("SPIRV-Cross: Index buffer is null");
-        return false;
-      }
-      UseRenderEncoderResource(index_buffer, MTL::ResourceUsageRead);
-      current_render_encoder_->drawIndexedPrimitives(
-          mtl_primitive, NS::UInteger(draw_index_count), index_type,
-          index_buffer, NS::UInteger(index_offset));
     }
   }
   ++draw_stats_.encoded;
@@ -5616,19 +5639,24 @@ bool MetalCommandProcessor::IssueDrawMsl(
           xenos::MsaaSamples::k1X) {
     current_render_encoder_->setVisibilityResultMode(
         MTL::VisibilityResultModeDisabled, 0);
+    ApplyRasterizerState(primitive_polygonal);
+    ApplyDepthStencilState(primitive_polygonal, normalized_depth_control);
     if (MTL::Buffer* probe_buffer = visibility_probe_buffer_) {
       probe_buffer->retain();
       const uint32_t probe_slot = draw_stats_.probed;
       const uint32_t probe_vertices =
           primitive_processing_result.host_draw_vertex_count;
       current_command_buffer_->addCompletedHandler(^(MTL::CommandBuffer*) {
-        uint64_t probe_samples = 0;
-        std::memcpy(&probe_samples,
+        uint64_t probe_samples[4] = {};
+        std::memcpy(probe_samples,
                     static_cast<const uint8_t*>(probe_buffer->contents()) +
-                        probe_slot * 8,
+                        probe_slot * 4 * 8,
                     sizeof(probe_samples));
-        XELOGI("Metal scene pixel probe: slot={} vertices={} samples_passed={}",
-               probe_slot, probe_vertices, probe_samples);
+        XELOGI(
+            "Metal scene pixel probe: slot={} vertices={} samples_passed={} "
+            "depth_test_off={} cull_off={} depth_clip_off={}",
+            probe_slot, probe_vertices, probe_samples[0], probe_samples[1],
+            probe_samples[2], probe_samples[3]);
         probe_buffer->release();
       });
     }
@@ -5638,7 +5666,8 @@ bool MetalCommandProcessor::IssueDrawMsl(
         "color0=0x{:08X} depth=0x{:08X} mode=0x{:08X} "
         "depth_control=0x{:08X} color_mask=0x{:X} cull=0x{:08X} "
         "viewport={},{} {}x{} z={}..{} ndc_scale={},{},{} "
-        "ndc_offset={},{},{} scissor={},{} {}x{}",
+        "ndc_offset={},{},{} scissor={},{} {}x{} clip=0x{:08X} "
+        "vte=0x{:08X} color_control=0x{:08X} alpha_ref={}",
         primitive_processing_result.host_draw_vertex_count,
         uint32_t(primitive_processing_result.host_primitive_type),
         regs[XE_GPU_REG_RB_SURFACE_INFO], regs[XE_GPU_REG_RB_COLOR_INFO],
@@ -5651,7 +5680,10 @@ bool MetalCommandProcessor::IssueDrawMsl(
         viewport_info.ndc_scale[2], viewport_info.ndc_offset[0],
         viewport_info.ndc_offset[1], viewport_info.ndc_offset[2],
         uint32_t(msl_scissor_.x), uint32_t(msl_scissor_.y),
-        uint32_t(msl_scissor_.width), uint32_t(msl_scissor_.height));
+        uint32_t(msl_scissor_.width), uint32_t(msl_scissor_.height),
+        regs[XE_GPU_REG_PA_CL_CLIP_CNTL], regs[XE_GPU_REG_PA_CL_VTE_CNTL],
+        regs[XE_GPU_REG_RB_COLORCONTROL],
+        regs.Get<float>(XE_GPU_REG_RB_ALPHA_REF));
   }
 
   // Handle memexport.
@@ -6116,10 +6148,11 @@ void MetalCommandProcessor::BeginCommandBuffer() {
     // avoid leaking cached binding state into the new encoder.
     ResetMslRenderEncoderStateCache();
     // Scene draw diagnostics: every pass gets the buffer the scene pixel probe
-    // counts passed samples into (8 bytes for each of up to 16 probed draws).
+    // counts passed samples into (four 8-byte counters for each of up to 16
+    // probed draws).
     if (!visibility_probe_buffer_ && device_) {
       visibility_probe_buffer_ =
-          device_->newBuffer(16 * 8, MTL::ResourceStorageModeShared);
+          device_->newBuffer(16 * 4 * 8, MTL::ResourceStorageModeShared);
     }
     pass_descriptor->setVisibilityResultBuffer(visibility_probe_buffer_);
     // Note: renderCommandEncoder() returns an autoreleased object, we must

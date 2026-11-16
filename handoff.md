@@ -196,34 +196,56 @@ constant depth rectangles drawn through a 4x view in the tiles' owner",
 transfers", "Match D3D12 color-to-depth transfer packing". They rework the
 file heavily and cannot be cherry-picked as they are.
 
+### Result of the scene pixel probe (build #9532, default settings)
+
+- Every probed scene draw passes **no samples**: 64 of 64 lines with
+  `vertices=1440` have `samples_passed=0`. These are the draws on
+  `surface=0x14010500` with `depth_control=0x00700766`, issued once with
+  `cull=0x00018006` and once with `cull=0x00018002` in each of the two bands.
+- Every 4-vertex clear quad passes its full area (for example 1843200 =
+  640x720x4 samples), so the counter and rasterization on multisampled
+  targets work. All of those quads use depth function ALWAYS or have the depth
+  test off, so they say nothing about what the depth buffer holds.
+- So the fragments are rejected before they are written; nothing clears the
+  target afterwards. Since the same mesh is drawn with both winding orders
+  and both give 0, culling alone is an unlikely cause.
+- That run had only 152 draws and about 6400 vertices per frame, fewer than
+  the 250 draws seen on the title screen before; the first 16 multisampled
+  draws of a frame are all that is probed.
+
 ### Current step
 
-A **scene pixel probe** was added. Every render pass now has a visibility
-result buffer (`visibility_probe_buffer_`), and each draw logged by the scene
-draw probe is counted:
+The scene pixel probe now encodes each probed draw four times, each time with
+one more test taken away, and logs all four counts:
 
 ```
 Metal scene pixel probe: slot=<n> vertices=<n> samples_passed=<n>
+    depth_test_off=<n> cull_off=<n> depth_clip_off=<n>
 ```
 
-Pair it with the `Metal scene draw probe` line that has the same `vertices`
-value in the same window. All earlier probes are still in place.
+(one line in the log). The scene draw probe line also gained `clip=`
+(`PA_CL_CLIP_CNTL`), `vte=` (`PA_CL_VTE_CNTL`), `color_control=`
+(`RB_COLORCONTROL`, alpha test and alpha-to-mask) and `alpha_ref=`.
+
+The extra encodings write colour (not depth) in the first frame of every
+120-frame window, so if the depth test is the cause the scene may flash on
+screen about every two seconds. That is expected while the probe is in.
 
 ### How to read the result
 
-- `samples_passed=0` for the scene draws (the lines with thousands of
-  vertices): the draws produce no fragments that pass. With a GREATER_EQUAL
-  test this means either the depth target does not hold 0 (the dump of depth
-  could be wrong; probe depth with a Metal depth resolve), or the geometry is
-  off screen / fully clipped (log the system constants and a few transformed
-  vertices), or the sample mask is 0.
-- `samples_passed` is large: the fragments pass and are lost afterwards, so
-  something clears or replaces the target between the draws and the dump
-  (render pass restarts with a clear load action, a transfer into the target
-  after the draws, or the draws going to a different texture than the dump
-  reads).
-- The 4-vertex clear quads are probed too; their counts show whether the
-  clears themselves rasterize.
+The first count that becomes non-zero names the test that rejects the draw:
+
+- `depth_test_off` > 0: the depth or stencil test. The depth target does not
+  hold what the game cleared it to (NaN would fail every comparison and still
+  dump as 0). Look at the 4x -> 2x depth ownership transfer and the host
+  depth written by the clear quads.
+- `cull_off` > 0: face culling / winding.
+- `depth_clip_off` > 0: the geometry is outside the depth clip range; look at
+  the viewport z range and `ndc_scale` / `ndc_offset` z handling.
+- All four are 0: the vertices are off screen or clipped (user clip planes in
+  `clip=`, a wrong transform, w <= 0), or every fragment is discarded (alpha
+  test in `color_control=`), or the sample mask is 0. Next step would be to
+  log the system constants and a few transformed vertices.
 
 ## On-screen controller (added at the owner's request)
 

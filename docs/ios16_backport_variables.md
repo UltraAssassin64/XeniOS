@@ -34,9 +34,9 @@ further edits.
 | `editor` | local in tableView:didSelectRowAtIndexPath: | Alert with a text field used to edit a kText row. | `src/xenia/ui/windowed_app_main_ios.mm` | 8100, 8104, 8110, 8113, 8116, 8126 | 6 |
 | `DrawStats` | struct in MetalCommandProcessor | Counters describing what happened to guest draws. | `src/xenia/gpu/metal/metal_command_processor.h` | 542, 552 | 2 |
 | `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.h` | 552 | 1 |
-| `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2525, 2532, 2533, 2534, 2535, 2536, 2537, 2538, 2539, 2803, 2805, 2841, 2866, 4231, 4255, 4290, 5596, 5597 | 25 |
+| `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2529, 2536, 2537, 2538, 2539, 2540, 2541, 2542, 2543, 2807, 2809, 2845, 2870, 4235, 4259, 4294, 5544, 5545, 5551, 5552, 5564, 5632, 5633, 5637, 5646, 5663 | 34 |
 | `kDrawStatsFrames` | constant in MetalCommandProcessor | Number of presented frames between draw-stat log lines. | `src/xenia/gpu/metal/metal_command_processor.h` | 539, 541 | 2 |
-| `kDrawStatsFrames` | constant in MetalCommandProcessor | Number of presented frames between draw-stat log lines. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2525 | 1 |
+| `kDrawStatsFrames` | constant in MetalCommandProcessor | Number of presented frames between draw-stat log lines. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2529 | 1 |
 | `app_version` | shell variable, CI Prepare artifacts step | CFBundleShortVersionString of the built app. | `.github/workflows/CI.yml` | 662, 664 | 2 |
 | `app_build` | shell variable, CI Prepare artifacts step | CFBundleVersion of the built app. | `.github/workflows/CI.yml` | 663, 664 | 2 |
 | `artifact_suffix` | shell variable and step output, CI | <version>-<build>, appended to the IPA and artifact names. | `.github/workflows/CI.yml` | 664, 665, 668, 682 | 5 |
@@ -66,7 +66,7 @@ further edits.
 | `probe_dest_nonzero` | local, resolve probe in MetalRenderTargetCache::Resolve | Non-zero bytes in the written range. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4980, 4987, 5006 | 3 |
 | `probe_source` | local, resolve probe in MetalRenderTargetCache::Resolve | EDRAM info (format, MSAA, depth flag) of the resolve source. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4991, 5001, 5002, 5003 | 4 |
 | `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.h` | 551 | 1 |
-| `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5541, 5545, 5614, 5621, 5635, 6119 | 6 |
+| `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5545, 5552, 5564, 5637, 5646, 5663 | 6 |
 | `msaa_probe_count` | function-local static in MetalRenderTargetCache::DumpRenderTargets | Counts dumps of multisampled RGBA16Float targets so the multisample probe samples every 61st. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4121, 4131 | 2 |
 | `msaa_probe_rt` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Render target of the dump rectangle being considered. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4123, 4125, 4168 | 4 |
 | `msaa_probe_source` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Multisampled texture of that render target. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4124, 4126, 4127, 4128, 4137, 4138, 4156 | 7 |
@@ -83,11 +83,12 @@ further edits.
 | `msaa_probe_nonzero` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Number of non-zero bytes in the resolved pixels. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4177, 4179, 4185 | 3 |
 | `msaa_probe_byte` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Loop variable over the resolved bytes. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4178, 4179 | 2 |
 | `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.h` | 555 | 1 |
-| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.cc` | 586, 587, 588, 5540, 5619, 6120, 6121, 6124 | 8 |
-| `probe_buffer` | local, scene pixel probe in IssueDrawMsl | Copy of `visibility_probe_buffer_` kept alive for the completion handler. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5619, 5620, 5627, 5632 | 4 |
-| `probe_slot` | local, scene pixel probe in IssueDrawMsl | Index of the 8-byte counter this draw used. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5621, 5628, 5631 | 3 |
-| `probe_vertices` | local, scene pixel probe in IssueDrawMsl | Vertex count of the probed draw, to pair the line with the scene draw probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5622, 5631 | 2 |
-| `probe_samples` | local, scene pixel probe in IssueDrawMsl | Number of samples the draw passed, read back from the buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5625, 5626, 5629, 5631 | 4 |
+| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.cc` | 586, 587, 588, 5544, 5551, 5644, 6153, 6154, 6157 | 9 |
+| `probe_buffer` | local, scene pixel probe in IssueDrawMsl | Copy of `visibility_probe_buffer_` kept alive for the completion handler. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5644, 5645, 5652, 5660 | 4 |
+| `probe_slot` | local, scene pixel probe in IssueDrawMsl | Index of the 8-byte counter this draw used. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5646, 5653, 5658 | 3 |
+| `probe_vertices` | local, scene pixel probe in IssueDrawMsl | Vertex count of the probed draw, to pair the line with the scene draw probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5647, 5658 | 2 |
+| `probe_samples` | local, scene pixel probe in IssueDrawMsl | Samples the draw passed in each of its four probe passes, read back from the buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5650, 5651, 5654, 5658, 5659 | 7 |
+| `probe_pass` | local, scene pixel probe in IssueDrawMsl | Loop counter over the encodings of a probed draw: 0 as issued, 1 depth and stencil tests off, 2 also culling off, 3 also depth clipping off. Unprobed draws run the loop once. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5543, 5544, 5550, 5555, 5557, 5559, 5564 | 7 |
 | `touch` | namespace `xe::hid::touch` | Holds the on-screen controller driver and its state. | `src/xenia/hid/touch_input_driver_ios.h` | 21, 37 | 2 |
 | `touch` | namespace `xe::hid::touch` | Holds the on-screen controller driver and its state. | `src/xenia/hid/touch_input_driver_ios.cc` | 20, 185 | 2 |
 | `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/hid/touch_input_driver_ios.h` | 27 | 1 |
@@ -169,7 +170,7 @@ further edits.
 | `parsed` | 4 |
 | `editor` | 6 |
 | `DrawStats` | 2 |
-| `draw_stats_` | 26 |
+| `draw_stats_` | 35 |
 | `kDrawStatsFrames` | 3 |
 | `app_version` | 2 |
 | `app_build` | 2 |
@@ -210,11 +211,12 @@ further edits.
 | `msaa_probe_bytes` | 4 |
 | `msaa_probe_nonzero` | 3 |
 | `msaa_probe_byte` | 2 |
-| `visibility_probe_buffer_` | 9 |
+| `visibility_probe_buffer_` | 10 |
 | `probe_buffer` | 4 |
 | `probe_slot` | 3 |
 | `probe_vertices` | 2 |
-| `probe_samples` | 4 |
+| `probe_samples` | 7 |
+| `probe_pass` | 7 |
 | `touch` | 4 |
 | `SetTouchState` | 4 |
 | `TouchInputDriver` | 3 |
