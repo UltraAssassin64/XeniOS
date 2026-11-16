@@ -261,31 +261,49 @@ This is the first direct cause found. For the scene vertex shader
   whole `src/xenia/cpu` tree differs from upstream (262 files).
   **This last step is an inference, not yet confirmed.**
 
-### Current step
+### Result of the constant probe (build #9540): confirmed, the game writes NaN
 
-Two changes to confirm where the NaN comes from:
+- `nan_constant_writes` is about 8760 per 120 frames on the title screen (0
+  during the intro videos). The first writes in each window are
+  `0xFFC00000` to c3.xyzw and c4.xyz, and `0x7FC00000` to c8.x.
+- Raw constants of the scene shader (`vs=F215CCB53656BEFB`), typical line:
+  - c0 `402F54F7,3DC166BD,BD96140C,BD963A81`, c1 `C496965E,C50D1B03,…`:
+    real view-projection data.
+  - c2 all `00000000`; c3 all `FFC00000`: the rest of the view-projection.
+  - c4 `FFC00000 x3, 3F800000`: looks like the pre-view translation
+    (minus the camera position), so **the camera position is NaN**.
+  - c5 to c7: a sane rotation times 10; c8 `7FC00000,7FC00000,7F800000,
+    3F800000` (NaN, NaN, +Inf, 1): the object translation after the NaN
+    camera offset. The +Inf shows a division by zero somewhere upstream.
+  - c9 to c11: sane.
+- So the GPU side is doing what it is told. The guest computes a NaN camera
+  position and a zero row in the view-projection matrix. The fault is in
+  guest code execution: the a64 JIT, or its mismatch with the older
+  `cpu/hir`, `cpu/ppc`, `cpu/compiler` on this branch.
 
-- The data probe now logs every vertex constant c0 to c63 the shader uses as
-  raw bits with its guest index: `c<n>=XXXXXXXX,XXXXXXXX,XXXXXXXX,XXXXXXXX`
-  (replacing the 16 floats).
-- `Metal constant probe: NaN bits 0x… written to vertex constant c<n>
-  component <k>` is logged for the first 8 NaN bit patterns written in each
-  120-frame window, and the draw stats line has `nan_constant_writes=<n>`.
+### Current step: decide how to test the JIT (waiting for the owner)
 
-### How to read the result
+Logging cannot find a miscompiled instruction. Options looked at:
 
-- `nan_constant_writes` > 0 and the NaN constants are the ones the scene
-  shader multiplies positions by: the game is sending NaN, so the fault is
-  upstream of the GPU, in guest code execution. Next: find the guest code
-  that builds the matrix, or run the PPC instruction tests
-  (`src/xenia/cpu/ppc/testing`) against this branch's a64 backend. That needs
-  an arm64 host or emulator and assembled test binaries; neither exists in
-  the cloud container (x86_64, no qemu, no `bin/` directory).
-- `nan_constant_writes=0` while the probe still shows NaN constants: the
-  values are produced inside the emulator after the write; re-check the
-  register file and packing.
-- Bit pattern `FFFFFFFF` in a whole row would suggest a vector compare mask
-  or an uninitialised value rather than arithmetic NaN.
+- **Emulation in the cloud container: not practical.** The container is
+  x86_64 with no arm64 emulator or cross toolchain available from its package
+  sources, and `xenia-cpu-tests` links almost the whole emulator (kernel,
+  gpu, apu, ui).
+- **A macOS arm64 test job in CI: the practical route.** `macos-26` runners
+  are Apple Silicon, so the a64 backend runs natively there. The repository
+  has `src/xenia/cpu/testing` (HIR-level tests: pack, unpack, permute,
+  swizzle, vector shifts and so on) and `./xenia-build.py test`. Upstream
+  has many more a64 tests under the same directory (NaN propagation,
+  conversions, compares) that could be copied in. The PPC instruction tests
+  (`src/xenia/cpu/ppc/testing`, 571 `.s` files) have no assembled `bin/`
+  files in either repository and need a PowerPC assembler via
+  `./xenia-build.py gentests`. Cost: the macOS desktop build of this branch
+  has not been tried since the iOS 16 changes and may need fixes, and macOS
+  runners have been slow to pick up jobs.
+- **Port upstream's current `src/xenia/cpu`** (262 files differ): may fix
+  it outright, large half-port risk.
+
+All GPU probes are still in place and should be removed once this is fixed.
 
 ### Input after starting a new game (reported by the owner, build #9534)
 
