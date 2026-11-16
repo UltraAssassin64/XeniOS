@@ -2532,14 +2532,14 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
     XELOGI(
         "Metal draw stats over {} frames: issued={} copies={} "
         "no_rasterization={} no_vertices={} compile_pending={} encoded={} "
-        "other={} encoded_vertices={}",
+        "other={} encoded_vertices={} nan_constant_writes={}",
         draw_stats_.frames, draw_stats_.issued, draw_stats_.copies,
         draw_stats_.no_rasterization, draw_stats_.no_vertices,
         draw_stats_.compile_pending, draw_stats_.encoded,
         draw_stats_.issued - draw_stats_.copies - draw_stats_.no_rasterization -
             draw_stats_.no_vertices - draw_stats_.compile_pending -
             draw_stats_.encoded,
-        draw_stats_.encoded_vertices);
+        draw_stats_.encoded_vertices, draw_stats_.nan_constants);
     draw_stats_ = {};
   }
   saw_swap_ = true;
@@ -5811,14 +5811,23 @@ bool MetalCommandProcessor::IssueDrawMsl(
               probe_attribute.fetch_instr.attributes.is_integer);
         }
       }
-      float probe_constants[16];
-      std::memcpy(probe_constants, msl_cached_float_constants_vertex_.data(),
-                  sizeof(probe_constants));
+      // Every vertex float constant c0 to c63 the shader uses, as written by
+      // the game (raw bits, so NaN payloads are visible).
+      for (uint32_t probe_constant = 0; probe_constant < 64; ++probe_constant) {
+        if (vertex_shader->constant_register_map().float_bitmap[0] &
+            (uint64_t(1) << probe_constant)) {
+          probe_text += fmt::format(
+              " c{}={:08X},{:08X},{:08X},{:08X}", probe_constant,
+              regs[XE_GPU_REG_SHADER_CONSTANT_000_X + probe_constant * 4],
+              regs[XE_GPU_REG_SHADER_CONSTANT_000_X + probe_constant * 4 + 1],
+              regs[XE_GPU_REG_SHADER_CONSTANT_000_X + probe_constant * 4 + 2],
+              regs[XE_GPU_REG_SHADER_CONSTANT_000_X + probe_constant * 4 + 3]);
+        }
+      }
       XELOGI(
           "Metal scene data probe: vertices={} vs={:016X} ps={:016X} "
           "index_type={} index_format={} index_base=0x{:08X} index_endian={} "
-          "flags=0x{:08X} base_index={} float_count={} "
-          "constants={},{},{},{} {},{},{},{} {},{},{},{} {},{},{},{}{}",
+          "flags=0x{:08X} base_index={} float_count={}{}",
           primitive_processing_result.host_draw_vertex_count,
           vertex_shader->ucode_data_hash(),
           pixel_shader ? pixel_shader->ucode_data_hash() : 0,
@@ -5828,13 +5837,7 @@ bool MetalCommandProcessor::IssueDrawMsl(
           uint32_t(primitive_processing_result.host_shader_index_endian),
           spirv_system_constants_.flags,
           spirv_system_constants_.vertex_base_index,
-          vertex_shader->constant_register_map().float_count,
-          probe_constants[0], probe_constants[1], probe_constants[2],
-          probe_constants[3], probe_constants[4], probe_constants[5],
-          probe_constants[6], probe_constants[7], probe_constants[8],
-          probe_constants[9], probe_constants[10], probe_constants[11],
-          probe_constants[12], probe_constants[13], probe_constants[14],
-          probe_constants[15], probe_text);
+          vertex_shader->constant_register_map().float_count, probe_text);
     }
   }
 
@@ -5999,6 +6002,16 @@ void MetalCommandProcessor::WriteRegister(uint32_t index, uint32_t value) {
         msl_float_constants_dirty_pixel_ = true;
       }
     } else {
+      // Scene draw diagnostics: the scene's vertex constants hold NaN rows.
+      // Report the first few NaN bit patterns the game writes in each
+      // statistics window, to show they arrive in the command stream.
+      if ((value & 0x7F800000) == 0x7F800000 && (value & 0x007FFFFF) &&
+          draw_stats_.nan_constants++ < 8) {
+        XELOGI(
+            "Metal constant probe: NaN bits 0x{:08X} written to vertex "
+            "constant c{} component {}",
+            value, float_constant_index, index & 3);
+      }
       if (msl_current_float_constant_map_vertex_[map_index] & map_bit) {
         msl_float_constants_dirty_vertex_ = true;
       }

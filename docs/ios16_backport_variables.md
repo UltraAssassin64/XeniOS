@@ -32,9 +32,9 @@ further edits.
 | `by_category` | local in AddAllConfigVarSettings | Generated sections keyed by config category. | `src/xenia/ui/windowed_app_main_ios.mm` | 1213, 1231, 1235 | 3 |
 | `parsed` | local in ApplyIOSConfigSections | The edited text parsed as a TOML value. | `src/xenia/ui/windowed_app_main_ios.mm` | 3715, 3717, 3720, 3727 | 4 |
 | `editor` | local in tableView:didSelectRowAtIndexPath: | Alert with a text field used to edit a kText row. | `src/xenia/ui/windowed_app_main_ios.mm` | 8100, 8104, 8110, 8113, 8116, 8126 | 6 |
-| `DrawStats` | struct in MetalCommandProcessor | Counters describing what happened to guest draws. | `src/xenia/gpu/metal/metal_command_processor.h` | 542, 552 | 2 |
-| `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.h` | 552 | 1 |
-| `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2529, 2536, 2537, 2538, 2539, 2540, 2541, 2542, 2543, 2807, 2809, 2845, 2870, 4235, 4259, 4294, 5546, 5547, 5553, 5554, 5566, 5640, 5641, 5645, 5654, 5673 | 34 |
+| `DrawStats` | struct in MetalCommandProcessor | Counters describing what happened to guest draws. | `src/xenia/gpu/metal/metal_command_processor.h` | 542, 555 | 2 |
+| `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.h` | 555 | 1 |
+| `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2529, 2536, 2537, 2538, 2539, 2540, 2541, 2542, 2543, 2807, 2809, 2845, 2870, 4235, 4259, 4294, 5546, 5547, 5553, 5554, 5566, 5640, 5641, 5645, 5654, 5673, 6009 | 36 |
 | `kDrawStatsFrames` | constant in MetalCommandProcessor | Number of presented frames between draw-stat log lines. | `src/xenia/gpu/metal/metal_command_processor.h` | 539, 541 | 2 |
 | `kDrawStatsFrames` | constant in MetalCommandProcessor | Number of presented frames between draw-stat log lines. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2529 | 1 |
 | `app_version` | shell variable, CI Prepare artifacts step | CFBundleShortVersionString of the built app. | `.github/workflows/CI.yml` | 662, 664 | 2 |
@@ -67,6 +67,8 @@ further edits.
 | `probe_source` | local, resolve probe in MetalRenderTargetCache::Resolve | EDRAM info (format, MSAA, depth flag) of the resolve source. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4991, 5001, 5002, 5003 | 4 |
 | `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.h` | 551 | 1 |
 | `probed` | field of `DrawStats` | Number of scene draws logged by the scene draw probe in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5547, 5554, 5566, 5645, 5654, 5673 | 6 |
+| `nan_constants` | field of `DrawStats` | Number of NaN bit patterns the game wrote to vertex float constants in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.h` | 553 | 1 |
+| `nan_constants` | field of `DrawStats` | Number of NaN bit patterns the game wrote to vertex float constants in the current statistics window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2542, 6009 | 2 |
 | `msaa_probe_count` | function-local static in MetalRenderTargetCache::DumpRenderTargets | Counts dumps of multisampled RGBA16Float targets so the multisample probe samples every 61st. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4121, 4131 | 2 |
 | `msaa_probe_rt` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Render target of the dump rectangle being considered. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4123, 4125, 4168 | 4 |
 | `msaa_probe_source` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Multisampled texture of that render target. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4124, 4126, 4127, 4128, 4137, 4138, 4156 | 7 |
@@ -82,20 +84,20 @@ further edits.
 | `msaa_probe_bytes` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Resolved pixels copied to the CPU. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4172, 4175, 4178, 4186 | 4 |
 | `msaa_probe_nonzero` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Number of non-zero bytes in the resolved pixels. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4177, 4179, 4185 | 3 |
 | `msaa_probe_byte` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Loop variable over the resolved bytes. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4178, 4179 | 2 |
-| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.h` | 555 | 1 |
-| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.cc` | 586, 587, 588, 5546, 5553, 5652, 6305, 6306, 6309 | 9 |
+| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.h` | 557 | 1 |
+| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.cc` | 586, 587, 588, 5546, 5553, 5652, 6318, 6319, 6322 | 9 |
 | `probe_buffer` | local, scene pixel probe in IssueDrawMsl | Copy of `visibility_probe_buffer_` kept alive for the completion handler. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5652, 5653, 5660, 5670 | 4 |
 | `probe_slot` | local, scene pixel probe in IssueDrawMsl | Index of the 8-byte counter this draw used. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5654, 5661, 5667 | 3 |
 | `probe_vertices` | local, scene pixel probe in IssueDrawMsl | Vertex count of the probed draw, to pair the line with the scene draw probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5655, 5667 | 2 |
 | `probe_samples` | local, scene pixel probe in IssueDrawMsl | Samples the draw passed in each of its six probe passes, read back from the buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5658, 5659, 5662, 5667, 5668, 5669 | 9 |
 | `probe_pass` | local, scene pixel probe in IssueDrawMsl | Loop counter over the encodings of a probed draw: 0 as issued, 1 depth and stencil tests off, 2 also culling off, 3 also depth clipping off, 4 vertices drawn as lines, 5 as points. Unprobed draws run the loop once. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5545, 5546, 5552, 5557, 5559, 5561, 5566, 5572, 5573, 5632, 5633 | 11 |
 | `probe_memory` | local, scene data probe in IssueDrawMsl | CPU pointer to the contents of the shared memory Metal buffer, the memory the vertex shader fetches from. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5712, 5723, 5739, 5742, 5747, 5750, 5790, 5802 | 8 |
-| `probe_text` | local, scene data probe in IssueDrawMsl | Text of the index bytes and vertex streams appended to the scene data probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5714, 5719, 5721, 5753, 5762, 5770, 5781, 5800, 5806, 5837 | 10 |
+| `probe_text` | local, scene data probe in IssueDrawMsl | Text of the index bytes and vertex streams appended to the scene data probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5714, 5719, 5721, 5753, 5762, 5770, 5781, 5800, 5806, 5819, 5840 | 11 |
 | `probe_byte` | local, scene data probe in IssueDrawMsl | Loop counter over the bytes dumped from the index data and from each vertex stream. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5720, 5724, 5730, 5731, 5733, 5735, 5740, 5743, 5748, 5751, 5794, 5795, 5796, 5797, 5799, 5802 | 18 |
 | `probe_binding` | local, scene data probe in IssueDrawMsl | Vertex binding of the probed draw's vertex shader being described. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5777, 5780, 5784, 5786, 5805 | 5 |
 | `probe_fetch` | local, scene data probe in IssueDrawMsl | Vertex fetch constant of `probe_binding` (address, size, endianness). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5779, 5784, 5785, 5787, 5790, 5791, 5796, 5797, 5802 | 10 |
 | `probe_attribute` | local, scene data probe in IssueDrawMsl | Attribute of `probe_binding` being described (format, offset). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5804, 5808, 5809, 5810, 5811 | 5 |
-| `probe_constants` | local, scene data probe in IssueDrawMsl | First 16 packed vertex float constants of the probed draw. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5814, 5815, 5816, 5832, 5833, 5834, 5835, 5836, 5837 | 19 |
+| `probe_constant` | local, scene data probe in IssueDrawMsl | Loop counter over vertex float constants c0 to c63; those the shader uses are logged as raw bits. Replaces `probe_constants`. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5816, 5818, 5820, 5821, 5822, 5823, 5824 | 9 |
 | `probe_index_min` | local, scene data probe in IssueDrawMsl | Smallest index of the probed draw, read from the shared memory buffer as big-endian 16-bit. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5728, 5736, 5737, 5754 | 4 |
 | `probe_index_max` | local, scene data probe in IssueDrawMsl | Largest index of the probed draw, read the same way. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5729, 5744, 5745, 5754 | 4 |
 | `probe_target` | local, scene data probe in IssueDrawMsl | Colour or depth texture of the current render pass, to log its size, sample count and format (declared twice, in two adjacent `if` scopes). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5758, 5763, 5764, 5765, 5766, 5768, 5771, 5772, 5773, 5774 | 10 |
@@ -180,7 +182,7 @@ further edits.
 | `parsed` | 4 |
 | `editor` | 6 |
 | `DrawStats` | 2 |
-| `draw_stats_` | 35 |
+| `draw_stats_` | 37 |
 | `kDrawStatsFrames` | 3 |
 | `app_version` | 2 |
 | `app_build` | 2 |
@@ -206,6 +208,7 @@ further edits.
 | `probe_dest_nonzero` | 3 |
 | `probe_source` | 4 |
 | `probed` | 7 |
+| `nan_constants` | 3 |
 | `msaa_probe_count` | 2 |
 | `msaa_probe_rt` | 4 |
 | `msaa_probe_source` | 7 |
@@ -228,12 +231,12 @@ further edits.
 | `probe_samples` | 9 |
 | `probe_pass` | 11 |
 | `probe_memory` | 8 |
-| `probe_text` | 10 |
+| `probe_text` | 11 |
 | `probe_byte` | 18 |
 | `probe_binding` | 5 |
 | `probe_fetch` | 10 |
 | `probe_attribute` | 5 |
-| `probe_constants` | 19 |
+| `probe_constant` | 9 |
 | `probe_index_min` | 4 |
 | `probe_index_max` | 4 |
 | `probe_target` | 10 |

@@ -231,50 +231,61 @@ file heavily and cannot be cherry-picked as they are.
   `MetalCommandProcessor::WriteRegister`, so the float constant dirty flags
   were checked and look right.
 
+### Result of the scene data probe (build #9539, default settings)
+
+This is the first direct cause found. For the scene vertex shader
+`vs=F215CCB53656BEFB` (cached source `3CB0952BDED69281.mslsrcache`):
+
+- Position is `ViewProjection (packed constants 0 to 3) x LocalToWorld
+  (packed 5 to 8) x vertex position`.
+- The first four packed vertex constants were, in 20 of 24 lines:
+  `2.74, 0.094, -0.073, -0.073` / `-1204.7, -2257.7, -2011.3, -2013.4` /
+  `0, 0, 0, 0` / `-nan, -nan, -nan, -nan`, and in the other 4:
+  `0, 0, 0.999, 1` / `0.995, 0, 0, 0` / `0, 0, 0, 0` / `-nan x4`.
+  Two rows look like real matrix columns; one is all zero and one is all NaN.
+  A NaN column makes every output position NaN, so nothing is rasterized,
+  which matches every earlier probe (`as_lines=0 as_points=0` too).
+- Everything else is sane: `guest_match=true` for both vertex streams, the
+  stream bytes are plausible big-endian floats, indices run 0 to 266 for a
+  267-vertex stream, targets are 1280x1024 2x MSAA (`format=115`
+  RGBA16Float, `format=260` Depth32Float_Stencil8).
+- The cached vertex shaders were read and are translated correctly (vertex
+  index swap, fetch, matrix multiply, final W / NDC step, buffer slots).
+- Checked by reading: every constant write (`SET_CONSTANT`,
+  `LOAD_ALU_CONSTANT`, type 0 packets) ends in the virtual `WriteRegister`,
+  the packing loop matches the Vulkan backend's, and the dirty tracking is
+  right. So the bad values are most likely what the **game itself wrote**,
+  i.e. the guest CPU computed a wrong matrix. That points at the a64 JIT
+  (vector / VMX128 code), which ties in with the owed audit of
+  `cpu/compiler`, `cpu/hir`, `cpu/ppc` against the newer a64 backend: the
+  whole `src/xenia/cpu` tree differs from upstream (262 files).
+  **This last step is an inference, not yet confirmed.**
+
 ### Current step
 
-A **scene data probe** was added. For each probed draw with more than 4
-vertices it logs one line:
+Two changes to confirm where the NaN comes from:
 
-```
-Metal scene data probe: vertices=<n> vs=<hash> ps=<hash> index_type=<n>
-    index_format=<n> index_base=0x… index_endian=<n> flags=0x… base_index=<n>
-    float_count=<n> constants=<16 floats> indices=<16 bytes>
-    stream<k>: address=0x… size=<n> endian=<n> stride=<n> data=<48 bytes>
-    attr(format=<n>,offset=<n>,signed=…,integer=…) …
-```
-
-The bytes are read from the contents of the shared memory Metal buffer, which
-is what the shader fetches from. `constants` are the first four packed vertex
-float constants as uploaded.
-
-Added in the following commit, at the owner's request for more data while
-CI runners were unavailable:
-
-- The pixel probe has two more passes: `as_lines=` and `as_points=` encode the
-  same vertices as lines and as points (all tests still off). Non-zero there
-  with zero for the triangle passes means the vertices are on screen but the
-  triangles are degenerate (bad indices, or positions collapsed onto a line
-  or point). Points have no point size output, so treat a point count as
-  "some" or "none" only.
-- The draw probe line has the guest viewport registers
-  (`guest_viewport_scale=`, `guest_viewport_offset=`), `window_offset=` and
-  `vtx_cntl=`.
-- The data probe line has `index16_min=` / `index16_max=` (compare with
-  stream size / stride), `guest_match=` per stream (the Metal buffer bytes
-  equal guest memory) and `color_target=` / `depth_target=` (size, sample
-  count and Metal pixel format of the textures the pass renders into).
+- The data probe now logs every vertex constant c0 to c63 the shader uses as
+  raw bits with its guest index: `c<n>=XXXXXXXX,XXXXXXXX,XXXXXXXX,XXXXXXXX`
+  (replacing the 16 floats).
+- `Metal constant probe: NaN bits 0x… written to vertex constant c<n>
+  component <k>` is logged for the first 8 NaN bit patterns written in each
+  120-frame window, and the draw stats line has `nan_constant_writes=<n>`.
 
 ### How to read the result
 
-- Stream or index bytes all zero while the game is clearly running: the
-  shared memory buffer does not hold the guest's data for that range.
-- Constants all zero, NaN or absurd: the float constant upload is wrong.
-- Everything looks sane: the translated vertex shader is suspect. The
-  generated source is cached on the device per title in a `msl_source`
-  folder as `<16 hex digits>.mslsrcache`; the `vs=` hash identifies the guest
-  shader. Ask the owner for those files, and work one vertex through the
-  shader by hand with the logged stream bytes and constants.
+- `nan_constant_writes` > 0 and the NaN constants are the ones the scene
+  shader multiplies positions by: the game is sending NaN, so the fault is
+  upstream of the GPU, in guest code execution. Next: find the guest code
+  that builds the matrix, or run the PPC instruction tests
+  (`src/xenia/cpu/ppc/testing`) against this branch's a64 backend. That needs
+  an arm64 host or emulator and assembled test binaries; neither exists in
+  the cloud container (x86_64, no qemu, no `bin/` directory).
+- `nan_constant_writes=0` while the probe still shows NaN constants: the
+  values are produced inside the emulator after the write; re-check the
+  register file and packing.
+- Bit pattern `FFFFFFFF` in a whole row would suggest a vector compare mask
+  or an uninitialised value rather than arithmetic NaN.
 
 ### Input after starting a new game (reported by the owner, build #9534)
 
