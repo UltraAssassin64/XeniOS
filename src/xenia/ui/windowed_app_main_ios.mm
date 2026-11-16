@@ -54,6 +54,7 @@
 #include "xenia/base/string.h"
 #include "xenia/config.h"
 #include "xenia/hid/input.h"
+#include "xenia/hid/touch_input_driver_ios.h"
 #include "xenia/ui/apple_ui_flags.h"
 #include "xenia/ui/apple_ui_navigation.h"
 #include "xenia/ui/surface_ios.h"
@@ -8195,6 +8196,268 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 @end
 
 // ---------------------------------------------------------------------------
+// XeniaTouchPadView - on-screen controller shown over the game while no
+// physical controller is connected. Reports its state to the touch input
+// driver through xe::hid::touch::SetTouchState.
+// ---------------------------------------------------------------------------
+typedef NS_ENUM(NSInteger, XeniaTouchPadControlKind) {
+  XeniaTouchPadControlKindButton,
+  XeniaTouchPadControlKindLeftTrigger,
+  XeniaTouchPadControlKindRightTrigger,
+  XeniaTouchPadControlKindLeftStick,
+  XeniaTouchPadControlKindRightStick,
+};
+
+struct XeniaTouchPadControl {
+  XeniaTouchPadControlKind kind;
+  uint16_t button;  // X_INPUT_GAMEPAD_* bit for buttons, 0 otherwise.
+  NSString* label;
+  CGPoint center;
+  CGFloat radius;
+};
+
+static const NSInteger kXeniaTouchPadControlCount = 19;
+
+@interface XeniaTouchPadView : UIView
+// Index of the control at the point, or -1.
+- (NSInteger)controlIndexAtPoint:(CGPoint)point;
+// Releases every control and reports the idle state.
+- (void)resetTouches;
+@end
+
+@implementation XeniaTouchPadView {
+  XeniaTouchPadControl controls_[kXeniaTouchPadControlCount];
+  // Touches currently on the pad and the control each one started on.
+  NSMutableArray<UITouch*>* pad_touches_;
+  NSMutableArray<NSNumber*>* pad_touch_controls_;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame {
+  self = [super initWithFrame:frame];
+  if (self) {
+    self.opaque = NO;
+    self.backgroundColor = [UIColor clearColor];
+    self.multipleTouchEnabled = YES;
+    self.contentMode = UIViewContentModeRedraw;
+    pad_touches_ = [[NSMutableArray alloc] init];
+    pad_touch_controls_ = [[NSMutableArray alloc] init];
+  }
+  return self;
+}
+
+- (void)dealloc {
+  [pad_touches_ release];
+  [pad_touch_controls_ release];
+  [super dealloc];
+}
+
+- (void)layoutSubviews {
+  [super layoutSubviews];
+  const CGFloat width = self.bounds.size.width;
+  const CGFloat height = self.bounds.size.height;
+  const UIEdgeInsets insets = self.safeAreaInsets;
+  const CGFloat left = insets.left;
+  const CGFloat right = width - insets.right;
+  const CGFloat middle = width * 0.5;
+  const XeniaTouchPadControl controls[kXeniaTouchPadControlCount] = {
+      {XeniaTouchPadControlKindLeftStick, 0, @"L", {left + 96, height - 150}, 62},
+      {XeniaTouchPadControlKindRightStick, 0, @"R", {right - 250, height - 82}, 54},
+      {XeniaTouchPadControlKindLeftTrigger, 0, @"LT", {left + 44, 44}, 30},
+      {XeniaTouchPadControlKindRightTrigger, 0, @"RT", {right - 44, 44}, 30},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_LEFT_SHOULDER, @"LB",
+       {left + 116, 44}, 30},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_RIGHT_SHOULDER, @"RB",
+       {right - 116, 44}, 30},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_BACK, @"Back",
+       {middle - 70, 36}, 26},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_GUIDE, @"Guide", {middle, 36}, 26},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_START, @"Start",
+       {middle + 70, 36}, 26},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_DPAD_UP, @"▲",
+       {left + 236, height - 126}, 24},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_DPAD_DOWN, @"▼",
+       {left + 236, height - 38}, 24},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_DPAD_LEFT, @"◀",
+       {left + 192, height - 82}, 24},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_DPAD_RIGHT, @"▶",
+       {left + 280, height - 82}, 24},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_A, @"A",
+       {right - 104, height - 94}, 28},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_B, @"B",
+       {right - 50, height - 148}, 28},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_X, @"X",
+       {right - 158, height - 148}, 28},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_Y, @"Y",
+       {right - 104, height - 202}, 28},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_LEFT_THUMB, @"L3",
+       {left + 30, height - 34}, 22},
+      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_RIGHT_THUMB, @"R3",
+       {right - 30, height - 34}, 22},
+  };
+  for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
+    controls_[i] = controls[i];
+  }
+  [self setNeedsDisplay];
+}
+
+- (NSInteger)controlIndexAtPoint:(CGPoint)point {
+  for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
+    const CGFloat dx = point.x - controls_[i].center.x;
+    const CGFloat dy = point.y - controls_[i].center.y;
+    // A little slack around each control makes it easier to hit.
+    const CGFloat reach = controls_[i].radius * 1.15;
+    if (dx * dx + dy * dy <= reach * reach) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// Touches outside the controls fall through to the views below.
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent*)event {
+  return [self controlIndexAtPoint:point] >= 0;
+}
+
+- (void)reportState {
+  uint16_t buttons = 0;
+  uint8_t triggers[2] = {0, 0};
+  int16_t axes[4] = {0, 0, 0, 0};
+  for (NSUInteger i = 0; i < pad_touches_.count; ++i) {
+    const CGPoint point = [pad_touches_[i] locationInView:self];
+    NSInteger index = pad_touch_controls_[i].integerValue;
+    if (controls_[index].kind == XeniaTouchPadControlKindLeftStick ||
+        controls_[index].kind == XeniaTouchPadControlKindRightStick) {
+      // A stick follows the touch that started on it, clamped to its rim.
+      CGFloat x = (point.x - controls_[index].center.x) / controls_[index].radius;
+      CGFloat y = (controls_[index].center.y - point.y) / controls_[index].radius;
+      const CGFloat length = sqrt(x * x + y * y);
+      if (length > 1.0) {
+        x /= length;
+        y /= length;
+      }
+      const NSInteger axis =
+          controls_[index].kind == XeniaTouchPadControlKindLeftStick ? 0 : 2;
+      axes[axis] = int16_t(x * 32767.0);
+      axes[axis + 1] = int16_t(y * 32767.0);
+      continue;
+    }
+    // Buttons and triggers follow the finger, so sliding between them works.
+    index = [self controlIndexAtPoint:point];
+    if (index < 0) {
+      continue;
+    }
+    if (controls_[index].kind == XeniaTouchPadControlKindLeftTrigger) {
+      triggers[0] = 255;
+    } else if (controls_[index].kind == XeniaTouchPadControlKindRightTrigger) {
+      triggers[1] = 255;
+    } else {
+      buttons |= controls_[index].button;
+    }
+  }
+  xe::hid::touch::SetTouchState(buttons, triggers[0], triggers[1], axes[0], axes[1], axes[2],
+                                axes[3]);
+  [self setNeedsDisplay];
+}
+
+- (void)resetTouches {
+  if (pad_touches_.count == 0) {
+    return;
+  }
+  [pad_touches_ removeAllObjects];
+  [pad_touch_controls_ removeAllObjects];
+  [self reportState];
+}
+
+- (void)touchesBegan:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
+  for (UITouch* touch in touches) {
+    const NSInteger index = [self controlIndexAtPoint:[touch locationInView:self]];
+    if (index >= 0) {
+      [pad_touches_ addObject:touch];
+      [pad_touch_controls_ addObject:@(index)];
+    }
+  }
+  [self reportState];
+}
+
+- (void)touchesMoved:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
+  [self reportState];
+}
+
+- (void)touchesEnded:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
+  for (UITouch* touch in touches) {
+    const NSUInteger position = [pad_touches_ indexOfObjectIdenticalTo:touch];
+    if (position != NSNotFound) {
+      [pad_touches_ removeObjectAtIndex:position];
+      [pad_touch_controls_ removeObjectAtIndex:position];
+    }
+  }
+  [self reportState];
+}
+
+- (void)touchesCancelled:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
+  [self touchesEnded:touches withEvent:event];
+}
+
+- (void)drawRect:(CGRect)rect {
+  NSDictionary* attributes = @{
+    NSFontAttributeName : [UIFont boldSystemFontOfSize:13],
+    NSForegroundColorAttributeName : [UIColor colorWithWhite:1.0 alpha:0.75],
+  };
+  for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
+    const XeniaTouchPadControl& control = controls_[i];
+    BOOL active = NO;
+    CGPoint knob = control.center;
+    for (NSUInteger j = 0; j < pad_touches_.count; ++j) {
+      const CGPoint point = [pad_touches_[j] locationInView:self];
+      const BOOL is_stick = control.kind == XeniaTouchPadControlKindLeftStick ||
+                            control.kind == XeniaTouchPadControlKindRightStick;
+      if (is_stick ? pad_touch_controls_[j].integerValue == i
+                   : [self controlIndexAtPoint:point] == i) {
+        active = YES;
+        if (is_stick) {
+          CGFloat x = point.x - control.center.x;
+          CGFloat y = point.y - control.center.y;
+          const CGFloat length = sqrt(x * x + y * y);
+          if (length > control.radius) {
+            x *= control.radius / length;
+            y *= control.radius / length;
+          }
+          knob = CGPointMake(control.center.x + x, control.center.y + y);
+        }
+      }
+    }
+    UIBezierPath* outline =
+        [UIBezierPath bezierPathWithArcCenter:control.center
+                                       radius:control.radius
+                                   startAngle:0
+                                     endAngle:2 * M_PI
+                                    clockwise:YES];
+    [[UIColor colorWithWhite:(active ? 1.0 : 0.0) alpha:(active ? 0.35 : 0.25)] setFill];
+    [outline fill];
+    [[UIColor colorWithWhite:1.0 alpha:0.55] setStroke];
+    outline.lineWidth = 1.5;
+    [outline stroke];
+    if (control.kind == XeniaTouchPadControlKindLeftStick ||
+        control.kind == XeniaTouchPadControlKindRightStick) {
+      UIBezierPath* knob_path =
+          [UIBezierPath bezierPathWithArcCenter:knob
+                                         radius:control.radius * 0.45
+                                     startAngle:0
+                                       endAngle:2 * M_PI
+                                      clockwise:YES];
+      [[UIColor colorWithWhite:1.0 alpha:0.45] setFill];
+      [knob_path fill];
+    }
+    const CGSize label_size = [control.label sizeWithAttributes:attributes];
+    [control.label drawAtPoint:CGPointMake(knob.x - label_size.width * 0.5,
+                                           knob.y - label_size.height * 0.5)
+                withAttributes:attributes];
+  }
+}
+
+@end
+
+// ---------------------------------------------------------------------------
 // XeniaViewController - manages the Metal view and game launcher UI.
 // ---------------------------------------------------------------------------
 @interface XeniaViewController : UIViewController <UIDocumentPickerDelegate,
@@ -8202,6 +8465,7 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
                                                    UICollectionViewDelegateFlowLayout,
                                                    XeniaGameContentHost>
 @property(nonatomic, strong) XeniaMetalView* metalView;
+@property(nonatomic, strong) XeniaTouchPadView* touchPadView;
 @property(nonatomic, strong) UIView* launcherOverlay;
 @property(nonatomic, strong) UIButton* openGameButton;
 @property(nonatomic, strong) UIButton* settingsButton;
@@ -8297,6 +8561,14 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
       UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   self.metalView.contentScaleFactor = [UIScreen mainScreen].scale;
   [self.view addSubview:self.metalView];
+
+  // On-screen controller, above the game and below every menu. Hidden until a
+  // game runs without a physical controller (see pollControllerNavigation).
+  self.touchPadView = [[[XeniaTouchPadView alloc] initWithFrame:self.view.bounds] autorelease];
+  self.touchPadView.autoresizingMask =
+      UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  self.touchPadView.hidden = YES;
+  [self.view addSubview:self.touchPadView];
 
   // Create the launcher overlay UI immediately. When JIT is missing, keep
   // settings/navigation available but gate game launch with status.
@@ -9082,6 +9354,18 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 }
 
 - (void)pollControllerNavigation:(NSTimer* __unused)timer {
+  // Show the on-screen controller only while a game is on screen and no
+  // physical controller is connected.
+  const BOOL hide_touch_pad = !self.gameRunning || !self.launcherOverlay.hidden ||
+                              !self.inGameMenuOverlay.hidden || self.presentedViewController ||
+                              [GCController controllers].count != 0;
+  if (self.touchPadView.hidden != hide_touch_pad) {
+    self.touchPadView.hidden = hide_touch_pad;
+    if (hide_touch_pad) {
+      [self.touchPadView resetTouches];
+    }
+  }
+
   const bool navigation_enabled = cvars::ui_controller_navigation;
   if (!navigation_enabled) {
     if (controller_navigation_was_enabled_) {
@@ -9685,6 +9969,13 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
     return;
   }
   if (self.launcherOverlay.hidden == NO || !self.gameRunning || self.presentedViewController) {
+    return;
+  }
+  // A tap on an on-screen controller button is input for the game, not a
+  // request for the menu.
+  if (!self.touchPadView.hidden &&
+      [self.touchPadView controlIndexAtPoint:[recognizer locationInView:self.touchPadView]] >=
+          0) {
     return;
   }
 

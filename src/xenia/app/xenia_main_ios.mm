@@ -43,6 +43,7 @@
 #include "xenia/hid/input_system.h"
 #include "xenia/hid/nop/nop_hid.h"
 #include "xenia/hid/sdl/sdl_hid.h"
+#include "xenia/hid/touch_input_driver_ios.h"
 #include "xenia/kernel/xam/xam.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_state.h"
@@ -836,6 +837,9 @@ EmulatorAppIOS::CreateInputDrivers(ui::Window* window) {
     XELOGW("iOS: SDL input driver setup failed, falling back to nop input");
     drivers.emplace_back(xe::hid::nop::Create(window, kZOrderHidInput));
   }
+  // The on-screen controller is a fallback device: InputSystem gives it player
+  // one only while no physical controller is connected.
+  drivers.emplace_back(xe::hid::touch::Create(window, kZOrderHidInput));
   return drivers;
 }
 

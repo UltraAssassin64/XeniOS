@@ -88,6 +88,65 @@ further edits.
 | `probe_slot` | local, scene pixel probe in IssueDrawMsl | Index of the 8-byte counter this draw used. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5621, 5628, 5631 | 3 |
 | `probe_vertices` | local, scene pixel probe in IssueDrawMsl | Vertex count of the probed draw, to pair the line with the scene draw probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5622, 5631 | 2 |
 | `probe_samples` | local, scene pixel probe in IssueDrawMsl | Number of samples the draw passed, read back from the buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5625, 5626, 5629, 5631 | 4 |
+| `touch` | namespace `xe::hid::touch` | Holds the on-screen controller driver and its state. | `src/xenia/hid/touch_input_driver_ios.h` | 21, 37 | 2 |
+| `touch` | namespace `xe::hid::touch` | Holds the on-screen controller driver and its state. | `src/xenia/hid/touch_input_driver_ios.cc` | 20, 185 | 2 |
+| `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/hid/touch_input_driver_ios.h` | 27 | 1 |
+| `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/hid/touch_input_driver_ios.cc` | 159 | 1 |
+| `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/ui/windowed_app_main_ios.mm` | 8201, 8357 | 2 |
+| `TouchInputDriver` | class (anonymous namespace) | Input driver presenting the on-screen controller as a fallback gamepad. | `src/xenia/hid/touch_input_driver_ios.cc` | 29, 31, 182 | 3 |
+| `touch_state_mutex_` | file-scope variable | Guards `touch_state_`. | `src/xenia/hid/touch_input_driver_ios.cc` | 24, 25, 66, 107, 162 | 5 |
+| `touch_state_` | file-scope variable | Latest on-screen controller state and packet number. | `src/xenia/hid/touch_input_driver_ios.cc` | 27, 67, 108, 109, 113, 163, 177 | 8 |
+| `kKeystrokeKeys` | local constant in GetKeystroke | Virtual key for each button bit. | `src/xenia/hid/touch_input_driver_ios.cc` | 85, 120, 123, 129, 153 | 5 |
+| `keystroke_buttons` | local in GetKeystroke | Current buttons and triggers as a bit field. | `src/xenia/hid/touch_input_driver_ios.cc` | 105, 108, 111, 115, 122, 124 | 6 |
+| `release_pass` | local in GetKeystroke | Loop counter: releases are reported before presses. | `src/xenia/hid/touch_input_driver_ios.cc` | 119, 125 | 3 |
+| `keystroke_bit` | local in GetKeystroke | Bit of the button being examined. | `src/xenia/hid/touch_input_driver_ios.cc` | 121, 122, 124, 128 | 4 |
+| `pressed` | local in GetKeystroke | Whether that button is currently down. | `src/xenia/hid/touch_input_driver_ios.cc` | 122, 125, 132 | 3 |
+| `last_keystroke_buttons_` | member of TouchInputDriver | Buttons already reported through GetKeystroke. | `src/xenia/hid/touch_input_driver_ios.cc` | 124, 128, 154 | 3 |
+| `XeniaTouchPadView` | Objective-C class | The on-screen controller view. | `src/xenia/ui/windowed_app_main_ios.mm` | 8199, 8221, 8228, 8468, 8567 | 5 |
+| `XeniaTouchPadControl` | struct | One control of the on-screen controller: kind, button bit, label, centre, radius. | `src/xenia/ui/windowed_app_main_ios.mm` | 8211, 8229, 8262, 8407 | 4 |
+| `XeniaTouchPadControlKind` | enum | Kind of control. | `src/xenia/ui/windowed_app_main_ios.mm` | 8203, 8212 | 2 |
+| `XeniaTouchPadControlKindButton` | enumerator | A digital button. | `src/xenia/ui/windowed_app_main_ios.mm` | 8204, 8267, 8269, 8271, 8273, 8274, 8276, 8278, 8280, 8282, 8284, 8286, 8288, 8290, 8292, 8294 | 16 |
+| `XeniaTouchPadControlKindLeftTrigger` | enumerator | Left trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8205, 8265, 8349 | 3 |
+| `XeniaTouchPadControlKindRightTrigger` | enumerator | Right trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8206, 8266, 8351 | 3 |
+| `XeniaTouchPadControlKindLeftStick` | enumerator | Left thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8207, 8263, 8328, 8339, 8412, 8440 | 6 |
+| `XeniaTouchPadControlKindRightStick` | enumerator | Right thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8208, 8264, 8329, 8413, 8441 | 5 |
+| `kXeniaTouchPadControlCount` | file-scope constant | Number of controls (19). | `src/xenia/ui/windowed_app_main_ios.mm` | 8219, 8229, 8262, 8297, 8304, 8406 | 6 |
+| `controls_` | instance variable of XeniaTouchPadView | The controls with their current positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 8229, 8298, 8305, 8306, 8308, 8328, 8329, 8331, 8332, 8339, 8349, 8351, 8354, 8407 | 16 |
+| `pad_touches_` | instance variable of XeniaTouchPadView | Touches currently on the pad. | `src/xenia/ui/windowed_app_main_ios.mm` | 8231, 8242, 8249, 8325, 8326, 8363, 8366, 8375, 8388, 8390, 8410, 8411 | 12 |
+| `pad_touch_controls_` | instance variable of XeniaTouchPadView | Control each of those touches started on. | `src/xenia/ui/windowed_app_main_ios.mm` | 8232, 8243, 8250, 8327, 8367, 8376, 8391, 8414 | 8 |
+| `controlIndexAtPoint` | method of XeniaTouchPadView | Index of the control at a point, or -1. | `src/xenia/ui/windowed_app_main_ios.mm` | 8223, 8303, 8318, 8345, 8373, 8415, 9977 | 7 |
+| `resetTouches` | method of XeniaTouchPadView | Releases every control and reports the idle state. | `src/xenia/ui/windowed_app_main_ios.mm` | 8225, 8362, 9365 | 3 |
+| `reportState` | method of XeniaTouchPadView | Computes the gamepad state from the touches and passes it to SetTouchState. | `src/xenia/ui/windowed_app_main_ios.mm` | 8321, 8368, 8379, 8383, 8394 | 5 |
+| `touchPadView` | property of XeniaViewController | The on-screen controller view instance. | `src/xenia/ui/windowed_app_main_ios.mm` | 8468, 8567, 8568, 8570, 8571, 9362, 9363, 9365, 9976, 9977 | 11 |
+| `hide_touch_pad` | local in pollControllerNavigation | Whether the on-screen controller should be hidden now. | `src/xenia/ui/windowed_app_main_ios.mm` | 9359, 9362, 9363, 9364 | 4 |
+| `width` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8256, 8260, 8261, 8452 | 5 |
+| `height` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8257, 8263, 8264, 8277, 8279, 8281, 8283, 8285, 8287, 8289, 8291, 8293, 8295, 8453 | 15 |
+| `insets` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8258, 8259, 8260 | 3 |
+| `left` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8259, 8263, 8265, 8268, 8277, 8279, 8281, 8283, 8293 | 10 |
+| `right` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8260, 8264, 8266, 8270, 8285, 8287, 8289, 8291, 8295 | 10 |
+| `middle` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8261, 8272, 8273, 8275 | 4 |
+| `controls` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8262, 8298, 8316 | 3 |
+| `reach` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8308, 8309 | 3 |
+| `dx` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8305, 8309 | 3 |
+| `dy` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8306, 8309 | 3 |
+| `buttons` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8213, 8322, 8354, 8357 | 4 |
+| `triggers` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8323, 8344, 8350, 8352, 8357 | 6 |
+| `axes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8324, 8340, 8341, 8357, 8358 | 7 |
+| `point` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8222, 8223, 8303, 8305, 8306, 8317, 8318, 8326, 8331, 8332, 8345, 8411, 8415, 8418, 8419 | 15 |
+| `index` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8327, 8328, 8329, 8331, 8332, 8339, 8345, 8346, 8349, 8351, 8354, 8373, 8374, 8376 | 16 |
+| `x` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8305, 8331, 8333, 8335, 8340, 8418, 8420, 8422, 8425, 8452 | 18 |
+| `y` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8306, 8332, 8333, 8336, 8341, 8419, 8420, 8423, 8425, 8453 | 18 |
+| `length` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8333, 8334, 8335, 8336, 8420, 8421, 8422, 8423 | 8 |
+| `axis` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8338, 8340, 8341 | 3 |
+| `position` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8388, 8389, 8390, 8391 | 4 |
+| `attributes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8402, 8451, 8454 | 3 |
+| `control` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8222, 8224, 8230, 8307, 8407, 8409, 8412, 8413, 8418, 8419, 8421, 8422, 8423, 8425, 8430, 8431, 8440, 8441, 8444, 8451, 8452 | 22 |
+| `active` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8408, 8416, 8435 | 4 |
+| `knob` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8409, 8425, 8443, 8452, 8453 | 5 |
+| `is_stick` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8412, 8414, 8417 | 3 |
+| `outline` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8429, 8436, 8438, 8439 | 4 |
+| `knob_path` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8442, 8449 | 2 |
+| `label_size` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8451, 8452, 8453 | 3 |
 
 ## Total references per name
 
@@ -156,6 +215,62 @@ further edits.
 | `probe_slot` | 3 |
 | `probe_vertices` | 2 |
 | `probe_samples` | 4 |
+| `touch` | 4 |
+| `SetTouchState` | 4 |
+| `TouchInputDriver` | 3 |
+| `touch_state_mutex_` | 5 |
+| `touch_state_` | 8 |
+| `kKeystrokeKeys` | 5 |
+| `keystroke_buttons` | 6 |
+| `release_pass` | 3 |
+| `keystroke_bit` | 4 |
+| `pressed` | 3 |
+| `last_keystroke_buttons_` | 3 |
+| `XeniaTouchPadView` | 5 |
+| `XeniaTouchPadControl` | 4 |
+| `XeniaTouchPadControlKind` | 2 |
+| `XeniaTouchPadControlKindButton` | 16 |
+| `XeniaTouchPadControlKindLeftTrigger` | 3 |
+| `XeniaTouchPadControlKindRightTrigger` | 3 |
+| `XeniaTouchPadControlKindLeftStick` | 6 |
+| `XeniaTouchPadControlKindRightStick` | 5 |
+| `kXeniaTouchPadControlCount` | 6 |
+| `controls_` | 16 |
+| `pad_touches_` | 12 |
+| `pad_touch_controls_` | 8 |
+| `controlIndexAtPoint` | 7 |
+| `resetTouches` | 3 |
+| `reportState` | 5 |
+| `touchPadView` | 11 |
+| `hide_touch_pad` | 4 |
+| `width` (XeniaTouchPadView locals) | 5 |
+| `height` (XeniaTouchPadView locals) | 15 |
+| `insets` (XeniaTouchPadView locals) | 3 |
+| `left` (XeniaTouchPadView locals) | 10 |
+| `right` (XeniaTouchPadView locals) | 10 |
+| `middle` (XeniaTouchPadView locals) | 4 |
+| `controls` (XeniaTouchPadView locals) | 3 |
+| `reach` (XeniaTouchPadView locals) | 3 |
+| `dx` (XeniaTouchPadView locals) | 3 |
+| `dy` (XeniaTouchPadView locals) | 3 |
+| `buttons` (XeniaTouchPadView locals) | 4 |
+| `triggers` (XeniaTouchPadView locals) | 6 |
+| `axes` (XeniaTouchPadView locals) | 7 |
+| `point` (XeniaTouchPadView locals) | 15 |
+| `index` (XeniaTouchPadView locals) | 16 |
+| `x` (XeniaTouchPadView locals) | 18 |
+| `y` (XeniaTouchPadView locals) | 18 |
+| `length` (XeniaTouchPadView locals) | 8 |
+| `axis` (XeniaTouchPadView locals) | 3 |
+| `position` (XeniaTouchPadView locals) | 4 |
+| `attributes` (XeniaTouchPadView locals) | 3 |
+| `control` (XeniaTouchPadView locals) | 22 |
+| `active` (XeniaTouchPadView locals) | 4 |
+| `knob` (XeniaTouchPadView locals) | 5 |
+| `is_stick` (XeniaTouchPadView locals) | 3 |
+| `outline` (XeniaTouchPadView locals) | 4 |
+| `knob_path` (XeniaTouchPadView locals) | 2 |
+| `label_size` (XeniaTouchPadView locals) | 3 |
 
 ## Checks
 
@@ -164,6 +279,12 @@ further edits.
   `probe_data` are each declared in two places (the texture cache probe and the
   resolve probe); they are locals of separate functions in separate files and
   do not refer to each other.
+- The `XeniaTouchPadView` locals (`width`, `x`, `index` and so on) are ordinary
+  short names that also occur elsewhere in the same file; their line lists and
+  counts cover only the `XeniaTouchPadView` block.
+- `touch_input_driver_ios.{h,cc}` are only compiled for iOS (the build's
+  `_ios` file filter), and `xe::hid::touch::SetTouchState` is called only from
+  the iOS UI file.
 - `shared_drivers_mutex_`, `shared_drivers_`, `shared_lock`, `mix_frame` and
   `mixed` only exist inside `#if XE_PLATFORM_IOS` blocks.
 - `artifact_suffix` is written to `$GITHUB_OUTPUT` in the `prepare_artifacts`

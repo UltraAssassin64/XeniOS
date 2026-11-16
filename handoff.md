@@ -174,36 +174,79 @@ resolve probe was zero and every single-sample one was not.
 The owner's config was still non-default in both logs of that run (the reset
 did not take effect); check the `CONFIG DUMP` again.
 
+### Result of the multisample probe (build #9530, default settings)
+
+`Metal multisample probe: key=0x00C88400 … nonzero=0/10485760` on every
+sample. Metal's own resolve of the scene colour target is also all zero, so
+the target really is empty; the compute dump is not at fault. The owner's
+settings were back to defaults in this run.
+
+Checked by reading and found in order: depth/stencil state creation,
+rasterizer state, viewport setup (`allow_reverse_z=false` flips the guest's
+reversed range the same way for all targets), render pass load/store actions
+(`Store`; first-use clear only once), render target storage (private, not
+memoryless; only dummy colour targets are memoryless on iOS), transfers go
+into the same command buffer in order, and every non-depth-only fragment
+shader writes `gl_SampleMask = -1` unless alpha-to-mask is enabled.
+
+Upstream (branch `xenios`, fetched with `git fetch --depth=600 upstream
+xenios`) has many later commits in exactly this area, for example "Store
+constant depth rectangles drawn through a 4x view in the tiles' owner",
+"Leave color quads that overwrite depth and stencil out of the depth
+transfers", "Match D3D12 color-to-depth transfer packing". They rework the
+file heavily and cannot be cherry-picked as they are.
+
 ### Current step
 
-A **multisample probe** was added in
-`MetalRenderTargetCache::DumpRenderTargets`. For every 61st dump of a
-multisampled RGBA16Float target it has Metal resolve the target into a
-CPU-readable texture (`StoreActionStoreAndMultisampleResolve`) and logs:
+A **scene pixel probe** was added. Every render pass now has a visibility
+result buffer (`visibility_probe_buffer_`), and each draw logged by the scene
+draw probe is counted:
 
 ```
-Metal multisample probe: #<n> key=0x<rt key> <w>x<h> tiles=<base>+<rows>x<pitch> nonzero=<n>/<total>
+Metal scene pixel probe: slot=<n> vertices=<n> samples_passed=<n>
 ```
 
-All earlier probes are still in place. Check CI for that commit first, then
-ask the owner for one log (title screen about a minute, press Start, ten
-seconds).
+Pair it with the `Metal scene draw probe` line that has the same `vertices`
+value in the same window. All earlier probes are still in place.
 
 ### How to read the result
 
-Compare with the `Metal resolve probe` lines for the same target
-(`source_format=3 source_msaa=1`).
+- `samples_passed=0` for the scene draws (the lines with thousands of
+  vertices): the draws produce no fragments that pass. With a GREATER_EQUAL
+  test this means either the depth target does not hold 0 (the dump of depth
+  could be wrong; probe depth with a Metal depth resolve), or the geometry is
+  off screen / fully clipped (log the system constants and a few transformed
+  vertices), or the sample mask is 0.
+- `samples_passed` is large: the fragments pass and are lost afterwards, so
+  something clears or replaces the target between the draws and the dump
+  (render pass restarts with a clear load action, a transfer into the target
+  after the draws, or the draws going to a different texture than the dump
+  reads).
+- The 4-vertex clear quads are probed too; their counts show whether the
+  clears themselves rasterize.
 
-- Multisample probe `nonzero` is large while the resolve probe's
-  `edram_nonzero` is 0: the scene **is** rendered and the compute dump cannot
-  read multisampled textures here. Fix: dump multisampled targets another way
-  (for example render each sample into a single-sample intermediate with a
-  fragment shader, which the transfer shaders already do successfully, then
-  run the existing 1x dump on it), for colour and depth.
-- Multisample probe `nonzero` is 0 too: the target really is empty. Then look
-  at the ownership transfers from the 4x depth clear targets into the scene
-  targets and at why fragments are not produced (a visibility-result counter
-  on the scene draws would settle it).
+## On-screen controller (added at the owner's request)
+
+- `src/xenia/hid/touch_input_driver_ios.{h,cc}`: `xe::hid::touch::Create`
+  returns a driver that enumerates one device with `fallback_auto_bind`, so
+  `InputSystem` gives it player one only while no physical controller is
+  connected. `xe::hid::touch::SetTouchState` receives the state from the UI.
+  The files are in the `xenia-hid` project and, through the build's `_ios`
+  filter, compiled only for iOS.
+- `src/xenia/app/xenia_main_ios.mm`: `CreateInputDrivers` adds the driver
+  after SDL.
+- `src/xenia/ui/windowed_app_main_ios.mm`: `XeniaTouchPadView` draws and
+  tracks 19 controls (two sticks, LT/RT, LB/RB, Back/Guide/Start, D-pad,
+  A/B/X/Y, L3/R3). `XeniaViewController` shows it from
+  `pollControllerNavigation` while a game is on screen, no menu is open and
+  `[GCController controllers]` is empty. A tap on a control no longer toggles
+  the in-game menu; a tap elsewhere still does.
+- Not customizable, fixed layout, no haptics. Upstream has a much larger
+  customizable touch system under `src/xenia/hid/touch/` and
+  `src/xenia/ui/ios/touch/`; this is deliberately a small stand-in with a
+  compatible driver idea (fallback device), not a port.
+- This file is Objective-C++ under manual reference counting and is not
+  lint-checked; it can only be compiled by CI.
 
 ### Other observations, unverified as causes
 
