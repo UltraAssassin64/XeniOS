@@ -844,6 +844,6 @@ EmulatorAppIOS::CreateInputDrivers(ui::Window* window) {
 }
 
 }  // namespace app
-}  // namespace xe 
+}  // namespace xe imcrine
 
 XE_DEFINE_WINDOWED_APP(xenia, xe::app::EmulatorAppIOS::Create);
