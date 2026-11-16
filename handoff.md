@@ -213,39 +213,60 @@ file heavily and cannot be cherry-picked as they are.
   the 250 draws seen on the title screen before; the first 16 multisampled
   draws of a frame are all that is probed.
 
+### Result of the four-pass pixel probe (build #9534, default settings)
+
+- Title screen and the start of a new game. Every scene draw (1080 to 20550
+  vertices, `surface=0x14010500`) has `samples_passed=0 depth_test_off=0
+  cull_off=0 depth_clip_off=0`. Every clear quad passes its full area in all
+  four passes.
+- So the depth test, the stencil test, culling and depth clipping are **not**
+  what rejects the scene. The triangles never cover a sample, or every
+  fragment is discarded.
+- Scene draw state: `clip=0x00080000` (DX clip space, clipping on, no user
+  clip planes), `vte=0x0000043F` (viewport scale and offset on, W not
+  reciprocal), `color_control=0x87000007` (alpha test and alpha-to-mask off).
+  So user clip planes and the alpha test are ruled out too.
+- What is left: the vertex shader's inputs (vertex streams, index data, float
+  constants) or its output position. All register writes do reach
+  `MetalCommandProcessor::WriteRegister`, so the float constant dirty flags
+  were checked and look right.
+
 ### Current step
 
-The scene pixel probe now encodes each probed draw four times, each time with
-one more test taken away, and logs all four counts:
+A **scene data probe** was added. For each probed draw with more than 4
+vertices it logs one line:
 
 ```
-Metal scene pixel probe: slot=<n> vertices=<n> samples_passed=<n>
-    depth_test_off=<n> cull_off=<n> depth_clip_off=<n>
+Metal scene data probe: vertices=<n> vs=<hash> ps=<hash> index_type=<n>
+    index_format=<n> index_base=0x… index_endian=<n> flags=0x… base_index=<n>
+    float_count=<n> constants=<16 floats> indices=<16 bytes>
+    stream<k>: address=0x… size=<n> endian=<n> stride=<n> data=<48 bytes>
+    attr(format=<n>,offset=<n>,signed=…,integer=…) …
 ```
 
-(one line in the log). The scene draw probe line also gained `clip=`
-(`PA_CL_CLIP_CNTL`), `vte=` (`PA_CL_VTE_CNTL`), `color_control=`
-(`RB_COLORCONTROL`, alpha test and alpha-to-mask) and `alpha_ref=`.
-
-The extra encodings write colour (not depth) in the first frame of every
-120-frame window, so if the depth test is the cause the scene may flash on
-screen about every two seconds. That is expected while the probe is in.
+The bytes are read from the contents of the shared memory Metal buffer, which
+is what the shader fetches from. `constants` are the first four packed vertex
+float constants as uploaded.
 
 ### How to read the result
 
-The first count that becomes non-zero names the test that rejects the draw:
+- Stream or index bytes all zero while the game is clearly running: the
+  shared memory buffer does not hold the guest's data for that range.
+- Constants all zero, NaN or absurd: the float constant upload is wrong.
+- Everything looks sane: the translated vertex shader is suspect. The
+  generated source is cached on the device per title in a `msl_source`
+  folder as `<16 hex digits>.mslsrcache`; the `vs=` hash identifies the guest
+  shader. Ask the owner for those files, and work one vertex through the
+  shader by hand with the logged stream bytes and constants.
 
-- `depth_test_off` > 0: the depth or stencil test. The depth target does not
-  hold what the game cleared it to (NaN would fail every comparison and still
-  dump as 0). Look at the 4x -> 2x depth ownership transfer and the host
-  depth written by the clear quads.
-- `cull_off` > 0: face culling / winding.
-- `depth_clip_off` > 0: the geometry is outside the depth clip range; look at
-  the viewport z range and `ndc_scale` / `ndc_offset` z handling.
-- All four are 0: the vertices are off screen or clipped (user clip planes in
-  `clip=`, a wrong transform, w <= 0), or every fragment is discarded (alpha
-  test in `color_control=`), or the sample mask is 0. Next step would be to
-  log the system constants and a few transformed vertices.
+### Input after starting a new game (reported by the owner, build #9534)
+
+Input stopped registering after "new game". A physical controller was
+connected in that run (`New controller connected to slot 0`), so this is not
+the on-screen controller. The log shows new shaders still being compiled and
+drawn until the owner quit, so the game was running; it was most likely in
+the opening cutscene, which cannot be seen while the scene is black. Not
+investigated further until the scene renders.
 
 ## On-screen controller (added at the owner's request)
 

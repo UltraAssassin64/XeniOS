@@ -83,12 +83,19 @@ further edits.
 | `msaa_probe_nonzero` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Number of non-zero bytes in the resolved pixels. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4177, 4179, 4185 | 3 |
 | `msaa_probe_byte` | local, multisample probe in MetalRenderTargetCache::DumpRenderTargets | Loop variable over the resolved bytes. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4178, 4179 | 2 |
 | `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.h` | 555 | 1 |
-| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.cc` | 586, 587, 588, 5544, 5551, 5644, 6153, 6154, 6157 | 9 |
+| `visibility_probe_buffer_` | member of MetalCommandProcessor | Buffer Metal writes the passed-sample counts of probed scene draws into; attached to every render pass. | `src/xenia/gpu/metal/metal_command_processor.cc` | 586, 587, 588, 5544, 5551, 5644, 6228, 6229, 6232 | 9 |
 | `probe_buffer` | local, scene pixel probe in IssueDrawMsl | Copy of `visibility_probe_buffer_` kept alive for the completion handler. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5644, 5645, 5652, 5660 | 4 |
 | `probe_slot` | local, scene pixel probe in IssueDrawMsl | Index of the 8-byte counter this draw used. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5646, 5653, 5658 | 3 |
 | `probe_vertices` | local, scene pixel probe in IssueDrawMsl | Vertex count of the probed draw, to pair the line with the scene draw probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5647, 5658 | 2 |
 | `probe_samples` | local, scene pixel probe in IssueDrawMsl | Samples the draw passed in each of its four probe passes, read back from the buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5650, 5651, 5654, 5658, 5659 | 7 |
 | `probe_pass` | local, scene pixel probe in IssueDrawMsl | Loop counter over the encodings of a probed draw: 0 as issued, 1 depth and stencil tests off, 2 also culling off, 3 also depth clipping off. Unprobed draws run the loop once. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5543, 5544, 5550, 5555, 5557, 5559, 5564 | 7 |
+| `probe_memory` | local, scene data probe in IssueDrawMsl | CPU pointer to the contents of the shared memory Metal buffer, the memory the vertex shader fetches from. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5693, 5704, 5725 | 3 |
+| `probe_text` | local, scene data probe in IssueDrawMsl | Text of the index bytes and vertex streams appended to the scene data probe line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5695, 5700, 5702, 5712, 5723, 5729, 5760 | 7 |
+| `probe_byte` | local, scene data probe in IssueDrawMsl | Loop counter over the bytes dumped from the index data and from each vertex stream. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5701, 5705, 5717, 5718, 5719, 5720, 5722, 5725 | 10 |
+| `probe_binding` | local, scene data probe in IssueDrawMsl | Vertex binding of the probed draw's vertex shader being described. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5708, 5711, 5714, 5716, 5728 | 5 |
+| `probe_fetch` | local, scene data probe in IssueDrawMsl | Vertex fetch constant of `probe_binding` (address, size, endianness). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5710, 5714, 5715, 5719, 5720, 5725 | 7 |
+| `probe_attribute` | local, scene data probe in IssueDrawMsl | Attribute of `probe_binding` being described (format, offset). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5727, 5731, 5732, 5733, 5734 | 5 |
+| `probe_constants` | local, scene data probe in IssueDrawMsl | First 16 packed vertex float constants of the probed draw. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5737, 5738, 5739, 5755, 5756, 5757, 5758, 5759, 5760 | 19 |
 | `touch` | namespace `xe::hid::touch` | Holds the on-screen controller driver and its state. | `src/xenia/hid/touch_input_driver_ios.h` | 21, 37 | 2 |
 | `touch` | namespace `xe::hid::touch` | Holds the on-screen controller driver and its state. | `src/xenia/hid/touch_input_driver_ios.cc` | 20, 185 | 2 |
 | `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/hid/touch_input_driver_ios.h` | 27 | 1 |
@@ -217,6 +224,13 @@ further edits.
 | `probe_vertices` | 2 |
 | `probe_samples` | 7 |
 | `probe_pass` | 7 |
+| `probe_memory` | 3 |
+| `probe_text` | 7 |
+| `probe_byte` | 10 |
+| `probe_binding` | 5 |
+| `probe_fetch` | 7 |
+| `probe_attribute` | 5 |
+| `probe_constants` | 19 |
 | `touch` | 4 |
 | `SetTouchState` | 4 |
 | `TouchInputDriver` | 3 |

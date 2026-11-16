@@ -5684,6 +5684,81 @@ bool MetalCommandProcessor::IssueDrawMsl(
         regs[XE_GPU_REG_PA_CL_CLIP_CNTL], regs[XE_GPU_REG_PA_CL_VTE_CNTL],
         regs[XE_GPU_REG_RB_COLORCONTROL],
         regs.Get<float>(XE_GPU_REG_RB_ALPHA_REF));
+    // Scene draw diagnostics: what the vertex shader of a probed scene draw
+    // reads. Every scene draw passes no samples with all tests off, so either
+    // its inputs or its transform are wrong.
+    if (primitive_processing_result.host_draw_vertex_count > 4 &&
+        shared_memory_ && shared_memory_->GetBuffer() &&
+        shared_memory_->GetBuffer()->contents()) {
+      const uint8_t* probe_memory =
+          static_cast<const uint8_t*>(shared_memory_->GetBuffer()->contents());
+      std::string probe_text;
+      if (primitive_processing_result.index_buffer_type ==
+              PrimitiveProcessor::ProcessedIndexBufferType::kGuestDMA &&
+          primitive_processing_result.guest_index_base <=
+              SharedMemory::kBufferSize - 16) {
+        probe_text += " indices=";
+        for (uint32_t probe_byte = 0; probe_byte < 16; ++probe_byte) {
+          probe_text += fmt::format(
+              "{:02X}",
+              probe_memory[primitive_processing_result.guest_index_base +
+                           probe_byte]);
+        }
+      }
+      for (const Shader::VertexBinding& probe_binding :
+           vertex_shader->vertex_bindings()) {
+        xenos::xe_gpu_vertex_fetch_t probe_fetch =
+            regs.GetVertexFetch(probe_binding.fetch_constant);
+        probe_text += fmt::format(
+            " stream{}: address=0x{:08X} size={} endian={} stride={} data=",
+            probe_binding.fetch_constant, uint32_t(probe_fetch.address) << 2,
+            uint32_t(probe_fetch.size) << 2, uint32_t(probe_fetch.endian),
+            probe_binding.stride_words * 4);
+        for (uint32_t probe_byte = 0;
+             probe_byte < 48 &&
+             probe_byte < (uint32_t(probe_fetch.size) << 2) &&
+             (uint32_t(probe_fetch.address) << 2) + probe_byte <
+                 SharedMemory::kBufferSize;
+             ++probe_byte) {
+          probe_text += fmt::format(
+              "{:02X}",
+              probe_memory[(uint32_t(probe_fetch.address) << 2) + probe_byte]);
+        }
+        for (const Shader::VertexBinding::Attribute& probe_attribute :
+             probe_binding.attributes) {
+          probe_text += fmt::format(
+              " attr(format={},offset={},signed={},integer={})",
+              uint32_t(probe_attribute.fetch_instr.attributes.data_format),
+              probe_attribute.fetch_instr.attributes.offset * 4,
+              probe_attribute.fetch_instr.attributes.is_signed,
+              probe_attribute.fetch_instr.attributes.is_integer);
+        }
+      }
+      float probe_constants[16];
+      std::memcpy(probe_constants, msl_cached_float_constants_vertex_.data(),
+                  sizeof(probe_constants));
+      XELOGI(
+          "Metal scene data probe: vertices={} vs={:016X} ps={:016X} "
+          "index_type={} index_format={} index_base=0x{:08X} index_endian={} "
+          "flags=0x{:08X} base_index={} float_count={} "
+          "constants={},{},{},{} {},{},{},{} {},{},{},{} {},{},{},{}{}",
+          primitive_processing_result.host_draw_vertex_count,
+          vertex_shader->ucode_data_hash(),
+          pixel_shader ? pixel_shader->ucode_data_hash() : 0,
+          uint32_t(primitive_processing_result.index_buffer_type),
+          uint32_t(primitive_processing_result.host_index_format),
+          primitive_processing_result.guest_index_base,
+          uint32_t(primitive_processing_result.host_shader_index_endian),
+          spirv_system_constants_.flags,
+          spirv_system_constants_.vertex_base_index,
+          vertex_shader->constant_register_map().float_count,
+          probe_constants[0], probe_constants[1], probe_constants[2],
+          probe_constants[3], probe_constants[4], probe_constants[5],
+          probe_constants[6], probe_constants[7], probe_constants[8],
+          probe_constants[9], probe_constants[10], probe_constants[11],
+          probe_constants[12], probe_constants[13], probe_constants[14],
+          probe_constants[15], probe_text);
+    }
   }
 
   // Handle memexport.
