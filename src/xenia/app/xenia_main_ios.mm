@@ -844,6 +844,6 @@ EmulatorAppIOS::CreateInputDrivers(ui::Window* window) {
 }
 
 }  // namespace app
-}  // namespace xe reversion
+}  // namespace xe 
 
 XE_DEFINE_WINDOWED_APP(xenia, xe::app::EmulatorAppIOS::Create);
