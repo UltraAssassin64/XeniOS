@@ -474,14 +474,32 @@ FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path,
   return ret;
 #else
 #if XE_PLATFORM_APPLE
-  std::string shm_name = "/" + path.filename().string();
-  if (shm_name.size() > 30) {
-    std::size_t h = std::hash<std::string>{}(shm_name);
-    char hash_buf[24];
-    std::snprintf(hash_buf, sizeof(hash_buf), "/%016zx", h);
-    shm_name = hash_buf;
+  // Callers name mappings after the host tick count, and the shared memory
+  // namespace is shared by every process on the machine. macOS refuses to
+  // resize a shared memory object a second time (ftruncate fails with
+  // EINVAL), so opening a name another process already uses fails. Create the
+  // object exclusively, falling back to names that include the process ID,
+  // and remove the name at once: nothing reopens a mapping by name, and the
+  // object lives on through the descriptor and its views.
+  std::string shm_name;
+  int ret = -1;
+  for (int shm_attempt = 0; shm_attempt < 8 && ret < 0; ++shm_attempt) {
+    shm_name = "/" + path.filename().string();
+    if (shm_attempt) {
+      shm_name +=
+          "_" + std::to_string(getpid()) + "_" + std::to_string(shm_attempt);
+    }
+    if (shm_name.size() > 30) {
+      std::size_t h = std::hash<std::string>{}(shm_name);
+      char hash_buf[24];
+      std::snprintf(hash_buf, sizeof(hash_buf), "/%016zx", h);
+      shm_name = hash_buf;
+    }
+    ret = shm_open(shm_name.c_str(), oflag | O_EXCL, 0777);
+    if (ret < 0 && errno != EEXIST) {
+      break;
+    }
   }
-  int ret = shm_open(shm_name.c_str(), oflag, 0777);
   if (ret < 0) {
     XELOGE("shm_open({}) failed: {} ({})", shm_name, strerror(errno), errno);
     return kFileMappingHandleInvalid;
@@ -493,12 +511,7 @@ FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path,
     shm_unlink(shm_name.c_str());
     return kFileMappingHandleInvalid;
   }
-  // Track for cleanup on abnormal exit and install cleanup handlers
-  {
-    std::lock_guard guard(g_shm_file_names_mutex);
-    g_shm_file_names.push_back(shm_name);
-  }
-  InstallCleanupHandlers();
+  shm_unlink(shm_name.c_str());
   return ret;
 #else
   auto full_path = "/" / path;

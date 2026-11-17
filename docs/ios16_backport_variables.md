@@ -121,6 +121,7 @@ further edits.
 | `mmio_repeat_address` | file-static atomic, MMIOHandler hang diagnostics | Guest address of the last MMIO store handled. | `src/xenia/cpu/mmio_handler.cc` | 30, 588 | 2 |
 | `mmio_repeat_count` | file-static atomic, MMIOHandler hang diagnostics | How many MMIO stores in a row went to mmio_repeat_address. | `src/xenia/cpu/mmio_handler.cc` | 31, 590, 591, 599 | 5 |
 | `mmio_guest_context` | local in MMIOHandler::ExceptionCallback (ARM64) | Guest register context of the faulting thread, read through host register x20 for the repeated-store report. | `src/xenia/cpu/mmio_handler.cc` | 592, 603, 604, 605, 606, 607, 608, 609, 610, 611 | 11 |
+| `shm_attempt` | local in CreateFileMappingHandle (macOS only) | Attempt number when creating a shared memory object exclusively; attempts after the first add the process ID to the name. | `src/xenia/base/memory_posix.cc` | 486, 488, 490 | 5 |
 
 ## Total references per name
 
@@ -224,6 +225,7 @@ further edits.
 | `mmio_repeat_address` | 2 |
 | `mmio_repeat_count` | 5 |
 | `mmio_guest_context` | 11 |
+| `shm_attempt` | 5 |
 
 ## Checks
 
