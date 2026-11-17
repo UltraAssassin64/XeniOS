@@ -60,22 +60,53 @@ def run_hir_tests(binary, timeout):
     return results
 
 
-def run_ppc_suite(binary, suite, timeout):
+def run_ppc_suite_once(binary, suite, timeout):
     status, output = run([binary, suite], timeout)
     passed = re.search(r"^Passed: (\d+)", output, re.M)
     failed = re.search(r"^Failed: (\d+)", output, re.M)
-    failed_cases = re.findall(r"^\s*\[(\S+)\] FAILED", output, re.M)
+    # "[case] FAILED", "[case] FAILED SETUP" and so on.
+    failed_cases = {}
+    for case, reason in re.findall(r"^\s*\[(\S+)\] (FAILED[^\n]*)", output,
+                                   re.M):
+        failed_cases[case] = reason.strip()
     details = [l for l in output.splitlines()
-               if "assert failed" in l or "Expected:" in l or "Actual:" in l]
+               if "assert failed" in l or "Expected:" in l or "Actual:" in l
+               or "FAILED" in l or "Test setup failed" in l
+               or "not found" in l or l.startswith(("E>", "!>"))]
     return {
-        "name": suite,
         "status": status,
         "passed": int(passed.group(1)) if passed else 0,
         "failed": int(failed.group(1)) if failed else 0,
         "failed_cases": failed_cases,
-        "details": details[:30],
+        "details": details[:40],
         "output": tail(output, 12) if status in ("crash", "timeout") else "",
     }
+
+
+def run_ppc_suite(binary, suite, timeout, reruns=2):
+    """Runs one test file; a file with failures is run again to tell cases
+    that fail every time from cases that fail now and then."""
+    first = run_ppc_suite_once(binary, suite, timeout)
+    result = dict(first, name=suite, runs=1, consistent_cases=[],
+                  intermittent_cases=[])
+    if first["status"] == "pass" and not first["failed"]:
+        result["failed_cases"] = []
+        return result
+    seen = {case: 1 for case in first["failed_cases"]}
+    reasons = dict(first["failed_cases"])
+    for _ in range(reruns):
+        again = run_ppc_suite_once(binary, suite, timeout)
+        result["runs"] += 1
+        for case, reason in again["failed_cases"].items():
+            seen[case] = seen.get(case, 0) + 1
+            reasons.setdefault(case, reason)
+    result["consistent_cases"] = sorted(
+        c for c, n in seen.items() if n == result["runs"])
+    result["intermittent_cases"] = sorted(
+        c for c, n in seen.items() if n != result["runs"])
+    result["failed_cases"] = sorted(seen)
+    result["reasons"] = reasons
+    return result
 
 
 def run_ppc_tests(binary, test_dir, timeout, jobs):
@@ -120,17 +151,27 @@ def write_report(path, hir, ppc):
                   f"crashed, "
                   f"{sum(1 for r in ppc if r['status'] == 'timeout')} files "
                   f"timed out.", ""]
+        consistent = sum(len(r["consistent_cases"]) for r in ppc)
+        intermittent = sum(len(r["intermittent_cases"]) for r in ppc)
+        lines += ["Files with failures were run three times: "
+                  f"{consistent} cases failed every time, {intermittent} "
+                  "failed only in some runs.", ""]
         if files_bad:
-            lines += ["| Test file | Result | Passed | Failed |",
-                      "|---|---|---|---|"]
+            lines += ["| Test file | Result | Passed | Failed | "
+                      "Every run | Some runs |",
+                      "|---|---|---|---|---|---|"]
             lines += [f"| `{r['name']}` | {r['status']} | {r['passed']} | "
-                      f"{r['failed']} |" for r in files_bad]
+                      f"{r['failed']} | {len(r['consistent_cases'])} | "
+                      f"{len(r['intermittent_cases'])} |" for r in files_bad]
             lines.append("")
             for r in files_bad:
                 lines += [f"### {r['name']} ({r['status']})", ""]
-                if r["failed_cases"]:
-                    lines += ["Failed cases: " + ", ".join(
-                        f"`{c}`" for c in r["failed_cases"][:40]), ""]
+                if r["consistent_cases"]:
+                    lines += ["Failed every run: " + ", ".join(
+                        f"`{c}`" for c in r["consistent_cases"][:40]), ""]
+                if r["intermittent_cases"]:
+                    lines += ["Failed in some runs: " + ", ".join(
+                        f"`{c}`" for c in r["intermittent_cases"][:40]), ""]
                 body = r["details"] or r["output"].splitlines()
                 if body:
                     lines += ["```"] + body + ["```", ""]
