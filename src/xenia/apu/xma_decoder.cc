@@ -9,6 +9,8 @@
 
 #include "xenia/apu/xma_decoder.h"
 
+#include <atomic>
+
 #include "xenia/apu/xma_context.h"
 #include "xenia/apu/xma_context_fake.h"
 #include "xenia/apu/xma_context_master.h"
@@ -25,6 +27,11 @@
 #include "xenia/cpu/thread_state.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/xthread.h"
+
+#if XE_PLATFORM_APPLE || XE_PLATFORM_LINUX
+#include <dlfcn.h>
+#include <execinfo.h>
+#endif
 extern "C" {
 #include "third_party/FFmpeg/libavutil/cpu.h"
 #include "third_party/FFmpeg/libavutil/log.h"
@@ -351,6 +358,45 @@ void XmaDecoder::WriteRegister(uint32_t addr, uint32_t value) {
 
   uint32_t r = (addr & 0xFFFF) / 4;
   value = xe::byte_swap(value);
+
+  // Hang diagnostics: after the first cutscene of Batman: Arkham Asylum the
+  // main thread was seen writing the same context-clear value millions of
+  // times without the guest moving on. Whatever path the write takes (fault
+  // handler or inline MMIO call), report the native call stack when one
+  // register/value pair is written many times in a row.
+  static std::atomic<uint64_t> xma_repeat_key{0};
+  static std::atomic<uint32_t> xma_repeat_count{0};
+  const uint64_t xma_key = (uint64_t(r) << 32) | value;
+  if (xma_repeat_key.exchange(xma_key) != xma_key) {
+    xma_repeat_count = 0;
+  } else if (++xma_repeat_count == 1000 || !(xma_repeat_count % 500000)) {
+    cpu::ThreadState* xma_thread_state = cpu::ThreadState::Get();
+    XELOGW(
+        "XMA register {:04X} written {:08X} {} times in a row; guest lr {:08X}",
+        r, value, xma_repeat_count.load(),
+        xma_thread_state ? uint32_t(xma_thread_state->context()->lr) : 0);
+#if XE_PLATFORM_APPLE || XE_PLATFORM_LINUX
+    if (xma_repeat_count == 1000) {
+      void* xma_frames[24];
+      int xma_frame_count = backtrace(xma_frames, 24);
+      for (int xma_frame = 0; xma_frame < xma_frame_count; ++xma_frame) {
+        Dl_info xma_symbol = {};
+        if (dladdr(xma_frames[xma_frame], &xma_symbol) &&
+            xma_symbol.dli_fbase) {
+          XELOGW("XMA repeat frame {}: {} + {:X} ({})", xma_frame,
+                 xma_symbol.dli_sname ? xma_symbol.dli_sname : "?",
+                 uintptr_t(xma_frames[xma_frame]) -
+                     uintptr_t(xma_symbol.dli_saddr ? xma_symbol.dli_saddr
+                                                    : xma_symbol.dli_fbase),
+                 xma_symbol.dli_fname ? xma_symbol.dli_fname : "?");
+        } else {
+          XELOGW("XMA repeat frame {}: {:016X} (generated code)", xma_frame,
+                 uintptr_t(xma_frames[xma_frame]));
+        }
+      }
+    }
+#endif  // XE_PLATFORM_APPLE || XE_PLATFORM_LINUX
+  }
 
   assert_true(r < XmaRegisterFile::kRegisterCount);
   register_file_[r] = value;

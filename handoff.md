@@ -233,6 +233,24 @@ Experiment asked of the owner: set `emit_inline_mmio_checks = true`
 `MMIOAwareStore` directly and never fault. If the hang goes away, the bug
 is in the fault path (MMIOHandler / exception_handler_mac.cc on iOS).
 
+Build #9557 with `emit_inline_mmio_checks = true`: first run still hung
+(no diagnostics can fire in that mode; at quit one guest thread had to be
+force-terminated). Second run with `log_level = 3` (debug) got through
+both cutscenes into gameplay. So the hang is timing-dependent (a race), and
+not only the fault path.
+
+Working debug log (`xenia_2026-11-17_14-51-29.log`): the main thread clears
+context 48, calls MmGetPhysicalAddress(FFCA6C40), clears 49, then decodes
+context 48 itself (on ARM64 `use_dedicated_xma_thread` defaults to false, so
+a kick runs `XmaContext::Work()` on the writing guest thread). In the hung
+runs it never gets from "clear 48" to the next MmGetPhysicalAddress.
+Contexts 0-43 are used by the XAudio thread `F80000D0`.
+
+Next build: `XmaDecoder::WriteRegister` logs `XMA register <r> written <v>
+<n> times in a row; guest lr …` after 1000 identical writes and, once,
+`XMA repeat frame <n>: <symbol> + <offset> (<image>)` for up to 24 native
+frames (`backtrace()`/`dladdr()`), whichever path the write took.
+
 Next build adds `MMIO hang host <address>: <8 words>` lines: 96 ARM64
 words from 256 bytes before the faulting store. Disassemble with
 `llvm-objdump -D -b binary`-style tooling (on Linux:

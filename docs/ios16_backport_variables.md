@@ -154,6 +154,14 @@ further edits.
 | `xma_depth` | local, XMA hang diagnostics | Depth in the stack walk. | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 100, 112, 114, 117 | 6 |
 | `xma_caller_frame` | local, XMA hang diagnostics | Back-chain pointer to the caller's frame. | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 104, 106, 107, 111, 113, 123 | 7 |
 | `xma_return` | local, XMA hang diagnostics | Return address saved at -8 from the caller's frame. | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 110, 113, 114, 115, 118, 120 | 6 |
+| `xma_repeat_key` | function-static atomic in XmaDecoder::WriteRegister, hang diagnostics | Register number and value of the last XMA register write. | `src/xenia/apu/xma_decoder.cc` | 367, 370 | 2 |
+| `xma_repeat_count` | function-static atomic in XmaDecoder::WriteRegister, hang diagnostics | How many times in a row that pair was written. | `src/xenia/apu/xma_decoder.cc` | 368, 371, 372, 376, 379 | 6 |
+| `xma_key` | local in XmaDecoder::WriteRegister, hang diagnostics | This write's register/value pair. | `src/xenia/apu/xma_decoder.cc` | 369, 370 | 3 |
+| `xma_thread_state` | local in XmaDecoder::WriteRegister, hang diagnostics | Guest thread state of the writer, for its link register. | `src/xenia/apu/xma_decoder.cc` | 373, 377 | 3 |
+| `xma_frames` | local array in XmaDecoder::WriteRegister, hang diagnostics | Native return addresses from backtrace(). | `src/xenia/apu/xma_decoder.cc` | 380, 381, 384, 388, 394 | 5 |
+| `xma_frame_count` | local in XmaDecoder::WriteRegister, hang diagnostics | Number of native frames captured. | `src/xenia/apu/xma_decoder.cc` | 381, 382 | 2 |
+| `xma_frame` | local in XmaDecoder::WriteRegister, hang diagnostics | Index of the frame being logged. | `src/xenia/apu/xma_decoder.cc` | 382, 384, 386, 388, 393, 394 | 8 |
+| `xma_symbol` | local in XmaDecoder::WriteRegister, hang diagnostics | dladdr() result for one frame. | `src/xenia/apu/xma_decoder.cc` | 383, 384, 385, 387, 389, 390, 391 | 10 |
 
 ## Total references per name
 
@@ -290,6 +298,14 @@ further edits.
 | `xma_depth` | 6 |
 | `xma_caller_frame` | 7 |
 | `xma_return` | 6 |
+| `xma_repeat_key` | 2 |
+| `xma_repeat_count` | 6 |
+| `xma_key` | 3 |
+| `xma_thread_state` (xma_decoder.cc) | 3 |
+| `xma_frames` | 5 |
+| `xma_frame_count` | 2 |
+| `xma_frame` | 8 |
+| `xma_symbol` | 10 |
 
 ## Checks
 
@@ -317,3 +333,5 @@ further edits.
   `scheme` parameter so the same builder serves `stikjit` and
   `apple-magnifier`; `apple-magnifier` was already in
   `LSApplicationQueriesSchemes` in `src/xenia/app/Info_ios.plist`.
+- `xma_thread_state` is declared in two files (`xboxkrnl_audio_xma.cc` and
+  `xma_decoder.cc`); both are function locals and unrelated.
