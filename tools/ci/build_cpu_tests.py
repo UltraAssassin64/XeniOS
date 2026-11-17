@@ -210,6 +210,13 @@ def main():
             cmd = [args.cxx, "-std=c++20", "-fobjc-arc"] + base_flags
         else:
             cmd = [args.cxx, "-std=c++20"] + base_flags
+        if source.replace(os.sep, "/").endswith("cpu/backend/backend.cc"):
+            # memory.cc and backend.cc both define these two cvars on this
+            # branch. Keep memory.cc's and rename this file's copies.
+            cmd += ["-Drecord_mmio_access_exceptions="
+                    "cpu_tests_duplicate_record_mmio_access_exceptions",
+                    "-Demit_mmio_aware_stores_for_recorded_exception_addresses="
+                    "cpu_tests_duplicate_emit_mmio_aware_stores"]
         jobs.append((path, obj, cmd + ["-c", path, "-o", obj]))
 
     print("Compiling %d files for %s/%s with %d jobs" % (
@@ -230,8 +237,7 @@ def main():
         link_flags = ["-mmacosx-version-min=15.0", "-framework", "Foundation",
                       "-framework", "CoreFoundation"]
     else:
-        # memory.cc and backend.cc both define two MMIO cvars on this branch.
-        link_flags += ["-lrt", "-Wl,--allow-multiple-definition"]
+        link_flags += ["-lrt"]
     # The shared code goes into an archive so the linker takes only the
     # objects each program refers to, as it does in the regular build.
     archive = os.path.join(args.out_dir, "libxenia-cpu-tests-common.a")
