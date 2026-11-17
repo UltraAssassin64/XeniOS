@@ -149,8 +149,9 @@ and 290 to 360 draws per frame on the title screen; vector register
 promotion now off; the GPU probes re-drew the first 16 multisampled draws
 six times every 120 frames with tests off (removed now, likely part of the
 flicker); the blocking `waitUntilCompleted` sites listed under "Owed"; and
-the `uniforms pool busy` waits. The Metal Performance HUD does not appear;
-not looked at.
+the `uniforms pool busy` waits. The Metal Performance HUD did not appear;
+`MetalHudEnabled` was added to `src/xenia/app/Info_ios.plist` at the owner's
+request and has not been confirmed to work on iOS 16.
 
 ## On-screen controller (added at the owner's request)
 

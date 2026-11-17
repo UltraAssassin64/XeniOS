@@ -119,5 +119,7 @@
 	</array>
 	<key>UISupportsDocumentBrowser</key>
 	<true/>
+	<key>MetalHudEnabled</key>
+	<true/>
 </dict>
 </plist>
