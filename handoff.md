@@ -188,6 +188,25 @@ the loop calls: on the 1000th call it logs `XMACreateContext called …
 caller lr … r1 …`, `XMA hang code …` and `XMA hang caller <n>: …` with
 the guest stack (10 frames, code dumped for the first five).
 
+Build #9554, second hang log (the MMIO path fired this time) gave the stack:
+
+- caller 0 `829FF6F4` in `829FF530`: calls the create function `829FF858`;
+  on failure calls the release function `829FF920`, maybe reports error
+  `0xA7820007`, returns the error. On success it continues at `829FF734`
+  (not yet dumped).
+- caller 1 `82A69C80`: calls `829FF530`; if the result is negative and
+  equals `0x8007000E` (E_OUTOFMEMORY) it jumps back to `82A69B98` and
+  tries again, forever. Any other error returns `0x3A`.
+- callers 2 to 7: `82A71EAC`, `82A45AD4`, `82A488F4`, `82A3F884`,
+  `8286D044`, `8286CD9C`.
+- Every kernel call the main thread makes just before the loop succeeds
+  (virtual and physical allocations, MmGetPhysicalAddress), so the
+  E_OUTOFMEMORY most likely comes from the game's own code after context
+  creation, from `829FF734` on.
+
+The XMACreateContext diagnostic now dumps 192 words from return - 0x100
+for the two nearest callers, which covers `829FF734`.
+
 CPU tests on ARM64 (CI "CPU tests", macOS) after the shared-memory fix:
 249 of 249 HIR tests and 141,712 of 141,712 instruction cases pass. The
 earlier failures were all `FAILED SETUP` from shared-memory name clashes in

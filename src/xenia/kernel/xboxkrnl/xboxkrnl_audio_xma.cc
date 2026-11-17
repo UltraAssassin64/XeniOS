@@ -113,7 +113,12 @@ static void LogFrequentXmaContextCreation() {
            xma_caller_frame, xma_return);
     if (xma_depth < 5 && xma_return >= 0x82000000u &&
         xma_return < 0x84000000u) {
-      xma_dump(xma_return - 0x80, 48);
+      // The two nearest callers decide whether to retry; dump them widely.
+      if (xma_depth < 2) {
+        xma_dump(xma_return - 0x100, 192);
+      } else {
+        xma_dump(xma_return - 0x80, 48);
+      }
     }
     xma_frame = xma_caller_frame;
   }
