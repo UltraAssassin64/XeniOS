@@ -651,6 +651,19 @@ bool MMIOHandler::ExceptionCallback(Exception* ex) {
                         (mmio_end - mmio_function->address()) / 4 + 1, 256));
         }
         mmio_dump(uint32_t(mmio_guest_context->lr) - 0x40, 32);
+        // The host code around the store, little-endian ARM64 words, to see
+        // whether the generated code itself branches back to it.
+        for (uint32_t mmio_line = 0; mmio_line < 96; mmio_line += 8) {
+          std::string mmio_text;
+          for (uint32_t mmio_word = mmio_line; mmio_word < mmio_line + 8;
+               ++mmio_word) {
+            mmio_text += fmt::format(
+                " {:08X}",
+                *reinterpret_cast<const uint32_t*>(p - 64 * 4 + mmio_word * 4));
+          }
+          XELOGW("MMIO hang host {:016X}:{}",
+                 uint64_t(rip) - 64 * 4 + mmio_line * 4, mmio_text);
+        }
         // The loop is driven from further up: walk the guest stack (the back
         // chain is at 0(r1), and functions save LR at -8 from the caller's
         // frame) and dump the code before each return address.

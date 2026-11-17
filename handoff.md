@@ -207,6 +207,23 @@ Build #9554, second hang log (the MMIO path fired this time) gave the stack:
 The XMACreateContext diagnostic now dumps 192 words from return - 0x100
 for the two nearest callers, which covers `829FF734`.
 
+Build #9556 (four runs): the loop appeared in three, always with the same
+guest stack, but **`XMACreateContext called` never appeared**, so
+XMACreateContext ran fewer than 1000 times while the store repeated
+millions of times. The old debug log agrees: in its last million lines the
+main thread makes no kernel call at all (no MmGetPhysicalAddress, which is
+logged), only the faulting store. So the game-level retry reading above is
+wrong: the **host** keeps re-running the one JIT store, either because the
+generated code branches back to it or because the fault does not resume
+past it. The MMIO handler and the Apple signal handler were read and look
+right (resume = pc + 4, written back through the mcontext pointer).
+
+Next build adds `MMIO hang host <address>: <8 words>` lines: 96 ARM64
+words from 256 bytes before the faulting store. Disassemble with
+`llvm-objdump -D -b binary`-style tooling (on Linux:
+`llvm-objdump --triple=aarch64 -D` on a raw file, or write the words to a
+file and use `--start-address`).
+
 CPU tests on ARM64 (CI "CPU tests", macOS) after the shared-memory fix:
 249 of 249 HIR tests and 141,712 of 141,712 instruction cases pass. The
 earlier failures were all `FAILED SETUP` from shared-memory name clashes in
