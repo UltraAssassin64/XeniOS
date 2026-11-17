@@ -9,7 +9,7 @@ on:
     paths:
       - 'src/xenia/cpu/**'
       - 'src/xenia/base/**'
-      - 'tools/ci/run_cpu_tests.py'
+      - 'tools/ci/**'
       - 'third_party/binutils/**'
       - 'src/xenia/**/premake5.lua'
       - '.github/workflows/cpu-tests.yml'
@@ -68,31 +68,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cache premake5
-        id: cache-premake5
-        uses: actions/cache@main
-        with:
-          path: tools/build/bin/premake5
-          key: ${{ runner.os }}-${{ runner.arch }}-macos26-premake5-ios-${{ hashFiles('.gitmodules', 'xenia-build.py', 'tools/build/premake.py') }}
-
-      - name: Cache build output
-        id: cache-build-cpu-tests
-        uses: actions/cache@v3
-        with:
-          path: build/DerivedData
-          key: ${{ runner.os }}-${{ runner.arch }}-macos26-cputests-deriveddata-${{ hashFiles('src/**', 'premake5.lua', 'third_party/**/*.lua') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-macos26-cputests-deriveddata-
-
-      - name: Cache Qt6
-        id: cache-qt-macos
-        uses: actions/cache@v3
-        with:
-          path: ~/Qt
-          key: ${{ runner.os }}-${{ runner.arch }}-macos26-qt6-6.10.1
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-macos26-qt6-
-
       - name: Cache submodules
         id: cache-submodules-cpu-tests
         uses: actions/cache@v3
@@ -100,7 +75,7 @@ jobs:
           path: |
             third_party
             .git/modules/third_party
-          key: ${{ runner.os }}-${{ runner.arch }}-submodules-cputests-v1-${{ hashFiles('.gitmodules') }}-${{ hashFiles('.git/modules/third_party/*/HEAD') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-submodules-cputests-v2-${{ hashFiles('.gitmodules') }}-${{ hashFiles('.git/modules/third_party/*/HEAD') }}
 
       - name: Setup
         run: |
@@ -119,85 +94,33 @@ jobs:
           if [ -z "$xcode_app" ]; then
             xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' ! -iname '*beta*' | sort -V | tail -n 1)"
           fi
-          if [ -z "$xcode_app" ]; then
-            echo "::error::Xcode 26 not found on runner"
-            ls -1 /Applications | sed 's/^/  /'
-            exit 1
+          if [ -n "$xcode_app" ]; then
+            echo "DEVELOPER_DIR=$xcode_app/Contents/Developer" >> "$GITHUB_ENV"
+            export DEVELOPER_DIR="$xcode_app/Contents/Developer"
           fi
-          echo "DEVELOPER_DIR=$xcode_app/Contents/Developer" >> "$GITHUB_ENV"
-          export DEVELOPER_DIR="$xcode_app/Contents/Developer"
-          xcodebuild -version
+          clang++ --version
 
           git config --global http.lowSpeedLimit 1000
           git config --global http.lowSpeedTime 60
           git config --global http.postBuffer 524288000
 
-          brew install sdl2 ninja pipx
-
-          # Qt is needed because the desktop libraries the tests link use it.
-          if [ '${{ steps.cache-qt-macos.outputs.cache-hit }}' != 'true' ]; then
-            pipx install aqtinstall
-            pipx ensurepath
-            export PATH="$HOME/.local/bin:$PATH"
-            aqt install-qt mac desktop 6.10.1 clang_64 -O ~/Qt
-          fi
-          export PATH="$HOME/Qt/6.10.1/macos/bin:$PATH"
-          export CMAKE_PREFIX_PATH="$HOME/Qt/6.10.1/macos"
-          export QT_DIR="$HOME/Qt/6.10.1/macos"
-          echo "$HOME/Qt/6.10.1/macos/bin" >> "$GITHUB_PATH"
-          echo "CMAKE_PREFIX_PATH=$HOME/Qt/6.10.1/macos" >> "$GITHUB_ENV"
-          echo "QT_DIR=$HOME/Qt/6.10.1/macos" >> "$GITHUB_ENV"
-
-          # The tests do not build the Metal backend, so the shader compiler
-          # submodule is not needed.
-          retry git submodule update --init --depth=1 -j$(sysctl -n hw.ncpu) $(grep -oE 'path = .+' .gitmodules | sed 's/path = //' | grep -v 'premake-androidndk\|premake-export-compile-commands\|DirectXShaderCompiler')
-          # Restore non-submodule files in third_party/ that the submodule
-          # cache may have overwritten with stale versions.
+          # Only the header and source libraries the CPU code uses.
+          retry git submodule update --init --depth=1 \
+            third_party/boost_context/context third_party/capstone \
+            third_party/catch third_party/cxxopts third_party/date \
+            third_party/disruptorplus third_party/fmt third_party/oaknut \
+            third_party/tomlplusplus third_party/utfcpp \
+            third_party/xbyak third_party/xbyak_aarch64 third_party/xxhash
           git checkout -- third_party/*.lua
 
-          rm -f third_party/premake-core/bin/release/premake5
-          mkdir -p tools/build/bin
-          if [ '${{ steps.cache-premake5.outputs.cache-hit }}' != 'true' ]; then
-            cd third_party/premake-core
-            make -f Bootstrap.mak PLATFORM=ARM64 osx
-            cd ../..
-            cp third_party/premake-core/bin/release/premake5 tools/build/bin/
-            chmod +x tools/build/bin/premake5
-          fi
-          if [ ! -x tools/build/bin/premake5 ]; then
-            echo "::error::tools/build/bin/premake5 not found or not executable"
-            exit 1
-          fi
-          tools/build/bin/premake5 --version
-
-          # Generate the desktop projects with the test targets included.
-          ./xenia-build.py premake -- --tests
-
-      - name: Build xenia-cpu-tests
-        id: build_hir_tests
+      # The test programs are built without the desktop UI, kernel, GPU and
+      # audio libraries, which do not all compile for macOS on this branch.
+      - name: Build CPU test programs
+        id: build_cpu_tests
         continue-on-error: true
-        env:
-          MACOSX_DEPLOYMENT_TARGET: 15.0
         run: |
           set -o pipefail
-          ./xenia-build.py build --config=Release --arch=arm64 \
-            --target=xenia-cpu-tests --no_premake -- \
-            MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET} \
-            2>&1 | tee build-xenia-cpu-tests.log | grep -E "error|warning: unused|BUILD|\*\*|ld:|Undefined|symbol" || true
-          test -x build/bin/Mac-ARM64/Release/xenia-cpu-tests
-
-      - name: Build xenia-cpu-ppc-tests
-        id: build_ppc_tests
-        continue-on-error: true
-        env:
-          MACOSX_DEPLOYMENT_TARGET: 15.0
-        run: |
-          set -o pipefail
-          ./xenia-build.py build --config=Release --arch=arm64 \
-            --target=xenia-cpu-ppc-tests --no_premake -- \
-            MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET} \
-            2>&1 | tee build-xenia-cpu-ppc-tests.log | grep -E "error|BUILD|\*\*|ld:|Undefined|symbol" || true
-          test -x build/bin/Mac-ARM64/Release/xenia-cpu-ppc-tests
+          python3 tools/ci/build_cpu_tests.py 2>&1 | tee build-cpu-tests.log
 
       - name: Download PowerPC test binaries
         uses: actions/download-artifact@main
@@ -208,23 +131,21 @@ jobs:
       - name: Run tests
         run: |
           python3 tools/ci/run_cpu_tests.py \
-            --hir-binary build/bin/Mac-ARM64/Release/xenia-cpu-tests \
-            --ppc-binary build/bin/Mac-ARM64/Release/xenia-cpu-ppc-tests \
+            --hir-binary build/cpu-tests/xenia-cpu-tests \
+            --ppc-binary build/cpu-tests/xenia-cpu-ppc-tests \
             --out-dir cpu-test-results
-          cp build-xenia-cpu-*.log cpu-test-results/ 2>/dev/null || true
+          cp build-cpu-tests.log cpu-test-results/ 2>/dev/null || true
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@main
         with:
           name: cpu-test-results
-          path: |
-            cpu-test-results
-            build-xenia-cpu-*.log
+          path: cpu-test-results
           if-no-files-found: warn
 
-      - name: Fail if a test program did not build
-        if: steps.build_hir_tests.outcome != 'success' || steps.build_ppc_tests.outcome != 'success'
+      - name: Fail if the test programs did not build
+        if: steps.build_cpu_tests.outcome != 'success'
         run: |
-          echo "::error::A CPU test program failed to build; see the build logs in the cpu-test-results artifact."
+          echo "::error::The CPU test programs failed to build; see build-cpu-tests.log in the cpu-test-results artifact."
           exit 1

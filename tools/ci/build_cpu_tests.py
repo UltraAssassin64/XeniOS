@@ -47,8 +47,6 @@ def wanted(path, system, arch):
             return False
     if stem.endswith("_arm64") and arch != "a64":
         return False
-    if stem.endswith(("_amd64", "_x64")) and arch != "a64" and False:
-        return False
     if stem.endswith(("_amd64", "_x64")) and arch == "a64":
         return False
     return True
@@ -75,7 +73,14 @@ def collect_sources(system, arch):
                 continue
         if not wanted(p, system, arch):
             continue
+        # XexModule loads real executables and needs the kernel; the tests
+        # only use TestModule and raw binaries.
+        if unix.endswith("/xex_module.cc"):
+            continue
         common.append(p)
+    # Message boxes go through SDL; cpu_tests_support.cc replaces them.
+    common = [p for p in common if not p.endswith(
+        ("system_gnulinux.cc", "system_mac.cc"))]
     common.append("src/xenia/memory.cc")
     common += ["third_party/fmt/src/format.cc", "third_party/fmt/src/os.cc"]
     common += ["third_party/mspack/logging.cc", "third_party/mspack/lzxd.c",
@@ -86,6 +91,12 @@ def collect_sources(system, arch):
         common += rel("third_party/xbyak_aarch64/src/*.cpp")
     else:
         common += rel("third_party/capstone/arch/X86/*.c")
+    boost = "third_party/boost_context/context/src/asm/%%s_%s_gas.S" % (
+        {("mac", "a64"): "arm64_aapcs_macho",
+         ("mac", "x64"): "x86_64_sysv_macho",
+         ("linux", "a64"): "arm64_aapcs_elf",
+         ("linux", "x64"): "x86_64_sysv_elf"}[(system, arch)])
+    common += [boost % part for part in ("make", "jump", "ontop")]
     common.append("tools/ci/cpu_tests_support.cc")
 
     console_main = "src/xenia/base/console_app_main_%s.cc" % (
@@ -129,6 +140,36 @@ def flags(system, arch):
     return common
 
 
+def ensure_version_header():
+    """Writes build/version.h, which the regular build generates."""
+    path = os.path.join(ROOT, "build", "version.h")
+    if os.path.exists(path):
+        return
+
+    def git(*cmd):
+        try:
+            return subprocess.check_output(
+                ("git", "-C", ROOT) + cmd,
+                stderr=subprocess.DEVNULL).decode().strip()
+        except (OSError, subprocess.CalledProcessError):
+            return "unknown"
+
+    commit = git("rev-parse", "HEAD")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write("#ifndef GENERATED_VERSION_H_\n"
+                "#define GENERATED_VERSION_H_\n"
+                '#define XE_BUILD_BRANCH "%s"\n'
+                '#define XE_BUILD_COMMIT "%s"\n'
+                '#define XE_BUILD_COMMIT_SHORT "%s"\n'
+                '#define XE_BUILD_VERSION "0.0.0"\n'
+                '#define XE_BUILD_NUMBER "0"\n'
+                "#define XE_BUILD_DATE __DATE__\n"
+                "#endif  // GENERATED_VERSION_H_\n" % (
+                    git("rev-parse", "--abbrev-ref", "HEAD"), commit,
+                    commit[:8]))
+
+
 def compile_one(job):
     source, obj, cmd = job
     if (os.path.exists(obj) and
@@ -150,6 +191,7 @@ def main():
     args = parser.parse_args()
 
     system, arch = host()
+    ensure_version_header()
     common, hir, ppc = collect_sources(system, arch)
     base_flags = flags(system, arch)
     obj_dir = os.path.join(args.out_dir, "obj")
@@ -160,7 +202,9 @@ def main():
         obj = os.path.join(obj_dir, source + ".o")
         objects[source] = obj
         path = os.path.join(ROOT, source)
-        if source.endswith(".c"):
+        if source.endswith(".S"):
+            cmd = [args.cc] + base_flags
+        elif source.endswith(".c"):
             cmd = [args.cc, "-std=c17"] + base_flags
         elif source.endswith(".mm"):
             cmd = [args.cxx, "-std=c++20", "-fobjc-arc"] + base_flags
@@ -186,14 +230,22 @@ def main():
         link_flags = ["-mmacosx-version-min=15.0", "-framework", "Foundation",
                       "-framework", "CoreFoundation"]
     else:
-        link_flags += ["-lrt"]
+        # memory.cc and backend.cc both define two MMIO cvars on this branch.
+        link_flags += ["-lrt", "-Wl,--allow-multiple-definition"]
+    # The shared code goes into an archive so the linker takes only the
+    # objects each program refers to, as it does in the regular build.
+    archive = os.path.join(args.out_dir, "libxenia-cpu-tests-common.a")
+    if os.path.exists(archive):
+        os.remove(archive)
+    subprocess.check_call(["ar", "rcs", archive] +
+                          [objects[s] for s in sorted(set(common))])
     result = 0
     for name, extra in (("xenia-cpu-tests", hir),
                         ("xenia-cpu-ppc-tests", ppc)):
         out = os.path.join(args.out_dir, name)
         cmd = [args.cxx, "-o", out]
-        cmd += [objects[s] for s in sorted(set(common + extra))]
-        cmd += link_flags
+        cmd += [objects[s] for s in sorted(set(extra))]
+        cmd += [archive] + link_flags
         proc = subprocess.run(cmd, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT)
         text = proc.stdout.decode("utf-8", "replace")
