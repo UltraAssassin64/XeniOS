@@ -218,6 +218,21 @@ generated code branches back to it or because the fault does not resume
 past it. The MMIO handler and the Apple signal handler were read and look
 right (resume = pc + 4, written back through the mcontext pointer).
 
+Build #9557 host dump (four of five runs hung, identical code each time),
+disassembled with `llvm-objcopy -I binary -O elf64-littleaarch64` then
+`llvm-objdump --triple=aarch64 -D -j .data`: the faulting
+`str w22, [x21, x0]` is preceded by the guest address computation (with
+the `>= 0xE0000000 ? +0x1000` adjust) and followed by `dmb ish` (eieio),
+then the iOS title-stop poll (`ldr w15, [stop_word]; cbnz`), then the next
+guest load. Straight-line code; nothing branches back to the store. So the
+same store keeps faulting: the fault-resume path is the prime suspect, not
+the generated code or the game.
+
+Experiment asked of the owner: set `emit_inline_mmio_checks = true`
+(Settings > All Options: CPU). Then stores to 0x7FC00000-0x7FFFFFFF call
+`MMIOAwareStore` directly and never fault. If the hang goes away, the bug
+is in the fault path (MMIOHandler / exception_handler_mac.cc on iOS).
+
 Next build adds `MMIO hang host <address>: <8 words>` lines: 96 ARM64
 words from 256 bytes before the faulting store. Disassemble with
 `llvm-objdump -D -b binary`-style tooling (on Linux:
