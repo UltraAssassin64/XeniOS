@@ -142,6 +142,24 @@ MMIO store repeated <n> times: guest address … value … host pc …
 what it is waiting on. It is a warning-level line, so the default log level
 shows it.
 
+Result on build #9549: `guest lr 829FF8C4`, value `00000100` (the decoder
+byte-swaps it to bit 16 of `Context1Clear` = context 48), `r4 7FEA1A84`,
+`r9 = r10 = 0x30` (48), `r11 0xC00`, `r3 1FCA7C00`, `r30 B410A090`,
+`r31 B410A0D0`. Over 3.5 million repeats. No MMIO read happens between the
+stores, so the loop polls normal guest memory (likely the context data).
+
+Next build also logs, once per hang, `MMIO hang function <start>-<end>` and
+`MMIO hang code <address>: <8 words>` lines: the guest code of the function
+holding the store and 32 words around `lr`. Disassemble them with the
+patched binutils (`third_party/binutils/build.sh`, then
+`powerpc-none-elf-objdump -D -b binary -m powerpc -EB -Mvmx128` on the words
+written to a file).
+
+CPU tests on ARM64 (CI "CPU tests", macOS) after the shared-memory fix:
+249 of 249 HIR tests and 141,712 of 141,712 instruction cases pass. The
+earlier failures were all `FAILED SETUP` from shared-memory name clashes in
+the test harness on macOS (fixed in `memory_posix.cc`, macOS only).
+
 ## Performance (reported on build #9543, not yet investigated)
 
 Very slow, with flickering. Known contributors: about 1.06 million vertices

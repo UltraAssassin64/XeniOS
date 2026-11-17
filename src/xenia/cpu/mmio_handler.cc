@@ -9,8 +9,10 @@
 
 #include "xenia/cpu/mmio_handler.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <string>
 
 #include "xenia/base/assert.h"
 #include "xenia/base/byte_order.h"
@@ -18,7 +20,12 @@
 #include "xenia/base/logging.h"
 #include "xenia/base/memory.h"
 #include "xenia/base/platform.h"
+#include "xenia/cpu/backend/backend.h"
+#include "xenia/cpu/backend/code_cache.h"
+#include "xenia/cpu/function.h"
 #include "xenia/cpu/ppc/ppc_context.h"
+#include "xenia/cpu/processor.h"
+#include "xenia/cpu/thread_state.h"
 
 namespace xe {
 namespace cpu {
@@ -609,6 +616,42 @@ bool MMIOHandler::ExceptionCallback(Exception* ex) {
           uint32_t(mmio_guest_context->r[11]),
           uint32_t(mmio_guest_context->r[30]),
           uint32_t(mmio_guest_context->r[31]));
+      // Once per hang: the guest function holding the store and the code
+      // around its return address, as raw big-endian words to disassemble.
+      ThreadState* mmio_thread_state = ThreadState::Get();
+      if (mmio_repeat_count == 1000 && mmio_thread_state &&
+          mmio_thread_state->processor()) {
+        GuestFunction* mmio_function = mmio_thread_state->processor()
+                                           ->backend()
+                                           ->code_cache()
+                                           ->LookupFunction(uint64_t(rip));
+        auto mmio_dump = [&](uint32_t mmio_start, uint32_t mmio_words) {
+          for (uint32_t mmio_line = 0; mmio_line < mmio_words; mmio_line += 8) {
+            std::string mmio_text;
+            for (uint32_t mmio_word = mmio_line;
+                 mmio_word < mmio_line + 8 && mmio_word < mmio_words;
+                 ++mmio_word) {
+              mmio_text += fmt::format(" {:08X}",
+                                       xe::load_and_swap<uint32_t>(
+                                           mmio_guest_context->virtual_membase +
+                                           mmio_start + mmio_word * 4));
+            }
+            XELOGW("MMIO hang code {:08X}:{}", mmio_start + mmio_line * 4,
+                   mmio_text);
+          }
+        };
+        if (mmio_function) {
+          uint32_t mmio_end = mmio_function->has_end_address()
+                                  ? mmio_function->end_address()
+                                  : mmio_function->address() + 0x200;
+          XELOGW("MMIO hang function {:08X}-{:08X}", mmio_function->address(),
+                 mmio_end);
+          mmio_dump(mmio_function->address(),
+                    std::min<uint32_t>(
+                        (mmio_end - mmio_function->address()) / 4 + 1, 256));
+        }
+        mmio_dump(uint32_t(mmio_guest_context->lr) - 0x40, 32);
+      }
     }
 #endif  // XE_ARCH_ARM64
     range->write(nullptr, range->callback_context, fault_guest_virtual_address,
