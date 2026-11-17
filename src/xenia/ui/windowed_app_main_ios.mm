@@ -591,6 +591,8 @@ static constexpr IOSFocusNodeId kInGameFocusExit = 104;
 
 static NSString* const kXeniaAutoOpenStikDebugOnLaunchPreferenceKey =
     @"ios_auto_open_stikdebug_on_launch";
+static NSString* const kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey =
+    @"ios_auto_enable_jit_via_trollstore";
 static NSString* const kXeniaPendingExternalLaunchPathPreferenceKey =
     @"ios_pending_external_launch_path";
 static NSString* const kXeniaPendingExternalLaunchTimestampPreferenceKey =
@@ -1503,12 +1505,15 @@ static NSString* xe_game_info_callback_provider(NSURL* request_url) {
   return [scheme lowercaseString];
 }
 
-static NSURL* xe_stikdebug_enable_jit_url_for_bundle_identifier(NSString* bundle_identifier) {
+// StikDebug (stikjit://) and TrollStore (apple-magnifier://) take the same
+// enable-jit?bundle-id=... request.
+static NSURL* xe_stikdebug_enable_jit_url_for_bundle_identifier(NSString* bundle_identifier,
+                                                                NSString* scheme) {
   if (!bundle_identifier || bundle_identifier.length == 0) {
     return nil;
   }
   NSURLComponents* components = [[[NSURLComponents alloc] init] autorelease];
-  components.scheme = @"stikjit";
+  components.scheme = scheme;
   components.host = @"enable-jit";
   components.queryItems = @[ [NSURLQueryItem queryItemWithName:@"bundle-id"
                                                          value:bundle_identifier] ];
@@ -3630,6 +3635,13 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
       "On app open, jump into StikDebug with XeniOS's bundle ID so it can enable JIT and "
       "relaunch XeniOS. Requires StikDebug, a valid pairing file, and your normal VPN / loopback "
       "setup.",
+      false);
+  AddUserDefaultBoolSetting(
+      automation.items, kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey,
+      "Auto-Enable JIT via TrollStore",
+      "On app open, ask TrollStore (apple-magnifier://) to enable JIT for XeniOS's bundle ID "
+      "and relaunch it. Requires XeniOS to be installed through TrollStore. Used before "
+      "StikDebug when both are on.",
       false);
   if (!automation.items.empty()) {
     sections.push_back(std::move(automation));
@@ -10718,7 +10730,8 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 
 - (BOOL)requestAutomaticStikDebugJITHandoffForPendingLaunchPath:
     (const std::filesystem::path*)launch_path {
-  if (!GetUserDefaultBool(kXeniaAutoOpenStikDebugOnLaunchPreferenceKey, false)) {
+  if (!GetUserDefaultBool(kXeniaAutoOpenStikDebugOnLaunchPreferenceKey, false) &&
+      !GetUserDefaultBool(kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey, false)) {
     XELOGI("iOS: Automatic StikDebug handoff skipped (disabled)");
     return NO;
   }
@@ -10743,16 +10756,33 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   }
 
   NSString* bundle_identifier = NSBundle.mainBundle.bundleIdentifier;
-  NSURL* stikdebug_url = xe_stikdebug_enable_jit_url_for_bundle_identifier(bundle_identifier);
-  if (!stikdebug_url) {
-    XELOGW("iOS: Unable to build StikDebug JIT handoff URL");
-    return NO;
-  }
-
   UIApplication* application = [UIApplication sharedApplication];
-  if (![application canOpenURL:stikdebug_url]) {
-    XELOGW("iOS: StikDebug URL scheme unavailable");
-    self.statusLabel.text = @"StikDebug is not installed or unavailable.";
+  // TrollStore first when its toggle is on and it can take the request, then
+  // StikDebug.
+  NSString* jit_provider_name = @"StikDebug";
+  NSURL* stikdebug_url = nil;
+  if (GetUserDefaultBool(kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey, false)) {
+    NSURL* trollstore_url =
+        xe_stikdebug_enable_jit_url_for_bundle_identifier(bundle_identifier, @"apple-magnifier");
+    if (trollstore_url && [application canOpenURL:trollstore_url]) {
+      stikdebug_url = trollstore_url;
+      jit_provider_name = @"TrollStore";
+    } else {
+      XELOGW("iOS: TrollStore URL scheme unavailable");
+    }
+  }
+  if (!stikdebug_url &&
+      GetUserDefaultBool(kXeniaAutoOpenStikDebugOnLaunchPreferenceKey, false)) {
+    stikdebug_url = xe_stikdebug_enable_jit_url_for_bundle_identifier(bundle_identifier,
+                                                                      @"stikjit");
+    if (stikdebug_url && ![application canOpenURL:stikdebug_url]) {
+      XELOGW("iOS: StikDebug URL scheme unavailable");
+      stikdebug_url = nil;
+    }
+  }
+  if (!stikdebug_url) {
+    XELOGW("iOS: No JIT handoff URL could be opened");
+    self.statusLabel.text = @"TrollStore / StikDebug JIT handoff is unavailable.";
     if (launch_path && !launch_path->empty()) {
       ClearPendingExternalLaunchPathPreference();
     }
@@ -10766,8 +10796,11 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   const BOOL has_pending_launch = launch_path && !launch_path->empty();
   SetUserDefaultDouble(kXeniaLastAutoStikDebugAttemptTimestampPreferenceKey, now);
   self.statusLabel.text =
-      has_pending_launch ? @"Opening StikDebug to enable JIT..." : @"Opening StikDebug for JIT...";
-  XELOGI("iOS: Opening StikDebug handoff URL {}", stikdebug_url.absoluteString.UTF8String);
+      [NSString stringWithFormat:(has_pending_launch ? @"Opening %@ to enable JIT..."
+                                                     : @"Opening %@ for JIT..."),
+                                 jit_provider_name];
+  XELOGI("iOS: Opening {} handoff URL {}", jit_provider_name.UTF8String,
+         stikdebug_url.absoluteString.UTF8String);
 
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                  dispatch_get_main_queue(), ^{
@@ -10775,8 +10808,10 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
                        options:@{}
                        completionHandler:^(BOOL success) {
                          if (!success) {
-                           XELOGW("iOS: Failed to open StikDebug handoff URL");
-                           self.statusLabel.text = @"Failed to open StikDebug.";
+                           XELOGW("iOS: Failed to open {} handoff URL",
+                                  jit_provider_name.UTF8String);
+                           self.statusLabel.text = [NSString
+                               stringWithFormat:@"Failed to open %@.", jit_provider_name];
                            if (has_pending_launch) {
                              ClearPendingExternalLaunchPathPreference();
                            }

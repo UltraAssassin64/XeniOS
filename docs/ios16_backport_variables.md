@@ -131,6 +131,9 @@ further edits.
 | `mmio_text` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Text of one dump line. | `src/xenia/cpu/mmio_handler.cc` | 630, 634, 640 | 3 |
 | `mmio_word` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Index of the word being added to a dump line. | `src/xenia/cpu/mmio_handler.cc` | 631, 632, 633, 637 | 5 |
 | `mmio_end` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | End address of the guest function, or start + 0x200 if unknown. | `src/xenia/cpu/mmio_handler.cc` | 644, 648, 651 | 3 |
+| `kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey` | static NSString constant, iOS UI | User-defaults key of the "Auto-Enable JIT via TrollStore" toggle (stored as ios_auto_enable_jit_via_trollstore). | `src/xenia/ui/windowed_app_main_ios.mm` | 594, 3640, 10734, 10764 | 4 |
+| `jit_provider_name` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | "TrollStore" or "StikDebug", for the status label and log lines. | `src/xenia/ui/windowed_app_main_ios.mm` | 10762, 10769, 10801, 10802, 10812, 10814 | 6 |
+| `trollstore_url` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | apple-magnifier://enable-jit?bundle-id=... request for TrollStore. | `src/xenia/ui/windowed_app_main_ios.mm` | 10765, 10767, 10768 | 4 |
 
 ## Total references per name
 
@@ -244,6 +247,9 @@ further edits.
 | `mmio_text` | 3 |
 | `mmio_word` | 5 |
 | `mmio_end` | 3 |
+| `kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey` | 4 |
+| `jit_provider_name` | 6 |
+| `trollstore_url` | 4 |
 
 ## Checks
 
@@ -267,3 +273,7 @@ further edits.
 - The names in `tools/ci/run_cpu_tests.py` are local to that script; `run`,
   `tail` and `main` are common names elsewhere in the tree but are not
   shared with any other file.
+- `xe_stikdebug_enable_jit_url_for_bundle_identifier` (existing) gained a
+  `scheme` parameter so the same builder serves `stikjit` and
+  `apple-magnifier`; `apple-magnifier` was already in
+  `LSApplicationQueriesSchemes` in `src/xenia/app/Info_ios.plist`.
