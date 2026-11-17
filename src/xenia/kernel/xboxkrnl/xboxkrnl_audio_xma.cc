@@ -7,9 +7,15 @@
  ******************************************************************************
  */
 
+#include <atomic>
+#include <string>
+
+#include "third_party/fmt/include/fmt/format.h"
 #include "xenia/apu/audio_system.h"
 #include "xenia/apu/xma_decoder.h"
+#include "xenia/base/byte_order.h"
 #include "xenia/base/logging.h"
+#include "xenia/cpu/thread_state.h"
 #include "xenia/emulator.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
@@ -55,7 +61,66 @@ using xe::apu::XMA_CONTEXT_DATA;
 // restrictions of frame/subframe/etc:
 // https://msdn.microsoft.com/en-us/library/windows/desktop/microsoft.directx_sdk.xaudio2.xaudio2_buffer(v=vs.85).aspx
 
+// Hang diagnostics: after Press Start, Batman: Arkham Asylum's main thread
+// was seen creating, clearing and releasing the same XMA context millions of
+// times. Report who calls XMACreateContext when it is called very often.
+static void LogFrequentXmaContextCreation() {
+  static std::atomic<uint32_t> xma_create_count{0};
+  const uint32_t xma_count = ++xma_create_count;
+  if (xma_count != 1000 && xma_count % 200000) {
+    return;
+  }
+  cpu::ThreadState* xma_thread_state = cpu::ThreadState::Get();
+  if (!xma_thread_state) {
+    return;
+  }
+  const cpu::ppc::PPCContext* xma_context = xma_thread_state->context();
+  Memory* xma_memory = kernel_memory();
+  XELOGW("XMACreateContext called {} times; caller lr {:08X} r1 {:08X}",
+         xma_count, uint32_t(xma_context->lr), uint32_t(xma_context->r[1]));
+  if (xma_count != 1000) {
+    return;
+  }
+  auto xma_dump = [&](uint32_t xma_start, uint32_t xma_words) {
+    for (uint32_t xma_line = 0; xma_line < xma_words; xma_line += 8) {
+      std::string xma_text;
+      for (uint32_t xma_word = xma_line;
+           xma_word < xma_line + 8 && xma_word < xma_words; ++xma_word) {
+        xma_text += fmt::format(
+            " {:08X}", xe::load_and_swap<uint32_t>(xma_memory->TranslateVirtual(
+                           xma_start + xma_word * 4)));
+      }
+      XELOGW("XMA hang code {:08X}:{}", xma_start + xma_line * 4, xma_text);
+    }
+  };
+  xma_dump(uint32_t(xma_context->lr) - 0x40, 32);
+  // Walk the guest stack: the back chain is at 0(r1) and each function saves
+  // its return address at -8 from its caller's frame.
+  uint32_t xma_frame = uint32_t(xma_context->r[1]);
+  for (uint32_t xma_depth = 0; xma_depth < 10; ++xma_depth) {
+    if (!xma_frame || xma_frame >= 0xF0000000u) {
+      break;
+    }
+    uint32_t xma_caller_frame =
+        xe::load_and_swap<uint32_t>(xma_memory->TranslateVirtual(xma_frame));
+    if (!xma_caller_frame || xma_caller_frame <= xma_frame ||
+        xma_caller_frame >= 0xF0000000u) {
+      break;
+    }
+    uint32_t xma_return = xe::load_and_swap<uint32_t>(
+        xma_memory->TranslateVirtual(xma_caller_frame - 8));
+    XELOGW("XMA hang caller {}: frame {:08X} return {:08X}", xma_depth,
+           xma_caller_frame, xma_return);
+    if (xma_depth < 5 && xma_return >= 0x82000000u &&
+        xma_return < 0x84000000u) {
+      xma_dump(xma_return - 0x80, 48);
+    }
+    xma_frame = xma_caller_frame;
+  }
+}
+
 dword_result_t XMACreateContext_entry(lpdword_t context_out_ptr) {
+  LogFrequentXmaContextCreation();
   auto xma_decoder = kernel_state()->emulator()->audio_system()->xma_decoder();
   uint32_t context_ptr = xma_decoder->AllocateContext();
   *context_out_ptr = context_ptr;

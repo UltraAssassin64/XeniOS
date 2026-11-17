@@ -172,6 +172,22 @@ Result on build #9552 (disassembled with the patched binutils):
 Next build logs `MMIO hang caller <n>: frame … return …` for up to 8 guest
 stack frames and dumps the code before the first four return addresses.
 
+Build #9554: same hang, but **no MMIO lines at all**. Most likely the JIT's
+MMIO recording (`record_mmio_access_exceptions`, persisted per game in
+`Library/Caches/xenia/modules/<hash>/executable_addr_flags.bin`) now marks
+that store, so it is compiled as a direct MMIO-aware store and never faults.
+The MMIO-handler diagnostic can therefore only fire on a fresh cache. (Not
+verified; deleting that file would confirm it.)
+
+In the earlier debug log (`xenia_2026-11-16_20-45-00.log`), the loop starts
+right after the loader thread (`F8000040`) opens `Max_IntroAudio.xxx`; the
+looping thread is `F8000008`, the game's main thread.
+
+The diagnostic moved to the `XMACreateContext` export, which every pass of
+the loop calls: on the 1000th call it logs `XMACreateContext called …
+caller lr … r1 …`, `XMA hang code …` and `XMA hang caller <n>: …` with
+the guest stack (10 frames, code dumped for the first five).
+
 CPU tests on ARM64 (CI "CPU tests", macOS) after the shared-memory fix:
 249 of 249 HIR tests and 141,712 of 141,712 instruction cases pass. The
 earlier failures were all `FAILED SETUP` from shared-memory name clashes in
