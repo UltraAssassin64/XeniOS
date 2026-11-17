@@ -246,6 +246,27 @@ a kick runs `XmaContext::Work()` on the writing guest thread). In the hung
 runs it never gets from "clear 48" to the next MmGetPhysicalAddress.
 Contexts 0-43 are used by the XAudio thread `F80000D0`.
 
+Build #9557, two debug-level runs (`log_level = 3`):
+
+- `emit_inline_mmio_checks = true`: reached gameplay.
+- `emit_inline_mmio_checks = false`: hung; the clear store faulted 1,596,843
+  times. In that log it is **the first and only fault in the MMIO range
+  path** (virtual 0x7FC00000-0x7FFFFFFF); every other fault is a
+  physical-memory write watch, which just retries the instruction and never
+  changes the PC. So on iOS the range path's "emulate the store and resume
+  at pc + 4" has never worked once: the thread resumes on the same store.
+- iOS compiles `exception_handler_mac.cc` (platform_files: `_ios`, then
+  `_mac`, then `_posix`). It writes `mcontext->__ss.__pc`, as upstream's
+  `exception_handler_posix.cc` does. Why the kernel does not take the new
+  PC here is unknown. Unverified idea: pointer-authentication handling of
+  signal thread state on arm64e hardware (the SDK's
+  `__darwin_arm_thread_state64_set_pc_fptr`).
+- **Fix applied:** `emit_inline_mmio_checks` defaults to true on iOS
+  (`kEmitInlineMmioChecksDefault` in `memory.cc`). Existing configs that
+  saved `false` keep it; the owner must turn it on or delete the line.
+- One earlier run with inline checks at `log_level = 2` still hung; where is
+  unknown. The XMA repeat detector below covers that case.
+
 Next build: `XmaDecoder::WriteRegister` logs `XMA register <r> written <v>
 <n> times in a row; guest lr …` after 1000 identical writes and, once,
 `XMA repeat frame <n>: <symbol> + <offset> (<image>)` for up to 24 native

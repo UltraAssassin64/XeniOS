@@ -33,7 +33,17 @@
 
 DEFINE_bool(protect_zero, true, "Protect the zero page from reads and writes.",
             "Memory");
-DEFINE_bool(emit_inline_mmio_checks, false,
+// On iOS the exception-based path never got past its first MMIO store: the
+// handler emulated the store and set the resume address past it, but the
+// thread resumed on the store again, so it repeated forever (seen as the hang
+// after Batman: Arkham Asylum's first cutscene). Why the new PC is not taken
+// is not known yet. The inline checks avoid the fault entirely.
+#if XE_PLATFORM_IOS
+constexpr bool kEmitInlineMmioChecksDefault = true;
+#else
+constexpr bool kEmitInlineMmioChecksDefault = false;
+#endif
+DEFINE_bool(emit_inline_mmio_checks, kEmitInlineMmioChecksDefault,
             "Emit inline MMIO range checks for all I32 loads/stores instead "
             "of relying on exception-based MMIO detection.",
             "CPU");
