@@ -163,6 +163,25 @@ further edits.
 | `xma_frame` | local in XmaDecoder::WriteRegister, hang diagnostics | Index of the frame being logged. | `src/xenia/apu/xma_decoder.cc` | 382, 384, 386, 388, 393, 394 | 8 |
 | `xma_symbol` | local in XmaDecoder::WriteRegister, hang diagnostics | dladdr() result for one frame. | `src/xenia/apu/xma_decoder.cc` | 383, 384, 385, 387, 389, 390, 391 | 10 |
 | `kEmitInlineMmioChecksDefault` | file-scope constexpr | Default of the `emit_inline_mmio_checks` cvar: true on iOS, false elsewhere. | `src/xenia/memory.cc` | 42, 44, 46 | 3 |
+| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.cc` | 18 | 1 |
+| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.h` | 16 | 1 |
+| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.h` | 547, 572 | 2 |
+| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.cc` | 49 | 1 |
+| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.h` | 548, 573 | 2 |
+| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.cc` | 29 | 1 |
+| `kernel_call_history` | thread_local array | The thread's last eight kernel exports, newest first. | `src/xenia/kernel/util/shim_utils.cc` | 33, 37, 44, 45, 47, 66 | 6 |
+| `kernel_call_runs` | thread_local array | For cycle lengths 1-4, how many calls in a row matched the call that many places earlier. | `src/xenia/kernel/util/shim_utils.cc` | 34, 38, 40, 52 | 4 |
+| `kernel_call_period` | local | Cycle length being checked (1-4). | `src/xenia/kernel/util/shim_utils.cc` | 35, 36, 37, 38, 40, 50, 51, 52, 61 | 11 |
+| `kernel_call_index` | local | Index into the history. | `src/xenia/kernel/util/shim_utils.cc` | 43, 44, 45, 61, 62, 66 | 9 |
+| `kernel_call_threshold` | local | Copy of the cvar for this call. | `src/xenia/kernel/util/shim_utils.cc` | 49, 55, 56, 57, 76 | 5 |
+| `kernel_call_run` | local | Run length for the cycle length being checked. | `src/xenia/kernel/util/shim_utils.cc` | 52, 55, 56, 57, 72, 76 | 6 |
+| `kernel_call_names` | local | Text of the repeating cycle, e.g. "A -> B". | `src/xenia/kernel/util/shim_utils.cc` | 60, 63, 64, 66, 73 | 5 |
+| `kernel_call_thread` | local | Current guest XThread, for its handle. | `src/xenia/kernel/util/shim_utils.cc` | 68, 72 | 3 |
+| `kernel_call_memory` | local | Guest memory, for the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 79, 88, 95 | 3 |
+| `kernel_call_frame` | local | Guest stack frame being walked. | `src/xenia/kernel/util/shim_utils.cc` | 80, 84, 88, 89, 97 | 6 |
+| `kernel_call_stack` | local | Text of the guest return addresses. | `src/xenia/kernel/util/shim_utils.cc` | 81, 93, 99 | 3 |
+| `kernel_call_depth` | local | Depth in the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 82, 83 | 3 |
+| `kernel_call_caller_frame` | local | Back-chain pointer to the caller's frame. | `src/xenia/kernel/util/shim_utils.cc` | 87, 89, 90, 96, 97 | 5 |
 
 ## Total references per name
 
@@ -308,6 +327,21 @@ further edits.
 | `xma_frame` | 8 |
 | `xma_symbol` | 10 |
 | `kEmitInlineMmioChecksDefault` | 3 |
+| `kernel_call_repeat_threshold` | 5 |
+| `NoteKernelCall` | 3 |
+| `kernel_call_history` | 6 |
+| `kernel_call_runs` | 4 |
+| `kernel_call_period` | 11 |
+| `kernel_call_index` | 9 |
+| `kernel_call_threshold` | 5 |
+| `kernel_call_run` | 6 |
+| `kernel_call_names` | 5 |
+| `kernel_call_thread` | 3 |
+| `kernel_call_memory` | 3 |
+| `kernel_call_frame` | 6 |
+| `kernel_call_stack` | 3 |
+| `kernel_call_depth` | 3 |
+| `kernel_call_caller_frame` | 5 |
 
 ## Checks
 

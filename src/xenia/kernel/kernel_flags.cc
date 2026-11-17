@@ -14,6 +14,12 @@ DEFINE_bool(headless, false,
             "UI");
 DEFINE_bool(log_high_frequency_kernel_calls, false,
             "Log kernel calls with the kHighFrequency tag.", "Logging");
+DEFINE_uint32(
+    kernel_call_repeat_threshold, 20000,
+    "Log a warning, with the guest caller and stack, when a guest thread "
+    "makes the same kernel call, or repeats the same cycle of up to four "
+    "kernel calls, this many times in a row. 0 disables it.",
+    "Logging");
 DEFINE_bool(
     guest_scheduler, false,
     "Run guest threads as cooperative fibers driven by an in-kernel scheduler "

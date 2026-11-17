@@ -283,6 +283,18 @@ CPU tests on ARM64 (CI "CPU tests", macOS) after the shared-memory fix:
 earlier failures were all `FAILED SETUP` from shared-memory name clashes in
 the test harness on macOS (fixed in `memory_posix.cc`, macOS only).
 
+## Kernel call repeat detector
+
+Every kernel export goes through `ExportRegistrerHelper::X::Trampoline` in
+`src/xenia/kernel/util/shim_utils.h`, which now calls `NoteKernelCall`
+(`shim_utils.cc`) first. Per guest thread it keeps the last eight exports
+and, for cycle lengths 1 to 4, how many calls in a row repeated. When a run
+reaches `kernel_call_repeat_threshold` (cvar, Logging, default 20000, 0 =
+off) it logs `Kernel calls repeating <n> times in a row on thread <handle>:
+A -> B ...; guest lr … r3 … r6 …` and the guest stack, then again every
+100 thresholds. Works at any log level and for high-frequency exports.
+It cannot see loops that make no kernel calls (like the MMIO store loop).
+
 ## JIT automation
 
 Settings > Automation has "Auto-Enable JIT via StikDebug" (stikjit://) and,

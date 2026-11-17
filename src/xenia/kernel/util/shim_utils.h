@@ -542,6 +542,11 @@ XE_NOALIAS void PrintKernelCall(cpu::Export* export_entry,
    always turned into strings except if kHighFrequency)
 
 */
+// Hang diagnostics: tracks the kernel calls each guest thread makes and logs
+// when one call, or a short cycle of calls, repeats many times in a row
+// (kernel_call_repeat_threshold).
+void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context);
+
 template <typename F, typename Tuple, std::size_t... I>
 XE_FORCEINLINE static auto KernelTrampoline(F&& f, Tuple&& t,
                                             std::index_sequence<I...>) {
@@ -564,6 +569,9 @@ struct ExportRegistrerHelper {
         new cpu::Export(ORDINAL, xe::cpu::Export::Type::kFunction, name, TAGS);
     struct X {
       static void Trampoline(PPCContext* ppc_context) {
+        if (cvars::kernel_call_repeat_threshold) {
+          NoteKernelCall(export_entry, ppc_context);
+        }
         Param::Init init = {
             ppc_context,
             0,
