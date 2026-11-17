@@ -13,6 +13,10 @@ project("xenia-ui")
   removefiles({
     "*_demo.cc",
     "windowed_app_main_*.cc",
+    -- The wxWidgets front end belongs to newer upstream's CMake build. This
+    -- build uses Qt on the desktop and UIKit on iOS and has no wxWidgets.
+    "*_wx.cc",
+    "*_wx.h",
   })
 
   filter("platforms:Mac-*")
