@@ -548,13 +548,8 @@ class MetalCommandProcessor : public CommandProcessor {
     uint32_t compile_pending = 0;   // Shader or pipeline still compiling.
     uint32_t encoded = 0;           // Reached a Metal draw call.
     uint64_t encoded_vertices = 0;
-    uint32_t probed = 0;  // Scene draws logged in this window.
-    // NaN bit patterns written to vertex float constants in this window.
-    uint32_t nan_constants = 0;
   };
   DrawStats draw_stats_;
-  // Receives the passed-sample counts of the draws the scene probe logs.
-  MTL::Buffer* visibility_probe_buffer_ = nullptr;
   std::unordered_map<uint64_t, MTL::RenderPipelineState*> msl_pipeline_cache_;
 
   // SPIRV-Cross tessellation support.

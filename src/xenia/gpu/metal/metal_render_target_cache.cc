@@ -12,7 +12,6 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -4113,82 +4112,6 @@ void MetalRenderTargetCache::DumpRenderTargets(
     owns_command_buffer = true;
   }
 
-  // Multisample diagnostics: the dump below reads multisampled render targets
-  // from a compute shader. For every 61st dump of a multisampled RGBA16Float
-  // target, also let Metal itself resolve the target into a CPU-readable
-  // texture and log how much of that is non-zero, to tell an empty target from
-  // a failing multisampled read.
-  static std::atomic<uint32_t> msaa_probe_count{0};
-  for (const ResolveCopyDumpRectangle& rect : rectangles) {
-    auto* msaa_probe_rt = static_cast<MetalRenderTarget*>(rect.render_target);
-    MTL::Texture* msaa_probe_source =
-        msaa_probe_rt ? msaa_probe_rt->texture() : nullptr;
-    if (!msaa_probe_source ||
-        msaa_probe_source->textureType() != MTL::TextureType2DMultisample ||
-        msaa_probe_source->pixelFormat() != MTL::PixelFormatRGBA16Float) {
-      continue;
-    }
-    const uint32_t msaa_probe_index = msaa_probe_count.fetch_add(1);
-    if (msaa_probe_index % 61 != 0 || msaa_probe_index >= 61 * 200) {
-      break;
-    }
-    MTL::TextureDescriptor* msaa_probe_desc =
-        MTL::TextureDescriptor::alloc()->init();
-    msaa_probe_desc->setWidth(msaa_probe_source->width());
-    msaa_probe_desc->setHeight(msaa_probe_source->height());
-    msaa_probe_desc->setPixelFormat(MTL::PixelFormatRGBA16Float);
-    msaa_probe_desc->setTextureType(MTL::TextureType2D);
-    msaa_probe_desc->setSampleCount(1);
-    msaa_probe_desc->setUsage(MTL::TextureUsageRenderTarget);
-    msaa_probe_desc->setStorageMode(MTL::StorageModeShared);
-    MTL::Texture* msaa_probe_texture = device_->newTexture(msaa_probe_desc);
-    msaa_probe_desc->release();
-    MTL::RenderPassDescriptor* msaa_probe_pass =
-        MTL::RenderPassDescriptor::renderPassDescriptor();
-    if (!msaa_probe_texture || !msaa_probe_pass) {
-      if (msaa_probe_texture) {
-        msaa_probe_texture->release();
-      }
-      break;
-    }
-    auto* msaa_probe_attachment =
-        msaa_probe_pass->colorAttachments()->object(0);
-    msaa_probe_attachment->setTexture(msaa_probe_source);
-    msaa_probe_attachment->setResolveTexture(msaa_probe_texture);
-    msaa_probe_attachment->setLoadAction(MTL::LoadActionLoad);
-    msaa_probe_attachment->setStoreAction(
-        MTL::StoreActionStoreAndMultisampleResolve);
-    MTL::RenderCommandEncoder* msaa_probe_encoder =
-        cmd->renderCommandEncoder(msaa_probe_pass);
-    if (!msaa_probe_encoder) {
-      msaa_probe_texture->release();
-      break;
-    }
-    msaa_probe_encoder->endEncoding();
-    const uint32_t msaa_probe_key = msaa_probe_rt->key().key;
-    cmd->addCompletedHandler(^(MTL::CommandBuffer*) {
-      const size_t msaa_probe_width = msaa_probe_texture->width();
-      const size_t msaa_probe_height = msaa_probe_texture->height();
-      std::vector<uint8_t> msaa_probe_bytes(msaa_probe_width * 8 *
-                                            msaa_probe_height);
-      msaa_probe_texture->getBytes(
-          msaa_probe_bytes.data(), msaa_probe_width * 8,
-          MTL::Region::Make2D(0, 0, msaa_probe_width, msaa_probe_height), 0);
-      size_t msaa_probe_nonzero = 0;
-      for (uint8_t msaa_probe_byte : msaa_probe_bytes) {
-        msaa_probe_nonzero += msaa_probe_byte != 0;
-      }
-      XELOGI(
-          "Metal multisample probe: #{} key=0x{:08X} {}x{} tiles={}+{}x{} "
-          "nonzero={}/{}",
-          msaa_probe_index, msaa_probe_key, msaa_probe_width, msaa_probe_height,
-          dump_base, dump_rows, dump_pitch, msaa_probe_nonzero,
-          msaa_probe_bytes.size());
-      msaa_probe_texture->release();
-    });
-    break;
-  }
-
   MTL::ComputeCommandEncoder* encoder = cmd->computeCommandEncoder();
   if (!encoder) {
     XELOGE("MetalRenderTargetCache::DumpRenderTargets: no compute encoder");
@@ -4941,76 +4864,6 @@ bool MetalRenderTargetCache::Resolve(Memory& memory, uint32_t& written_address,
                 MTL::Size::Make(8, 8, 1));
 
             encoder->endEncoding();
-            // Resolve diagnostics: for every 97th resolve, snapshot the EDRAM
-            // buffer and the destination range right after the copy and log
-            // how much of the dumped tiles and of the written range is
-            // non-zero, to tell an empty render target from a failed copy.
-            static std::atomic<uint32_t> probe_count{0};
-            const uint32_t probe_index = probe_count.fetch_add(1);
-            const size_t probe_edram_size = edram_buffer_->length();
-            const size_t probe_dest_size = resolve_info.copy_dest_extent_length;
-            if (!draw_resolution_scaled && probe_index % 97 == 0 &&
-                probe_index < 97 * 400 &&
-                resolve_info.copy_dest_extent_start + probe_dest_size <=
-                    dest_buffer->length()) {
-              MTL::Buffer* probe_buffer =
-                  device_->newBuffer(probe_edram_size + probe_dest_size,
-                                     MTL::ResourceStorageModeShared);
-              MTL::BlitCommandEncoder* probe_blit =
-                  probe_buffer ? cmd->blitCommandEncoder() : nullptr;
-              if (probe_blit) {
-                probe_blit->copyFromBuffer(edram_buffer_, 0, probe_buffer, 0,
-                                           probe_edram_size);
-                probe_blit->copyFromBuffer(
-                    dest_buffer, resolve_info.copy_dest_extent_start,
-                    probe_buffer, probe_edram_size, probe_dest_size);
-                probe_blit->endEncoding();
-                cmd->addCompletedHandler(^(MTL::CommandBuffer*) {
-                  const uint8_t* probe_data =
-                      static_cast<const uint8_t*>(probe_buffer->contents());
-                  // Bytes per EDRAM tile at 1x resolution scale.
-                  const size_t probe_tile_size =
-                      probe_edram_size / xenos::kEdramTileCount;
-                  const size_t probe_span_start = std::min(
-                      size_t(dump_base) * probe_tile_size, probe_edram_size);
-                  const size_t probe_span_size =
-                      std::min(size_t(dump_rows) * dump_pitch * probe_tile_size,
-                               probe_edram_size - probe_span_start);
-                  size_t probe_edram_nonzero = 0;
-                  size_t probe_dest_nonzero = 0;
-                  if (probe_data) {
-                    for (size_t i = 0; i < probe_span_size; ++i) {
-                      probe_edram_nonzero +=
-                          probe_data[probe_span_start + i] != 0;
-                    }
-                    for (size_t i = 0; i < probe_dest_size; ++i) {
-                      probe_dest_nonzero +=
-                          probe_data[probe_edram_size + i] != 0;
-                    }
-                  }
-                  const draw_util::ResolveEdramInfo probe_source =
-                      resolve_info.IsCopyingDepth()
-                          ? resolve_info.depth_edram_info
-                          : resolve_info.color_edram_info;
-                  XELOGI(
-                      "Metal resolve probe: #{} shader={} depth={} "
-                      "source_format={} source_msaa={} edram_tiles={}+{}x{} "
-                      "dest=0x{:08X} dest_format={} edram_nonzero={}/{} "
-                      "dest_nonzero={}/{}",
-                      probe_index, uint32_t(copy_shader),
-                      uint32_t(probe_source.is_depth),
-                      uint32_t(probe_source.format),
-                      uint32_t(probe_source.msaa_samples), dump_base, dump_rows,
-                      dump_pitch, resolve_info.copy_dest_extent_start,
-                      uint32_t(resolve_info.copy_dest_info.copy_dest_format),
-                      probe_edram_nonzero, probe_span_size, probe_dest_nonzero,
-                      probe_dest_size);
-                  probe_buffer->release();
-                });
-              } else if (probe_buffer) {
-                probe_buffer->release();
-              }
-            }
             if (owns_command_buffer) {
               cmd->commit();
               cmd->waitUntilCompleted();

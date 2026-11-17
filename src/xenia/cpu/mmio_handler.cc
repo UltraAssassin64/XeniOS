@@ -9,6 +9,7 @@
 
 #include "xenia/cpu/mmio_handler.h"
 
+#include <atomic>
 #include <cstring>
 
 #include "xenia/base/assert.h"
@@ -17,11 +18,17 @@
 #include "xenia/base/logging.h"
 #include "xenia/base/memory.h"
 #include "xenia/base/platform.h"
+#include "xenia/cpu/ppc/ppc_context.h"
 
 namespace xe {
 namespace cpu {
 
 MMIOHandler* MMIOHandler::global_handler_ = nullptr;
+
+// Hang diagnostics: the last guest address an MMIO store went to, and how
+// many stores in a row went there.
+static std::atomic<uint32_t> mmio_repeat_address{0};
+static std::atomic<uint32_t> mmio_repeat_count{0};
 
 std::unique_ptr<MMIOHandler> MMIOHandler::Install(
     uint8_t* virtual_membase, uint8_t* physical_membase, uint8_t* membase_end,
@@ -573,6 +580,37 @@ bool MMIOHandler::ExceptionCallback(Exception* ex) {
         value = xe::byte_swap(value);
       }
     }
+#if XE_ARCH_ARM64
+    // Hang diagnostics: a guest thread was seen repeating one store to an
+    // XMA register forever. When the same address is written many times in a
+    // row, report where the store is and what the guest registers hold (x20
+    // is the guest context in JIT code).
+    if (mmio_repeat_address.exchange(fault_guest_virtual_address) !=
+        fault_guest_virtual_address) {
+      mmio_repeat_count = 0;
+    } else if (++mmio_repeat_count == 1000 || !(mmio_repeat_count % 500000)) {
+      const auto* mmio_guest_context =
+          reinterpret_cast<const ppc::PPCContext*>(thread_context.x[20]);
+      XELOGW(
+          "MMIO store repeated {} times: guest address {:08X} value {:08X} "
+          "host pc {:016X} instruction {:08X} previous {:08X} next {:08X} "
+          "guest lr {:08X} ctr {:08X} r1 {:08X} r3 {:08X} r4 {:08X} r9 {:08X} "
+          "r10 {:08X} r11 {:08X} r30 {:08X} r31 {:08X}",
+          mmio_repeat_count.load(), fault_guest_virtual_address, value,
+          uint64_t(rip), *reinterpret_cast<const uint32_t*>(p),
+          *reinterpret_cast<const uint32_t*>(p - 4),
+          *reinterpret_cast<const uint32_t*>(p + 4),
+          uint32_t(mmio_guest_context->lr), uint32_t(mmio_guest_context->ctr),
+          uint32_t(mmio_guest_context->r[1]),
+          uint32_t(mmio_guest_context->r[3]),
+          uint32_t(mmio_guest_context->r[4]),
+          uint32_t(mmio_guest_context->r[9]),
+          uint32_t(mmio_guest_context->r[10]),
+          uint32_t(mmio_guest_context->r[11]),
+          uint32_t(mmio_guest_context->r[30]),
+          uint32_t(mmio_guest_context->r[31]));
+    }
+#endif  // XE_ARCH_ARM64
     range->write(nullptr, range->callback_context, fault_guest_virtual_address,
                  value);
   }
