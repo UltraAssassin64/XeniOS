@@ -160,6 +160,22 @@ further edits.
 | `outline` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8429, 8436, 8438, 8439 | 4 |
 | `knob_path` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8442, 8449 | 2 |
 | `label_size` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8451, 8452, 8453 | 3 |
+| `ppc-test-binaries` | job id and artifact name, CPU tests workflow | Assembles the PowerPC instruction tests on Linux and hands the binaries to the macOS job. | `.github/workflows/cpu-tests.yml` | 18, 54, 63, 204 | 4 |
+| `cpu-tests-macos-arm64` | job id, CPU tests workflow | Builds and runs the CPU test programs on Apple Silicon. | `.github/workflows/cpu-tests.yml` | 61 | 1 |
+| `cache-binutils` | step id, CPU tests workflow | Cache of the patched PowerPC binutils build. | `.github/workflows/cpu-tests.yml` | 25, 34 | 2 |
+| `cache-build-cpu-tests` | step id, CPU tests workflow | Cache of the Xcode build output of the test programs. | `.github/workflows/cpu-tests.yml` | 78 | 1 |
+| `cache-submodules-cpu-tests` | step id, CPU tests workflow | Cache of the submodules the desktop test build needs. | `.github/workflows/cpu-tests.yml` | 96 | 1 |
+| `build_hir_tests` | step id, CPU tests workflow | Build of xenia-cpu-tests; its outcome decides the final step. | `.github/workflows/cpu-tests.yml` | 176, 226 | 2 |
+| `build_ppc_tests` | step id, CPU tests workflow | Build of xenia-cpu-ppc-tests; its outcome decides the final step. | `.github/workflows/cpu-tests.yml` | 189, 226 | 2 |
+| `bin_count` | shell variable, CPU tests workflow | Number of assembled test binaries, checked against a minimum. | `.github/workflows/cpu-tests.yml` | 44, 45, 46 | 3 |
+| `run` | function, CPU test runner script | Runs one command with a timeout and classifies it as pass, fail, crash or timeout. | `tools/ci/run_cpu_tests.py` | 6, 20, 23, 50, 56, 64 | 6 |
+| `tail` | function, CPU test runner script | Last non-empty lines of a test's output, for the report. | `tools/ci/run_cpu_tests.py` | 39, 58, 77 | 3 |
+| `escape_catch_name` | function, CPU test runner script | Escapes a test name so Catch matches it exactly. | `tools/ci/run_cpu_tests.py` | 44, 56 | 2 |
+| `run_hir_tests` | function, CPU test runner script | Lists the HIR test cases and runs each in its own process. | `tools/ci/run_cpu_tests.py` | 49, 157 | 2 |
+| `run_ppc_suite` | function, CPU test runner script | Runs one instruction test file and extracts its pass and fail counts. | `tools/ci/run_cpu_tests.py` | 63, 87 | 2 |
+| `run_ppc_tests` | function, CPU test runner script | Runs every instruction test file, several at a time. | `tools/ci/run_cpu_tests.py` | 81, 159 | 2 |
+| `write_report` | function, CPU test runner script | Writes report.md from the collected results. | `tools/ci/run_cpu_tests.py` | 95, 164 | 2 |
+| `main` | function, CPU test runner script | Parses arguments, runs both test programs, writes the results. | `tools/ci/run_cpu_tests.py` | 142, 178 | 2 |
 
 ## Total references per name
 
@@ -296,6 +312,22 @@ further edits.
 | `outline` (XeniaTouchPadView locals) | 4 |
 | `knob_path` (XeniaTouchPadView locals) | 2 |
 | `label_size` (XeniaTouchPadView locals) | 3 |
+| `ppc-test-binaries` | 4 |
+| `cpu-tests-macos-arm64` | 1 |
+| `cache-binutils` | 2 |
+| `cache-build-cpu-tests` | 1 |
+| `cache-submodules-cpu-tests` | 1 |
+| `build_hir_tests` | 2 |
+| `build_ppc_tests` | 2 |
+| `bin_count` | 3 |
+| `run` (run_cpu_tests.py) | 6 |
+| `tail` (run_cpu_tests.py) | 3 |
+| `escape_catch_name` | 2 |
+| `run_hir_tests` | 2 |
+| `run_ppc_suite` | 2 |
+| `run_ppc_tests` | 2 |
+| `write_report` | 2 |
+| `main` (run_cpu_tests.py) | 2 |
 
 ## Checks
 
@@ -315,3 +347,10 @@ further edits.
 - `artifact_suffix` is written to `$GITHUB_OUTPUT` in the `prepare_artifacts`
   step and read by the following upload step, which only runs when that step
   succeeded.
+- The CPU test sources added under `src/xenia/cpu/testing` (and the
+  `skip_cf_simplification` parameter of `TestModule`, `CreateBackend` in
+  `util.h`, `test_backend_cvars.cc`) are copied from upstream
+  `release-v2.0.1-build-9730`, so their identifiers are not listed here.
+- The names in `tools/ci/run_cpu_tests.py` are local to that script; `run`,
+  `tail` and `main` are common names elsewhere in the tree but are not
+  shared with any other file.

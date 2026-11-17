@@ -34,6 +34,12 @@ test_suite("xenia-cpu-tests", project_root, ".", {
   },
 })
 
+-- The tests link the emulator setup code but not the app main that defines
+-- the apu and gpu backend selection cvars.
+files({
+  "test_backend_cvars.cc",
+})
+
 -- xenia-kernel links to xenia-apu, which needs SDL on Linux
 apu_transitive_deps()
 

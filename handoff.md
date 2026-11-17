@@ -281,27 +281,62 @@ This is the first direct cause found. For the scene vertex shader
   guest code execution: the a64 JIT, or its mismatch with the older
   `cpu/hir`, `cpu/ppc`, `cpu/compiler` on this branch.
 
-### Current step: decide how to test the JIT (waiting for the owner)
+### The front end and the JIT backend are from different releases
 
-Logging cannot find a miscompiled instruction. Options looked at:
+Found by diffing `src/xenia/cpu` against upstream tags (fetch one with
+`git fetch --depth=1 https://github.com/xenios-jp/XeniOS tag <name>`):
 
-- **Emulation in the cloud container: not practical.** The container is
-  x86_64 with no arm64 emulator or cross toolchain available from its package
-  sources, and `xenia-cpu-tests` links almost the whole emulator (kernel,
-  gpu, apu, ui).
-- **A macOS arm64 test job in CI: the practical route.** `macos-26` runners
-  are Apple Silicon, so the a64 backend runs natively there. The repository
-  has `src/xenia/cpu/testing` (HIR-level tests: pack, unpack, permute,
-  swizzle, vector shifts and so on) and `./xenia-build.py test`. Upstream
-  has many more a64 tests under the same directory (NaN propagation,
-  conversions, compares) that could be copied in. The PPC instruction tests
-  (`src/xenia/cpu/ppc/testing`, 571 `.s` files) have no assembled `bin/`
-  files in either repository and need a PowerPC assembler via
-  `./xenia-build.py gentests`. Cost: the macOS desktop build of this branch
-  has not been tried since the iOS 16 changes and may need fixes, and macOS
-  runners have been slow to pick up jobs.
-- **Port upstream's current `src/xenia/cpu`** (262 files differ): may fix
-  it outright, large half-port risk.
+- `src/xenia/cpu/backend/a64` is upstream `release-v2.0.1-build-9730`
+  (only include paths differ).
+- `src/xenia/cpu/ppc`, `cpu/hir` and `cpu/compiler` are still
+  `release-v1.0.1-build-9288`.
+- Between the two, the behavioural differences in the front end are few.
+  The one in the vector path: 9730's `ContextPromotionPass` does not forward
+  VEC128 context values or remove VEC128 context stores (upstream turned that
+  off on 2026-01-25 "to work around undiagnosed instability in some games";
+  later releases put it back behind `context_promote_vec128` with range-keyed
+  tracking). This branch still did both.
+
+**Candidate fix, pushed, not yet tested on the device:** commit "[CPU] Stop
+promoting vector registers across instructions, as the a64 backend's release
+does" takes 9730's `context_promotion_pass.cc`. If the title screen's 3D
+scene appears with this build, this was the cause. If not, the test job
+below is the next source of information.
+
+Full audit of instruction coverage: `docs/ppc_instruction_coverage.md`.
+Summary: no user-mode instruction the game has hit is missing (no
+`Invalid instruction` / `Unimplemented instruction` /
+`Unable to process HIR opcode` in any log); 28 instructions are stubs (all
+integer AltiVec, string load/store, `mtfsb0/1`), 22 are partial (mostly the
+overflow-recording `o` forms); `vupkhsh128` / `vupklsh128` are absent from
+the decode table (upstream added them later).
+
+### CPU test job
+
+`.github/workflows/cpu-tests.yml` ("CPU tests"), triggered by pushes that
+touch `src/xenia/cpu/**`, `src/xenia/base/**`, the workflow or
+`tools/ci/run_cpu_tests.py`, and by hand (workflow_dispatch).
+
+- Job 1 (Ubuntu) builds the patched binutils in `third_party/binutils`,
+  runs `./xenia-build.py gentests` and uploads the `.bin` / `.map` files.
+  Verified locally in the cloud container: 570 test files assemble.
+- Job 2 (`macos-26`, Apple Silicon) generates the desktop projects with
+  `--tests`, builds `xenia-cpu-tests` and `xenia-cpu-ppc-tests`, and runs
+  `tools/ci/run_cpu_tests.py`, which runs every HIR test case and every
+  instruction test file in its own process and writes
+  `cpu-test-results/report.md` (also shown as the job summary). Failing
+  tests do not fail the job; a test program that does not build does.
+- `src/xenia/cpu/testing` gained the tests upstream wrote for this backend
+  at 9730 (compare, NaN propagation, pack/unpack, memory, rounding mode,
+  opcode coverage and so on), plus `test_backend_cvars.cc`. `util.h` keeps
+  this branch's Apple-specific stack setup. All of them pass a syntax check
+  against this branch's headers on Linux/x64; none has been built for macOS
+  yet.
+- Known risks for the first runs: the macOS desktop build of this branch has
+  not been tried since the iOS 16 work, and tests that call
+  `memory->SystemHeapAlloc` themselves may not suit this branch's memory
+  setup on Apple platforms. Treat harness crashes separately from wrong
+  results.
 
 All GPU probes are still in place and should be removed once this is fixed.
 

@@ -41,6 +41,7 @@ project("xenia-cpu-ppc-tests")
   filter({})
   files({
     "ppc_testing_main.cc",
+    "../../testing/test_backend_cvars.cc",
     "../../../base/console_app_main_"..platform_suffix..".cc",
   })
   files({
