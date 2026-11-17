@@ -651,6 +651,28 @@ bool MMIOHandler::ExceptionCallback(Exception* ex) {
                         (mmio_end - mmio_function->address()) / 4 + 1, 256));
         }
         mmio_dump(uint32_t(mmio_guest_context->lr) - 0x40, 32);
+        // The loop is driven from further up: walk the guest stack (the back
+        // chain is at 0(r1), and functions save LR at -8 from the caller's
+        // frame) and dump the code before each return address.
+        uint32_t mmio_frame = uint32_t(mmio_guest_context->r[1]);
+        for (uint32_t mmio_depth = 0;
+             mmio_depth < 8 && mmio_frame && mmio_frame < 0xF0000000u;
+             ++mmio_depth) {
+          uint32_t mmio_caller_frame = xe::load_and_swap<uint32_t>(
+              mmio_guest_context->virtual_membase + mmio_frame);
+          if (!mmio_caller_frame || mmio_caller_frame <= mmio_frame) {
+            break;
+          }
+          uint32_t mmio_return = xe::load_and_swap<uint32_t>(
+              mmio_guest_context->virtual_membase + mmio_caller_frame - 8);
+          XELOGW("MMIO hang caller {}: frame {:08X} return {:08X}", mmio_depth,
+                 mmio_caller_frame, mmio_return);
+          if (mmio_depth < 4 && mmio_return >= 0x82000000u &&
+              mmio_return < 0x84000000u) {
+            mmio_dump(mmio_return - 0x80, 48);
+          }
+          mmio_frame = mmio_caller_frame;
+        }
       }
     }
 #endif  // XE_ARCH_ARM64

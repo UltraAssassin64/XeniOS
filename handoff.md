@@ -155,10 +155,34 @@ patched binutils (`third_party/binutils/build.sh`, then
 `powerpc-none-elf-objdump -D -b binary -m powerpc -EB -Mvmx128` on the words
 written to a file).
 
+Result on build #9552 (disassembled with the patched binutils):
+
+- `829FF858` (the function holding the store): for each of `count = obj[0]`
+  slots of 96 bytes at `obj[8]`, if `slot+0x40` holds no context it calls
+  `XMACreateContext(&slot[0x40])`, then `MmGetPhysicalAddress` on it,
+  stores `(phys - context_array_base) >> 6` (the context index) at
+  `slot+0x50`, and writes `1 << (index & 31)` to the clear register
+  `0x7FEA1A80 + (index >> 5) * 4`. Then sets bit 0x40000 in `obj[4]`.
+- `829FF920` (next function): for each slot with a context, calls
+  `XMAReleaseContext` and zeroes `slot+0x40`; clears that bit in `obj[4]`.
+- So nothing in these functions loops forever. Something above them keeps
+  calling create-then-release, and context 48 (the lowest free one) is
+  handed out each time. The caller is the next thing to find.
+
+Next build logs `MMIO hang caller <n>: frame … return …` for up to 8 guest
+stack frames and dumps the code before the first four return addresses.
+
 CPU tests on ARM64 (CI "CPU tests", macOS) after the shared-memory fix:
 249 of 249 HIR tests and 141,712 of 141,712 instruction cases pass. The
 earlier failures were all `FAILED SETUP` from shared-memory name clashes in
 the test harness on macOS (fixed in `memory_posix.cc`, macOS only).
+
+## JIT automation
+
+Settings > Automation has "Auto-Enable JIT via StikDebug" (stikjit://) and,
+since this session, "Auto-Enable JIT via TrollStore"
+(`apple-magnifier://enable-jit?bundle-id=<bundle ID>`). TrollStore is tried
+first when both are on. Not yet confirmed on the device.
 
 ## Performance (reported on build #9543, not yet investigated)
 
