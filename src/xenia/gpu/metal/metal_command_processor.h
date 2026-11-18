@@ -15,6 +15,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <deque>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -33,6 +34,7 @@
 #include "xenia/gpu/metal/metal_render_target_cache.h"
 #include "xenia/gpu/metal/metal_shared_memory.h"
 #include "xenia/gpu/metal/metal_texture_cache.h"
+#include "xenia/gpu/metal/metal_zpd_visibility_pool.h"
 #include "xenia/gpu/metal/msl_bindings.h"
 #include "xenia/gpu/metal/msl_shader.h"
 #include "xenia/gpu/spirv_shader_translator.h"
@@ -181,6 +183,9 @@ class MetalCommandProcessor : public CommandProcessor {
   bool CanEndSubmissionImmediately();
   void WaitForPendingCompletionHandlers();
   void ProcessCompletedSubmissions();
+  // occlusion_query_enable: writes the sample counts of guest occlusion
+  // queries whose command buffers completed.
+  void ProcessCompletedZPDQueries();
   bool EnsureDrawRingCapacity();
   void UseRenderEncoderAttachmentHeaps(MTL::RenderPassDescriptor* descriptor);
   void UseRenderEncoderHeap(MTL::Heap* heap);
@@ -449,6 +454,38 @@ class MetalCommandProcessor : public CommandProcessor {
   uint32_t current_render_area_height_ = 0;
   std::unordered_map<MTL::RenderPassDescriptor*, std::array<uint32_t, 4>>
       render_area_by_descriptor_;
+  // occlusion_query_enable (SPIRV-Cross path): guest occlusion queries
+  // (EVENT_WRITE_ZPD) counted with Metal visibility results. A query counts
+  // in one pool slot per render pass it spans; at its end the guest gets a
+  // guess at once (the last count at the same address, or 1), corrected when
+  // its command buffer completes unless the guest re-armed the address.
+  struct MetalZPDQuery {
+    // Guest report the count goes to, 0 for none.
+    uint32_t address = 0;
+    // The command buffer of its last segment.
+    uint64_t submission = 0;
+    // zpd_query_ends_ at its end, to correct only an address's latest query.
+    uint64_t ticket = 0;
+    // The count written at its end.
+    uint32_t guess = 0;
+    // A draw was skipped for a pending compile or found no slot: keep guess.
+    bool inexact = false;
+    // {index, generation} of each slot.
+    std::vector<std::pair<uint32_t, uint32_t>> slots;
+  };
+  MetalZPDVisibilityPool zpd_visibility_pool_;
+  // The current render encoder was created with the pool's buffer.
+  bool render_encoder_has_zpd_visibility_ = false;
+  // A query began and has not ended; a slot is counting in this encoder.
+  bool zpd_query_active_ = false;
+  bool zpd_segment_open_ = false;
+  MetalZPDQuery zpd_query_;
+  uint32_t zpd_compile_pending_at_begin_ = 0;
+  uint64_t zpd_query_ends_ = 0;
+  std::deque<MetalZPDQuery> zpd_queries_in_flight_;
+  // Per guest report address: {last count, ticket of its latest query}.
+  std::unordered_map<uint32_t, std::pair<uint32_t, uint64_t>>
+      zpd_results_by_address_;
   NS::AutoreleasePool* command_buffer_autorelease_pool_ = nullptr;
 
   // Tracks resources marked via useResource for the current render encoder

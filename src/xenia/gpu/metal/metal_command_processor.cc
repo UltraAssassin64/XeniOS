@@ -2019,6 +2019,11 @@ void MetalCommandProcessor::ShutdownContext() {
     current_command_buffer_ = nullptr;
   }
   DrainCommandBufferAutoreleasePool();
+  zpd_query_active_ = false;
+  zpd_segment_open_ = false;
+  render_encoder_has_zpd_visibility_ = false;
+  zpd_queries_in_flight_.clear();
+  zpd_visibility_pool_.Shutdown();
 
 #if METAL_SHADER_CONVERTER_AVAILABLE
   {
@@ -2789,7 +2794,7 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
           "Metal render area and queries over {} frames: draw passes limited "
           "{} of {} (average {} rows), restarted {}; transfer passes limited "
           "{} of {} (average {} rows); occlusion queries {:.1f} per frame "
-          "(faked as visible), {} query events",
+          "({}), {} query events",
           draw_stats_.frames, area_draw_limited, area_draw_passes,
           area_draw_limited ? area_draw_rows / area_draw_limited : 0,
           take(metal_perf_counters.render_area_restarts), area_transfer_limited,
@@ -2798,7 +2803,21 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
                                 : 0,
           double(take(metal_perf_counters.occlusion_queries)) /
               draw_stats_.frames,
+          cvars::occlusion_query_enable ? "counted" : "faked as visible",
           take(metal_perf_counters.occlusion_query_events));
+      if (cvars::occlusion_query_enable) {
+        XELOGI(
+            "Metal occlusion queries over {} frames: {} counted ({} with no "
+            "samples), {} guesses corrected, {} left as guesses (draws "
+            "skipped for compiles, or no free slot), {} draw passes restarted "
+            "to count, {} in flight",
+            draw_stats_.frames, take(metal_perf_counters.zpd_queries_measured),
+            take(metal_perf_counters.zpd_queries_hidden),
+            take(metal_perf_counters.zpd_queries_corrected),
+            take(metal_perf_counters.zpd_queries_guessed),
+            take(metal_perf_counters.zpd_pass_restarts),
+            zpd_queries_in_flight_.size());
+      }
     }
     metal_gpu_pass_timer.Log(draw_stats_.frames, metal_perf_window_us);
     metal_compile_stall_tracker.Log(draw_stats_.frames);
@@ -5570,6 +5589,24 @@ bool MetalCommandProcessor::IssueDrawMsl(
     bind_msl_samplers(msl_pixel_shader, pixel_translation, true);
   }
 
+  // occlusion_query_enable: count the draw's samples for the guest's query,
+  // in a slot of its own for each render pass.
+  if (zpd_query_active_ && !zpd_segment_open_ && !zpd_query_.inexact) {
+    uint32_t slot_index = 0;
+    uint32_t slot_generation = 0;
+    size_t slot_offset = 0;
+    if (render_encoder_has_zpd_visibility_ &&
+        zpd_visibility_pool_.Acquire(slot_index, slot_generation,
+                                     slot_offset)) {
+      current_render_encoder_->setVisibilityResultMode(
+          MTL::VisibilityResultModeCounting, NS::UInteger(slot_offset));
+      zpd_query_.slots.emplace_back(slot_index, slot_generation);
+      zpd_segment_open_ = true;
+    } else {
+      zpd_query_.inexact = true;
+    }
+  }
+
   // =====================================================================
   // Draw dispatch — native Metal encoder calls (no IRRuntime).
   // =====================================================================
@@ -6215,6 +6252,179 @@ void MetalCommandProcessor::ProcessCompletedSubmissions() {
   if (texture_cache_) {
     texture_cache_->CompletedSubmissionUpdated(completed);
   }
+  ProcessCompletedZPDQueries();
+}
+
+bool MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(uint32_t packet,
+                                                               uint32_t count) {
+  // D3D sets both ZPass lanes (ZFail in older versions, 4D5307D5) to
+  // 0xFFFFFEED before the event that ends a query, and waits for them to
+  // change. The report is little-endian.
+  const uint32_t kQueryFinished = xe::byte_swap(0xFFFFFEEDu);
+  const uint32_t sample_count_addr =
+      register_file_->values[XE_GPU_REG_RB_SAMPLE_COUNT_ADDR];
+  auto* sample_counts =
+      memory_->TranslatePhysical<xenos::xe_gpu_depth_sample_counts*>(
+          sample_count_addr);
+  const bool is_end =
+      sample_counts && ((sample_counts->ZPass_A == kQueryFinished &&
+                         sample_counts->ZPass_B == kQueryFinished) ||
+                        (sample_counts->ZFail_A == kQueryFinished &&
+                         sample_counts->ZFail_B == kQueryFinished));
+  metal_perf_counters.occlusion_query_events.fetch_add(
+      1, std::memory_order_relaxed);
+  if (is_end) {
+    metal_perf_counters.occlusion_queries.fetch_add(1,
+                                                    std::memory_order_relaxed);
+  }
+
+  if (zpd_segment_open_) {
+    // Disabled at the segment's own offset: the offset given is still written
+    // by the pass, so 0 would clear slot 0.
+    current_render_encoder_->setVisibilityResultMode(
+        MTL::VisibilityResultModeDisabled,
+        NS::UInteger(zpd_query_.slots.back().first) * sizeof(uint64_t));
+    zpd_segment_open_ = false;
+  }
+  const bool real_queries =
+      cvars::occlusion_query_enable && UseSpirvCrossPath() && sample_counts &&
+      zpd_visibility_pool_.EnsureInitialized(device_, 4096);
+  if (zpd_query_active_ && (!real_queries || !is_end)) {
+    // Abandoned (switched off, or begun again): its slots are only released.
+    zpd_query_active_ = false;
+    zpd_query_.address = 0;
+    zpd_query_.submission = submission_current_;
+    if (!zpd_query_.slots.empty()) {
+      zpd_queries_in_flight_.push_back(std::move(zpd_query_));
+    }
+  }
+  if (!real_queries) {
+    return CommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(packet, count);
+  }
+
+  assert_true(count == 1);
+  const uint32_t initiator = reader_.ReadAndSwap<uint32_t>();
+  WriteEventInitiator(initiator & 0x3F);
+  ProcessCompletedZPDQueries();
+  if (!is_end) {
+    // D3D subtracts the begin report from the end report.
+    std::memset(sample_counts, 0, sizeof(*sample_counts));
+    zpd_query_ = {};
+    zpd_query_active_ = true;
+    zpd_compile_pending_at_begin_ = draw_stats_.compile_pending;
+    return true;
+  }
+
+  MetalZPDQuery query;
+  if (zpd_query_active_) {
+    query = std::move(zpd_query_);
+    zpd_query_active_ = false;
+    if (draw_stats_.compile_pending != zpd_compile_pending_at_begin_) {
+      query.inexact = true;
+    }
+  } else {
+    query.inexact = true;
+  }
+  if (zpd_results_by_address_.size() >= 4096 &&
+      !zpd_results_by_address_.count(sample_count_addr)) {
+    zpd_results_by_address_.clear();
+  }
+  std::pair<uint32_t, uint64_t>& address_result =
+      zpd_results_by_address_[sample_count_addr];
+  query.address = sample_count_addr;
+  query.ticket = ++zpd_query_ends_;
+  address_result.second = query.ticket;
+  uint32_t samples = 0;
+  if (query.slots.empty() && !query.inexact) {
+    // Nothing was drawn: no samples, known now.
+    address_result.first = 0;
+    metal_perf_counters.zpd_queries_measured.fetch_add(
+        1, std::memory_order_relaxed);
+    metal_perf_counters.zpd_queries_hidden.fetch_add(1,
+                                                     std::memory_order_relaxed);
+  } else {
+    // Unknown until the GPU is done: guess the last count here, or visible.
+    samples = std::max<uint32_t>(address_result.first, 1);
+    query.guess = samples;
+    query.submission = submission_current_;
+    zpd_queries_in_flight_.push_back(std::move(query));
+  }
+  sample_counts->Total_A = samples;
+  sample_counts->Total_B = 0;
+  sample_counts->ZFail_A = 0;
+  sample_counts->ZFail_B = 0;
+  sample_counts->StencilFail_A = 0;
+  sample_counts->StencilFail_B = 0;
+  sample_counts->ZPass_B = 0;
+  // The lane D3D waits on, last.
+  std::atomic_thread_fence(std::memory_order_release);
+  sample_counts->ZPass_A = samples;
+  return true;
+}
+
+void MetalCommandProcessor::ProcessCompletedZPDQueries() {
+  if (zpd_queries_in_flight_.empty()) {
+    return;
+  }
+  const uint64_t completed = GetCompletedSubmission();
+  // The visibility results were copied before the command buffer completed.
+  std::atomic_thread_fence(std::memory_order_acquire);
+  const uint64_t scale_area =
+      texture_cache_ ? uint64_t(texture_cache_->draw_resolution_scale_x()) *
+                           texture_cache_->draw_resolution_scale_y()
+                     : 1;
+  while (!zpd_queries_in_flight_.empty() &&
+         zpd_queries_in_flight_.front().submission <= completed) {
+    const MetalZPDQuery& query = zpd_queries_in_flight_.front();
+    uint64_t samples = 0;
+    bool counted = !query.inexact;
+    for (const auto& [slot_index, slot_generation] : query.slots) {
+      uint64_t slot_samples = 0;
+      if (zpd_visibility_pool_.IsGenerationCurrent(slot_index,
+                                                   slot_generation) &&
+          zpd_visibility_pool_.Read(slot_index, slot_samples)) {
+        samples += slot_samples;
+      } else {
+        counted = false;
+      }
+      zpd_visibility_pool_.Release(slot_index, slot_generation);
+    }
+    if (query.address && !counted) {
+      metal_perf_counters.zpd_queries_guessed.fetch_add(
+          1, std::memory_order_relaxed);
+    } else if (query.address) {
+      if (scale_area > 1 && samples) {
+        samples =
+            std::max<uint64_t>(1, (samples + scale_area / 2) / scale_area);
+      }
+      const uint32_t count = uint32_t(std::min<uint64_t>(samples, UINT32_MAX));
+      metal_perf_counters.zpd_queries_measured.fetch_add(
+          1, std::memory_order_relaxed);
+      if (!count) {
+        metal_perf_counters.zpd_queries_hidden.fetch_add(
+            1, std::memory_order_relaxed);
+      }
+      auto address_result = zpd_results_by_address_.find(query.address);
+      if (address_result != zpd_results_by_address_.end()) {
+        address_result->second.first = count;
+        // Only over the guess of the address's latest query, if the guest
+        // has not written the address since (to begin another query).
+        auto* sample_counts =
+            memory_->TranslatePhysical<xenos::xe_gpu_depth_sample_counts*>(
+                query.address);
+        if (address_result->second.second == query.ticket &&
+            count != query.guess && sample_counts->ZPass_A == query.guess &&
+            sample_counts->Total_A == query.guess) {
+          sample_counts->Total_A = count;
+          std::atomic_thread_fence(std::memory_order_release);
+          sample_counts->ZPass_A = count;
+          metal_perf_counters.zpd_queries_corrected.fetch_add(
+              1, std::memory_order_relaxed);
+        }
+      }
+    }
+    zpd_queries_in_flight_.pop_front();
+  }
 }
 
 void MetalCommandProcessor::EnsureCommandBufferAutoreleasePool() {
@@ -6294,6 +6504,13 @@ void MetalCommandProcessor::EndRenderEncoder() {
     return;
   }
   current_render_encoder_->endEncoding();
+  if (render_encoder_has_zpd_visibility_) {
+    // Copies the pass's occlusion query results before the next pass resets
+    // them. A query still going resumes in a new slot in the next pass.
+    zpd_visibility_pool_.EndRenderPass(current_command_buffer_);
+    render_encoder_has_zpd_visibility_ = false;
+  }
+  zpd_segment_open_ = false;
   current_render_encoder_->release();
   current_render_encoder_ = nullptr;
   metal_gpu_pass_record_ = nullptr;
@@ -6415,6 +6632,17 @@ void MetalCommandProcessor::BeginCommandBuffer() {
       current_render_pass_descriptor_ != pass_descriptor) {
     EndRenderEncoder();
   }
+  // occlusion_query_enable: a query counts only in a render encoder created
+  // with the visibility buffer, so one created before the query began is
+  // restarted.
+  const bool zpd_pass = zpd_query_active_ && !zpd_query_.inexact &&
+                        zpd_visibility_pool_.is_initialized();
+  if (current_render_encoder_ && zpd_pass &&
+      !render_encoder_has_zpd_visibility_) {
+    EndRenderEncoder();
+    metal_perf_counters.zpd_pass_restarts.fetch_add(1,
+                                                    std::memory_order_relaxed);
+  }
   // A pass with a limited render area that the current draw needs more of is
   // restarted with a larger area (its attachments are loaded, see below).
   if (current_render_encoder_ && current_render_area_width_ &&
@@ -6476,6 +6704,10 @@ void MetalCommandProcessor::BeginCommandBuffer() {
       pass_descriptor->setRenderTargetWidth(area_width);
       pass_descriptor->setRenderTargetHeight(area_height);
     }
+    if (zpd_pass) {
+      pass_descriptor->setVisibilityResultBuffer(
+          zpd_visibility_pool_.visibility_buffer());
+    }
     // Note: renderCommandEncoder() returns an autoreleased object, we must
     // retain it.
     current_render_encoder_ = metal_gpu_pass_timer.RenderEncoder(
@@ -6486,6 +6718,11 @@ void MetalCommandProcessor::BeginCommandBuffer() {
       pass_descriptor->setRenderTargetWidth(0);
       pass_descriptor->setRenderTargetHeight(0);
     }
+    if (zpd_pass) {
+      pass_descriptor->setVisibilityResultBuffer(nullptr);
+    }
+    render_encoder_has_zpd_visibility_ =
+        zpd_pass && current_render_encoder_ != nullptr;
     current_render_area_width_ = current_render_encoder_ ? area_width : 0;
     current_render_area_height_ = current_render_encoder_ ? area_height : 0;
     if (render_area_needed_width_ && current_render_encoder_) {
@@ -10816,17 +11053,9 @@ void MetalCommandProcessor::UpdateSystemConstantValues(
 #endif  // METAL_SHADER_CONVERTER_AVAILABLE
 
 #define COMMAND_PROCESSOR MetalCommandProcessor
-// Counts the guest's occlusion queries for the perf log.
-#define XE_GPU_NOTE_FAKE_OCCLUSION_QUERY(query_ended)     \
-  do {                                                    \
-    metal_perf_counters.occlusion_query_events.fetch_add( \
-        1, std::memory_order_relaxed);                    \
-    if (query_ended) {                                    \
-      metal_perf_counters.occlusion_queries.fetch_add(    \
-          1, std::memory_order_relaxed);                  \
-    }                                                     \
-  } while (false)
+#define XE_GPU_OVERRIDES_EVENT_WRITE_ZPD
 #include "../pm4_command_processor_implement.h"
+#undef XE_GPU_OVERRIDES_EVENT_WRITE_ZPD
 #undef COMMAND_PROCESSOR
 
 }  // namespace metal

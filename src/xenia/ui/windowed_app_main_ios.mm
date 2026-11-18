@@ -3597,6 +3597,12 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "shader, for games using float depth: fixes striped or flickering surfaces "
                  "drawn in several passes, at some GPU cost.",
                  false);
+  AddBoolSetting(accuracy.items, "occlusion_query_enable", "Real Occlusion Queries",
+                 "Experimental. Counts what the game's visibility tests really draw "
+                 "instead of reporting everything as visible, so hidden characters and "
+                 "objects can be skipped and glows fade as on console. Turn off if "
+                 "objects pop in and out or effects flicker.",
+                 false);
   if (!accuracy.items.empty()) {
     sections.push_back(std::move(accuracy));
   }

@@ -1186,9 +1186,6 @@ bool COMMAND_PROCESSOR::ExecutePacketType3_EVENT_WRITE_ZPD(
     pSampleCounts->ZPass_A = samples;
     pSampleCounts->Total_A = samples;
   }
-#if defined(XE_GPU_NOTE_FAKE_OCCLUSION_QUERY)
-  XE_GPU_NOTE_FAKE_OCCLUSION_QUERY(is_end_via_z_pass || is_end_via_z_fail);
-#endif
 
   samples =
       samples <= static_cast<uint32_t>(

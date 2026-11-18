@@ -55,9 +55,17 @@ struct MetalPerfCounters {
   std::atomic<uint64_t> render_area_transfer_limited{0};
   std::atomic<uint64_t> render_area_transfer_rows{0};
   // Guest occlusion queries (EVENT_WRITE_ZPD): every event, and the query
-  // ends, which get a made-up sample count.
+  // ends.
   std::atomic<uint64_t> occlusion_query_events{0};
   std::atomic<uint64_t> occlusion_queries{0};
+  // occlusion_query_enable: query ends given a counted result, of which with
+  // no samples and replacing the guess written at the end, query ends left
+  // with the guess, and draw passes restarted to count in.
+  std::atomic<uint64_t> zpd_queries_measured{0};
+  std::atomic<uint64_t> zpd_queries_hidden{0};
+  std::atomic<uint64_t> zpd_queries_corrected{0};
+  std::atomic<uint64_t> zpd_queries_guessed{0};
+  std::atomic<uint64_t> zpd_pass_restarts{0};
   // Guest memory copied into the GPU's shared memory buffer.
   std::atomic<uint64_t> upload_bytes{0};
 };
