@@ -961,6 +961,11 @@ Changes for the next build:
   (target and sources), occlusion queries, per-frame totals. Raw register
   values are logged; decode them offline with registers.h.
 - 198fb502 (docs only): rows for the CPU test build script, stale CI rows.
+- 028920a8: the iOS build of af206569 (run 44336513400, attempt 7) failed
+  to link: new Metal sources must be listed in
+  `src/xenia/gpu/metal/premake5.lua` (it does not collect the folder);
+  `metal_zpd_visibility_pool.cc/.h` added there. Merged the owner's
+  comment-only commit 1274515a (pushed to start CI) as d27a059a.
 
 Test plan sent to the owner: default run (title screen, then gameplay) for
 the uniform line; same with Real Occlusion Queries on (FPS near the NPCs,
