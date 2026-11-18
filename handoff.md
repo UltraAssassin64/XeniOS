@@ -1017,6 +1017,8 @@ Changes for the next build:
 - 1ff32888: metal_log_shader_hashes: listed shaders' microcode disassembly
   and MSL logged at translation ("Shader log"), and their float constants
   per draw in the frame detail log.
+Build #9611 (`xenios_ios_arm64_0.2.9-9611`, 1ff32888, run 44391308505)
+built on the first attempt and has all three.
 Next candidates: recognize UE3's 4x-alias clear draws (full-target depth
 write, always pass) and skip transferring the old contents into the alias
 (~25 ms of transfers per frame in gameplay, ~27 ms on the title screen);
