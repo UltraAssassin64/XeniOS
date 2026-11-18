@@ -1059,6 +1059,13 @@ Changes for the next build:
 - c13223b5: "Frame detail resolve probe": during a capture, each depth
   resolve is sampled on a 16-wide grid (tiled addressing) once its command
   buffer completes.
+Build #9615 (`xenios_ios_arm64_0.2.9-9615`, c13223b5, run 44420063578)
+built on the first attempt and has both.
+Owner's two more 9611 runs (zip "9611-2"): every captured frame has the
+same shadow structure (one restore, 9-10 shadows each with resolve,
+volume and projection). Frame time hardly follows the draw count (765
+draws: 42-45 ms, GPU 112%): ~270 GPU passes per frame, rt transfers
+33 ms, draws 18 ms; about half of the transfer time is pass overhead.
 Next candidates: the 4x-alias stencil/depth clears cost two full depth
 transfers each (~40 per frame); every resolve in a draw command buffer
 commits it (~33 command buffers per frame); query reappearance latency.
