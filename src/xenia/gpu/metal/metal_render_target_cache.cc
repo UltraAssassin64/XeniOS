@@ -28,6 +28,7 @@
 #include "xenia/gpu/draw_util.h"
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/metal/metal_heap_pool.h"
+#include "xenia/gpu/metal/metal_perf_counters.h"
 #include "xenia/gpu/metal/metal_texture_cache.h"
 #include "xenia/gpu/shaders/bytecode/metal/host_depth_store_1xmsaa_cs.h"
 #include "xenia/gpu/shaders/bytecode/metal/host_depth_store_2xmsaa_cs.h"
@@ -3312,7 +3313,7 @@ void MetalRenderTargetCache::RestoreEdramSnapshot(const void* snapshot) {
                        MTL::Origin::Make(0, 0, 0));
   blit->endEncoding();
   cmd->commit();
-  cmd->waitUntilCompleted();
+  WaitUntilCompletedCounted(cmd);
   // cmd is autoreleased from commandBuffer() - do not release
   staging->release();
   if (metal_rt->needs_initial_clear()) {
@@ -4311,7 +4312,7 @@ void MetalRenderTargetCache::DumpRenderTargets(
   encoder->endEncoding();
   if (owns_command_buffer) {
     cmd->commit();
-    cmd->waitUntilCompleted();
+    WaitUntilCompletedCounted(cmd);
   }
   // cmd is autoreleased from commandBuffer() - do not release
 }
@@ -4866,7 +4867,7 @@ bool MetalRenderTargetCache::Resolve(Memory& memory, uint32_t& written_address,
             encoder->endEncoding();
             if (owns_command_buffer) {
               cmd->commit();
-              cmd->waitUntilCompleted();
+              WaitUntilCompletedCounted(cmd);
             }
             // cmd is autoreleased from commandBuffer() - do not release
 

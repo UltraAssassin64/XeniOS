@@ -44,6 +44,7 @@
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/graphics_system.h"
 #include "xenia/gpu/metal/metal_graphics_system.h"
+#include "xenia/gpu/metal/metal_perf_counters.h"
 #include "xenia/gpu/metal/metal_shader_cache.h"
 #include "xenia/gpu/packet_disassembler.h"
 #include "xenia/gpu/registers.h"
@@ -72,6 +73,14 @@ using BYTE = uint8_t;
 #define IR_RUNTIME_METALCPP
 #include "third_party/metal-shader-converter/include/metal_irconverter_runtime.h"
 #endif  // METAL_SHADER_CONVERTER_AVAILABLE
+
+#if XE_PLATFORM_APPLE
+#include <mach/mach.h>
+#include <unordered_map>
+#endif  // XE_PLATFORM_APPLE
+#if XE_PLATFORM_IOS
+#include <os/proc.h>
+#endif  // XE_PLATFORM_IOS
 
 #ifndef DISPATCH_DATA_DESTRUCTOR_NONE
 #define DISPATCH_DATA_DESTRUCTOR_NONE DISPATCH_DATA_DESTRUCTOR_DEFAULT
@@ -502,6 +511,89 @@ MTL::BlendFactor ToMetalBlendFactorAlpha(xenos::BlendFactor blend_factor) {
   return kBlendFactorAlphaMap[uint32_t(blend_factor) & 0x1F];
 }
 
+// Performance diagnostics: host CPU time of every thread in the process
+// since the previous call, as a share of window_us of wall time, busiest
+// first. Each entry is "name#id/priority=percent" (thread name, low bits of
+// the system thread ID, current host scheduling priority). The first call
+// counts each thread's whole life so far.
+std::string MetalPerfThreadCpu(uint64_t window_us) {
+  std::string metal_perf_text;
+#if XE_PLATFORM_APPLE
+  static std::unordered_map<uint64_t, uint64_t> metal_perf_previous_ns;
+  std::unordered_map<uint64_t, uint64_t> metal_perf_current_ns;
+  std::vector<std::pair<uint64_t, std::string>> metal_perf_threads;
+  thread_act_array_t metal_perf_list = nullptr;
+  mach_msg_type_number_t metal_perf_count = 0;
+  if (task_threads(mach_task_self(), &metal_perf_list, &metal_perf_count) !=
+      KERN_SUCCESS) {
+    return " unavailable";
+  }
+  uint64_t metal_perf_total_ns = 0;
+  for (mach_msg_type_number_t metal_perf_index = 0;
+       metal_perf_index < metal_perf_count; ++metal_perf_index) {
+    thread_identifier_info_data_t metal_perf_identifier;
+    mach_msg_type_number_t metal_perf_info_count = THREAD_IDENTIFIER_INFO_COUNT;
+    thread_extended_info_data_t metal_perf_extended;
+    mach_msg_type_number_t metal_perf_extended_count =
+        THREAD_EXTENDED_INFO_COUNT;
+    if (thread_info(metal_perf_list[metal_perf_index], THREAD_IDENTIFIER_INFO,
+                    reinterpret_cast<thread_info_t>(&metal_perf_identifier),
+                    &metal_perf_info_count) == KERN_SUCCESS &&
+        thread_info(metal_perf_list[metal_perf_index], THREAD_EXTENDED_INFO,
+                    reinterpret_cast<thread_info_t>(&metal_perf_extended),
+                    &metal_perf_extended_count) == KERN_SUCCESS) {
+      const uint64_t metal_perf_ns = metal_perf_extended.pth_user_time +
+                                     metal_perf_extended.pth_system_time;
+      metal_perf_current_ns[metal_perf_identifier.thread_id] = metal_perf_ns;
+      auto metal_perf_previous =
+          metal_perf_previous_ns.find(metal_perf_identifier.thread_id);
+      const uint64_t metal_perf_delta =
+          metal_perf_previous != metal_perf_previous_ns.end()
+              ? metal_perf_ns -
+                    std::min(metal_perf_ns, metal_perf_previous->second)
+              : metal_perf_ns;
+      metal_perf_total_ns += metal_perf_delta;
+      if (metal_perf_delta) {
+        metal_perf_extended.pth_name[sizeof(metal_perf_extended.pth_name) - 1] =
+            '\0';
+        metal_perf_threads.emplace_back(
+            metal_perf_delta,
+            fmt::format("{}#{:X}/{}",
+                        metal_perf_extended.pth_name[0]
+                            ? metal_perf_extended.pth_name
+                            : "?",
+                        metal_perf_identifier.thread_id & 0xFFFF,
+                        metal_perf_extended.pth_curpri));
+      }
+    }
+    mach_port_deallocate(mach_task_self(), metal_perf_list[metal_perf_index]);
+  }
+  vm_deallocate(mach_task_self(), vm_address_t(metal_perf_list),
+                metal_perf_count * sizeof(thread_act_t));
+  metal_perf_previous_ns.swap(metal_perf_current_ns);
+  std::sort(metal_perf_threads.begin(), metal_perf_threads.end(),
+            [](const auto& metal_perf_left, const auto& metal_perf_right) {
+              return metal_perf_left.first > metal_perf_right.first;
+            });
+  const double metal_perf_window_ns =
+      double(std::max<uint64_t>(window_us, 1)) * 1000.0;
+  metal_perf_text = fmt::format(
+      " total {:.0f}% of one core, {} threads;",
+      metal_perf_total_ns * 100.0 / metal_perf_window_ns, metal_perf_count);
+  for (size_t metal_perf_index = 0;
+       metal_perf_index < std::min<size_t>(metal_perf_threads.size(), 16);
+       ++metal_perf_index) {
+    metal_perf_text +=
+        fmt::format(" {}={:.0f}%", metal_perf_threads[metal_perf_index].second,
+                    metal_perf_threads[metal_perf_index].first * 100.0 /
+                        metal_perf_window_ns);
+  }
+#else
+  metal_perf_text = " unavailable";
+#endif  // XE_PLATFORM_APPLE
+  return metal_perf_text;
+}
+
 }  // namespace
 
 MetalCommandProcessor::MetalCommandProcessor(
@@ -901,8 +993,13 @@ MTL::RenderPipelineState* MetalCommandProcessor::CreateMslPipelineState(
 #endif  // METAL_SHADER_CONVERTER_AVAILABLE
 
   NS::Error* error = nullptr;
+  const auto pipeline_compile_begin = std::chrono::steady_clock::now();
   MTL::RenderPipelineState* pipeline =
       device_->newRenderPipelineState(desc, &error);
+  metal_perf_counters.pipeline_compiles.fetch_add(1, std::memory_order_relaxed);
+  metal_perf_counters.pipeline_compile_us.fetch_add(
+      MetalPerfMicrosecondsSince(pipeline_compile_begin),
+      std::memory_order_relaxed);
   desc->release();
 
   if (!pipeline && error_out && error) {
@@ -1737,7 +1834,7 @@ void MetalCommandProcessor::PrepareForWait() {
       wait_shared_event_->waitUntilSignaledValue(
           wait_value, std::numeric_limits<uint64_t>::max());
     } else {
-      current_command_buffer_->waitUntilCompleted();
+      WaitUntilCompletedCounted(current_command_buffer_);
     }
     current_command_buffer_->release();
     current_command_buffer_ = nullptr;
@@ -1770,7 +1867,7 @@ void MetalCommandProcessor::PrepareForWait() {
         wait_shared_event_->waitUntilSignaledValue(
             wait_value, std::numeric_limits<uint64_t>::max());
       } else {
-        sync_cmd->waitUntilCompleted();
+        WaitUntilCompletedCounted(sync_cmd);
       }
       // Don't release - it's autoreleased and will be cleaned up by the pool
     }
@@ -1824,7 +1921,7 @@ void MetalCommandProcessor::ShutdownContext() {
       wait_shared_event_->waitUntilSignaledValue(
           wait_value, std::numeric_limits<uint64_t>::max());
     } else {
-      current_command_buffer_->waitUntilCompleted();
+      WaitUntilCompletedCounted(current_command_buffer_);
     }
     current_command_buffer_->release();
     current_command_buffer_ = nullptr;
@@ -1853,7 +1950,7 @@ void MetalCommandProcessor::ShutdownContext() {
         wait_shared_event_->waitUntilSignaledValue(
             wait_value, std::numeric_limits<uint64_t>::max());
       } else {
-        sync_cmd->waitUntilCompleted();
+        WaitUntilCompletedCounted(sync_cmd);
       }
     }
     pool->release();
@@ -2522,6 +2619,20 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
                                       uint32_t frontbuffer_width,
                                       uint32_t frontbuffer_height) {
   ProcessCompletedSubmissions();
+  // Host time between guest swaps, for the perf line below.
+  const auto metal_perf_swap_time = std::chrono::steady_clock::now();
+  if (metal_perf_last_swap_.time_since_epoch().count()) {
+    const uint64_t metal_perf_frame_us =
+        uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(
+                     metal_perf_swap_time - metal_perf_last_swap_)
+                     .count());
+    draw_stats_.frame_us_total += metal_perf_frame_us;
+    draw_stats_.frame_us_max =
+        std::max(draw_stats_.frame_us_max, metal_perf_frame_us);
+    draw_stats_.frames_over_33ms += metal_perf_frame_us > 33333;
+    draw_stats_.frames_over_50ms += metal_perf_frame_us > 50000;
+  }
+  metal_perf_last_swap_ = metal_perf_swap_time;
   if (++draw_stats_.frames >= kDrawStatsFrames) {
     // "other" is every draw that left the draw path for a reason not counted
     // separately (errors are logged where they happen).
@@ -2536,6 +2647,58 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
             draw_stats_.no_vertices - draw_stats_.compile_pending -
             draw_stats_.encoded,
         draw_stats_.encoded_vertices);
+    // Performance diagnostics for the same window.
+    uint64_t metal_perf_footprint_mb = 0;
+#if XE_PLATFORM_APPLE
+    task_vm_info_data_t metal_perf_vm_info;
+    mach_msg_type_number_t metal_perf_vm_count = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO,
+                  reinterpret_cast<task_info_t>(&metal_perf_vm_info),
+                  &metal_perf_vm_count) == KERN_SUCCESS) {
+      metal_perf_footprint_mb = metal_perf_vm_info.phys_footprint >> 20;
+    }
+#endif  // XE_PLATFORM_APPLE
+    uint64_t metal_perf_available_mb = 0;
+#if XE_PLATFORM_IOS
+    metal_perf_available_mb = uint64_t(os_proc_available_memory()) >> 20;
+#endif  // XE_PLATFORM_IOS
+    const uint64_t metal_perf_window_us =
+        std::max<uint64_t>(draw_stats_.frame_us_total, 1);
+    const uint64_t metal_perf_gpu_us =
+        metal_perf_counters.gpu_us.exchange(0, std::memory_order_relaxed);
+    XELOGI(
+        "Metal perf over {} frames: frame avg {:.1f} ms, max {:.1f} ms, {} "
+        "over 33 ms, {} over 50 ms; GPU busy {:.0f} ms in {} command buffers "
+        "({:.0f}% of the time); CPU blocked on GPU {} times, {:.1f} ms; "
+        "shaders compiled {} ({:.0f} ms), pipelines created {} ({:.0f} ms); "
+        "uploaded {:.1f} MB; memory footprint {} MB, available {} MB; "
+        "thermal state {}",
+        draw_stats_.frames,
+        draw_stats_.frame_us_total / 1000.0 / draw_stats_.frames,
+        draw_stats_.frame_us_max / 1000.0, draw_stats_.frames_over_33ms,
+        draw_stats_.frames_over_50ms, metal_perf_gpu_us / 1000.0,
+        metal_perf_counters.gpu_command_buffers.exchange(
+            0, std::memory_order_relaxed),
+        metal_perf_gpu_us * 100.0 / metal_perf_window_us,
+        metal_perf_counters.cpu_waits.exchange(0, std::memory_order_relaxed),
+        metal_perf_counters.cpu_wait_us.exchange(0, std::memory_order_relaxed) /
+            1000.0,
+        metal_perf_counters.shader_compiles.exchange(0,
+                                                     std::memory_order_relaxed),
+        metal_perf_counters.shader_compile_us.exchange(
+            0, std::memory_order_relaxed) /
+            1000.0,
+        metal_perf_counters.pipeline_compiles.exchange(
+            0, std::memory_order_relaxed),
+        metal_perf_counters.pipeline_compile_us.exchange(
+            0, std::memory_order_relaxed) /
+            1000.0,
+        metal_perf_counters.upload_bytes.exchange(0,
+                                                  std::memory_order_relaxed) /
+            1048576.0,
+        metal_perf_footprint_mb, metal_perf_available_mb,
+        uint32_t(NS::ProcessInfo::processInfo()->thermalState()));
+    XELOGI("Metal perf threads:{}", MetalPerfThreadCpu(metal_perf_window_us));
     draw_stats_ = {};
   }
   saw_swap_ = true;
@@ -5818,10 +5981,20 @@ MTL::CommandBuffer* MetalCommandProcessor::EnsureCommandBuffer() {
 
   ++submission_current_;
   pending_completion_handlers_.fetch_add(1, std::memory_order_relaxed);
-  current_command_buffer_->addCompletedHandler([this](MTL::CommandBuffer*) {
-    completed_command_buffers_.fetch_add(1, std::memory_order_relaxed);
-    pending_completion_handlers_.fetch_sub(1, std::memory_order_relaxed);
-  });
+  current_command_buffer_->addCompletedHandler(
+      [this](MTL::CommandBuffer* completed_buffer) {
+        completed_command_buffers_.fetch_add(1, std::memory_order_relaxed);
+        const double metal_perf_gpu_seconds =
+            completed_buffer->GPUEndTime() - completed_buffer->GPUStartTime();
+        if (metal_perf_gpu_seconds > 0.0) {
+          metal_perf_counters.gpu_us.fetch_add(
+              uint64_t(metal_perf_gpu_seconds * 1e6),
+              std::memory_order_relaxed);
+        }
+        metal_perf_counters.gpu_command_buffers.fetch_add(
+            1, std::memory_order_relaxed);
+        pending_completion_handlers_.fetch_sub(1, std::memory_order_relaxed);
+      });
 
   if (primitive_processor_) {
     primitive_processor_->BeginSubmission();
@@ -7193,7 +7366,12 @@ MTL::RenderPipelineState* MetalCommandProcessor::GetOrCreatePipelineState(
   // Create pipeline state
   NS::Error* error = nullptr;
   MTL::RenderPipelineState* pipeline = nullptr;
+  const auto pipeline_compile_begin = std::chrono::steady_clock::now();
   pipeline = device_->newRenderPipelineState(desc, &error);
+  metal_perf_counters.pipeline_compiles.fetch_add(1, std::memory_order_relaxed);
+  metal_perf_counters.pipeline_compile_us.fetch_add(
+      MetalPerfMicrosecondsSince(pipeline_compile_begin),
+      std::memory_order_relaxed);
   desc->release();
 
   if (!pipeline) {

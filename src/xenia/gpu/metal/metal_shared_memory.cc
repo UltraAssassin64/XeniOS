@@ -8,6 +8,7 @@
  */
 
 #include "xenia/gpu/metal/metal_shared_memory.h"
+#include "xenia/gpu/metal/metal_perf_counters.h"
 
 #include "xenia/base/logging.h"
 #include "xenia/base/memory.h"
@@ -137,6 +138,8 @@ bool MetalSharedMemory::UploadRanges(
     }
     uint32_t length = end - start;
     MakeRangeValid(start, length, false);
+    metal_perf_counters.upload_bytes.fetch_add(length,
+                                               std::memory_order_relaxed);
     if (!use_zero_copy_) {
       memcpy(buffer_data + start, xbox_data + start, length);
     }

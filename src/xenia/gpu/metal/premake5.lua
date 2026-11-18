@@ -47,6 +47,7 @@ project("xenia-gpu-metal")
       "metal_graphics_system.h",
       "metal_heap_pool.cc",
       "metal_heap_pool.h",
+      "metal_perf_counters.h",
       "metal_primitive_processor.cc",
       "metal_primitive_processor.h",
       "metal_render_target_cache.cc",

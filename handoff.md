@@ -518,6 +518,58 @@ first when both are on. Not yet confirmed on the device.
 
 ## Performance (reported on build #9543, not yet investigated)
 
+### Findings on build #9568 (three runs into gameplay, 2026-11-18)
+
+- Gameplay: about 3,500 draws and 3.5 million vertices per frame (draw
+  stats: issued 420,000-444,000 per 120 frames).
+- **The textures blacking out on the way to the over-the-shoulder camera
+  are skipped draws.** In that window `compile_pending=125160` of 387,919
+  draws: a third of all draws were dropped because their shader or
+  pipeline was still compiling. The SPIR-V path skips a draw rather than
+  wait for its pipeline, so objects disappear until compilation finishes.
+  Same place in runs 2 and 3, because the same shaders are compiled again.
+- **Shaders are recompiled every run.** 326-376 `MslShader: Compile
+  timings` warnings per run (only compiles of 100 ms or more, or large
+  SPIR-V, are warnings), typically `metal-library` 50-90 ms each.
+  `metal_shader_disk_cache` caches only the MSL source (skips the ~5 ms
+  SPIRV-Cross step); `newLibraryWithSource` runs every time. The
+  `pipeline_binary_archive_` (MTLBinaryArchive) is only fed in the MSC
+  path and `CreateMslPipelineState`; whether it is used and reloaded on
+  iOS needs checking.
+- Known CPU costs not yet measured: VEC128 context promotion off, inline
+  MMIO checks on every store, 11 `waitUntilCompleted` sites, job threads
+  spinning on zero-length KeDelayExecutionThread (`MaybeYield`).
+
+Diagnostics added (commit "[GPU] Log frame, GPU, wait, compile, memory and
+per-thread CPU numbers"), printed with the draw stats every 120 frames:
+- `Metal perf over N frames:` frame time avg/max and frames over 33/50 ms
+  (host time between guest swaps); GPU busy time and command buffers
+  (GPUEndTime - GPUStartTime of every submission); CPU blocked on GPU
+  (all `waitUntilCompleted` in the Metal GPU code now go through
+  `WaitUntilCompletedCounted`); shaders compiled and pipelines created
+  with their time; MB uploaded into shared memory; process footprint and
+  `os_proc_available_memory`; `NSProcessInfo.thermalState` (0 nominal ...
+  3 critical).
+- `Metal perf threads:` every thread's CPU share in the window (task_threads
+  + THREAD_EXTENDED_INFO), busiest 16 with name, low system thread ID and
+  host priority, plus the total in "% of one core".
+- Metal HUD: commit "[iOS] Ask for the Metal performance HUD in code as
+  well" (MTL_HUD_ENABLED env at main, layer developerHUDProperties).
+
+Ideas to discuss with the owner (not started):
+1. Cache compiled shaders across runs: MTLBinaryArchive for SPIR-V-path
+   pipelines (iOS 14+), or compiling libraries with
+   `MTLCompileOptions` and keeping a per-shader archive; check what
+   XeniOS HEAD does here first (standing rule 10).
+2. Choose skip vs wait for pipelines still compiling: skipping causes the
+   blackouts, waiting causes hitches; a short bounded wait is a middle
+   ground.
+3. Precompile at boot from the shader cache list of the last run.
+4. Reduce `waitUntilCompleted` stalls (owed item above).
+5. Revisit VEC128 context promotion and the inline MMIO default once the
+   MMIO fault fix is confirmed.
+
+
 Very slow, with flickering. Known contributors: about 1.06 million vertices
 and 290 to 360 draws per frame on the title screen; vector register
 promotion now off; the GPU probes re-drew the first 16 multisampled draws
@@ -577,6 +629,23 @@ request and has not been confirmed to work on iOS 16.
   when doing so.
 
 ### Owed once the threading hangs are resolved (owner's request, 2026-11-18)
+
+**Status (build after #9568):** both done, not yet tested on device.
+1. Thread handle leak: commit "[Kernel] Release the handle of exited
+   threads on iOS" (`XE_PLATFORM_APPLE` in `XThread::Create`'s and
+   `Terminate`'s guards, matching XeniOS). The join-outside-the-lock
+   rewrite was not ported.
+2. MMIO fault resume: commit "[Base] Keep the resume PC set by iOS fault
+   handlers". Root cause: `exception_handler_mac.cc` memcpy'd its aligned
+   `ucontext_t` copy back over the signal context after the handlers ran.
+   With `_XOPEN_SOURCE`, `ucontext_t` includes `__mcontext_data`, a copy of
+   the registers taken before the handlers ran, so the copy back undid the
+   new PC. XeniOS and xenia-edge copy in but never back. The owner should
+   test once with `emit_inline_mmio_checks` off; if the store loop is gone,
+   the inline default could be revisited (it costs a check per store).
+   Unhandled faults now log the first ten and then one per million.
+
+Original notes:
 
 Both are held so they are not tested at the same time as the thread start
 fix. Compare against both upstreams (standing rule 10).

@@ -548,8 +548,14 @@ class MetalCommandProcessor : public CommandProcessor {
     uint32_t compile_pending = 0;   // Shader or pipeline still compiling.
     uint32_t encoded = 0;           // Reached a Metal draw call.
     uint64_t encoded_vertices = 0;
+    // Host time between guest swaps (performance diagnostics).
+    uint64_t frame_us_total = 0;
+    uint64_t frame_us_max = 0;
+    uint32_t frames_over_33ms = 0;
+    uint32_t frames_over_50ms = 0;
   };
   DrawStats draw_stats_;
+  std::chrono::steady_clock::time_point metal_perf_last_swap_{};
   std::unordered_map<uint64_t, MTL::RenderPipelineState*> msl_pipeline_cache_;
 
   // SPIRV-Cross tessellation support.

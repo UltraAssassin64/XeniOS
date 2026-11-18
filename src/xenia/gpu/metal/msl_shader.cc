@@ -30,6 +30,7 @@
 #include "xenia/base/filesystem.h"
 #include "xenia/base/logging.h"
 #include "xenia/gpu/gpu_flags.h"
+#include "xenia/gpu/metal/metal_perf_counters.h"
 #include "xenia/gpu/metal/msl_bindings.h"
 
 DEFINE_bool(
@@ -1407,6 +1408,9 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
 
   const double total_compile_ms =
       to_ms(std::chrono::steady_clock::now() - compile_begin);
+  metal_perf_counters.shader_compiles.fetch_add(1, std::memory_order_relaxed);
+  metal_perf_counters.shader_compile_us.fetch_add(
+      uint64_t(total_compile_ms * 1000.0), std::memory_order_relaxed);
   if (total_compile_ms >= 100.0 || spirv_size_bytes >= 64 * 1024) {
     XELOGW(
         "MslShader: Compile timings shader={:016X} stage={} spirv={}B "
