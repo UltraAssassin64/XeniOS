@@ -286,6 +286,8 @@ void SpirvShaderTranslator::Reset() {
   main_rect_list_loop_vertex_index_next_ = spv::NoResult;
   var_main_kill_pixel_ = spv::NoResult;
   var_main_fsi_color_written_ = spv::NoResult;
+  output_or_var_fragment_depth_ = spv::NoResult;
+  output_fragment_depth_ = spv::NoResult;
   std::fill(output_fragment_data_.begin(), output_fragment_data_.end(),
             spv::NoResult);
 
@@ -3098,16 +3100,17 @@ void SpirvShaderTranslator::StartFragmentShaderBeforeMain() {
 
   // Depth output.
   output_or_var_fragment_depth_ = spv::NoResult;
+  output_fragment_depth_ = spv::NoResult;
   if (current_shader().writes_depth()) {
     if (!edram_fragment_shader_interlock_) {
-      // Create gl_FragDepth output.
-      output_or_var_fragment_depth_ =
+      // Create gl_FragDepth output, written from the oDepth variable at the
+      // end of the shader.
+      output_fragment_depth_ =
           builder_->createVariable(spv::NoPrecision, spv::StorageClassOutput,
                                    type_float_, "gl_FragDepth");
-      builder_->addDecoration(output_or_var_fragment_depth_,
-                              spv::DecorationBuiltIn,
+      builder_->addDecoration(output_fragment_depth_, spv::DecorationBuiltIn,
                               static_cast<int>(spv::BuiltIn::FragDepth));
-      main_interface_.push_back(output_or_var_fragment_depth_);
+      main_interface_.push_back(output_fragment_depth_);
     }
   }
 
@@ -3187,8 +3190,10 @@ void SpirvShaderTranslator::StartFragmentShaderInMain() {
         "xe_var_color_written", const_uint_0_);
   }
 
-  if (edram_fragment_shader_interlock_) {
-    // Initialize depth output variable with fragment shader interlock.
+  if (edram_fragment_shader_interlock_ ||
+      output_fragment_depth_ != spv::NoResult) {
+    // The guest oDepth, for the EDRAM with fragment shader interlock, or for
+    // gl_FragDepth at the end of the shader.
     output_or_var_fragment_depth_ = spv::NoResult;
     if (current_shader().writes_depth()) {
       output_or_var_fragment_depth_ = builder_->createVariable(

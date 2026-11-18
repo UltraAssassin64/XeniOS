@@ -1027,10 +1027,12 @@ class SpirvShaderTranslator : public ShaderTranslator {
   // output_or_var_fragment_data_.
   std::array<spv::Id, xenos::kMaxColorRenderTargets> output_fragment_data_;
 
-  // Fragment shader depth output (gl_FragDepth).
-  // With fragment shader interlock, a variable in the main function.
-  // Otherwise, the depth output (only created if shader writes depth).
+  // Guest oDepth, a variable in the main function (only created if the shader
+  // writes depth). With fragment shader interlock, written to the EDRAM;
+  // otherwise copied to output_fragment_depth_ at the end of the shader.
   spv::Id output_or_var_fragment_depth_;
+  // gl_FragDepth for host render targets (only if the shader writes depth).
+  spv::Id output_fragment_depth_;
 
   // Fragment shader sample mask output (gl_SampleMask).
   // Only used for alpha-to-coverage in non-FSI mode.

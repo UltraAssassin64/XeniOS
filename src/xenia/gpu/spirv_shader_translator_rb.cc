@@ -1501,6 +1501,30 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
 
     builder_->createNoResultOp(spv::OpEndInvocationInterlockEXT);
   }
+
+  if (output_fragment_depth_ != spv::NoResult) {
+    // Host render targets keep float24 (D24FS8) depth at half the guest value
+    // (draw_util full_float24_in_0_to_1: the viewport maps rasterized depth
+    // to 0...0.5), so the 0...2 range of 20e4 survives transfers. The guest's
+    // oDepth must be halved the same way, or depth a shader writes (such as
+    // Unreal Engine 3 restoring the scene depth from a texture) is twice what
+    // everything else stores (as upstream XeniOS's
+    // CompleteFragmentShader_DSV_DepthTo24Bit does).
+    spv::Id depth =
+        builder_->createLoad(output_or_var_fragment_depth_, spv::NoPrecision);
+    spv::Id depth_is_float24 = builder_->createBinOp(
+        spv::OpINotEqual, type_bool_,
+        builder_->createBinOp(
+            spv::OpBitwiseAnd, type_uint_, main_system_constant_flags_,
+            builder_->makeUintConstant(kSysFlag_DepthFloat24)),
+        const_uint_0_);
+    depth = builder_->createTriOp(
+        spv::OpSelect, type_float_, depth_is_float24,
+        builder_->createBinOp(spv::OpFMul, type_float_, depth,
+                              builder_->makeFloatConstant(0.5f)),
+        depth);
+    builder_->createStore(depth, output_fragment_depth_);
+  }
 }
 
 spv::Id SpirvShaderTranslator::LoadMsaaSamplesFromFlags() {
