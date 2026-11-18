@@ -18,16 +18,84 @@
 
 DEFINE_bool(metal_gpu_pass_timing, true,
             "Diagnostics: measure the GPU time of every render, compute and "
-            "blit pass with Metal's stage boundary timestamps, and log where "
-            "the GPU time goes with the Metal perf lines.",
+            "blit pass with Metal's stage boundary timestamps, estimate the "
+            "attachment memory traffic, share the time out per pipeline, and "
+            "track draws skipped for compiles; logged with the Metal perf "
+            "lines.",
             "Metal");
 
 namespace xe {
 namespace gpu {
 namespace metal {
 
+namespace {
+
+// Bytes per sample of a render target format, for the traffic estimate
+// (stencil: of the stencil plane alone). 0 for formats not listed.
+uint32_t MetalGpuBytesPerPixel(MTL::PixelFormat format, bool stencil) {
+  if (stencil) {
+    return 1;
+  }
+  switch (format) {
+    case MTL::PixelFormatR8Unorm:
+    case MTL::PixelFormatR8Snorm:
+    case MTL::PixelFormatR8Uint:
+    case MTL::PixelFormatR8Sint:
+    case MTL::PixelFormatStencil8:
+      return 1;
+    case MTL::PixelFormatRG8Unorm:
+    case MTL::PixelFormatRG8Snorm:
+    case MTL::PixelFormatR16Unorm:
+    case MTL::PixelFormatR16Snorm:
+    case MTL::PixelFormatR16Float:
+    case MTL::PixelFormatR16Uint:
+    case MTL::PixelFormatB5G6R5Unorm:
+    case MTL::PixelFormatDepth16Unorm:
+      return 2;
+    case MTL::PixelFormatRGBA8Unorm:
+    case MTL::PixelFormatRGBA8Unorm_sRGB:
+    case MTL::PixelFormatRGBA8Snorm:
+    case MTL::PixelFormatRGBA8Uint:
+    case MTL::PixelFormatBGRA8Unorm:
+    case MTL::PixelFormatBGRA8Unorm_sRGB:
+    case MTL::PixelFormatRGB10A2Unorm:
+    case MTL::PixelFormatBGR10A2Unorm:
+    case MTL::PixelFormatRG11B10Float:
+    case MTL::PixelFormatRGB9E5Float:
+    case MTL::PixelFormatRG16Unorm:
+    case MTL::PixelFormatRG16Snorm:
+    case MTL::PixelFormatRG16Float:
+    case MTL::PixelFormatRG16Uint:
+    case MTL::PixelFormatR32Float:
+    case MTL::PixelFormatR32Uint:
+    case MTL::PixelFormatR32Sint:
+    case MTL::PixelFormatDepth32Float:
+    // The depth plane; the stencil plane is counted with the stencil
+    // attachment.
+    case MTL::PixelFormatDepth32Float_Stencil8:
+      return 4;
+    case MTL::PixelFormatRGBA16Unorm:
+    case MTL::PixelFormatRGBA16Snorm:
+    case MTL::PixelFormatRGBA16Float:
+    case MTL::PixelFormatRGBA16Uint:
+    case MTL::PixelFormatRG32Float:
+    case MTL::PixelFormatRG32Uint:
+      return 8;
+    case MTL::PixelFormatRGBA32Float:
+    case MTL::PixelFormatRGBA32Uint:
+      return 16;
+    default:
+      return 0;
+  }
+}
+
+}  // namespace
+
 void MetalGpuPassTimer::Initialize(MTL::Device* device) {
   std::lock_guard<std::mutex> lock(mutex_);
+  // Shaders of an earlier title are gone, and their addresses may be reused.
+  pixel_shader_features_.clear();
+  stats_by_pipeline_.clear();
   if (device == device_) {
     return;
   }
@@ -59,17 +127,32 @@ void MetalGpuPassTimer::Initialize(MTL::Device* device) {
     return;
   }
   MTL::CounterSet* timestamp_set = nullptr;
+  // Every counter the GPU offers (Apple GPUs are documented to offer only
+  // timestamps; memory traffic counters would be listed here).
+  std::string counter_text;
   if (NS::Array* counter_sets = device->counterSets()) {
     for (NS::UInteger i = 0; i < counter_sets->count(); ++i) {
       auto* counter_set = counter_sets->object<MTL::CounterSet>(i);
-      if (counter_set && counter_set->name() &&
-          counter_set->name()->isEqualToString(
-              MTL::CommonCounterSetTimestamp)) {
+      if (!counter_set || !counter_set->name()) {
+        continue;
+      }
+      counter_text += fmt::format(" {}:", counter_set->name()->utf8String());
+      if (NS::Array* counters = counter_set->counters()) {
+        for (NS::UInteger j = 0; j < counters->count(); ++j) {
+          auto* counter = counters->object<MTL::Counter>(j);
+          if (counter && counter->name()) {
+            counter_text += fmt::format(" {}", counter->name()->utf8String());
+          }
+        }
+      }
+      if (!timestamp_set && counter_set->name()->isEqualToString(
+                                MTL::CommonCounterSetTimestamp)) {
         timestamp_set = counter_set;
-        break;
       }
     }
   }
+  XELOGI("Metal GPU counter sets:{}",
+         counter_text.empty() ? std::string(" none") : counter_text);
   if (!timestamp_set) {
     XELOGW(
         "Metal GPU pass timing: the GPU has no timestamp counter set, so pass "
@@ -208,10 +291,32 @@ MTL::RenderCommandEncoder* MetalGpuPassTimer::RenderEncoder(
       record->height = uint32_t(texture->height());
       record->samples = uint32_t(texture->sampleCount());
     }
-    record->load_actions |= (uint32_t(attachment->loadAction()) & 3)
-                            << (index * 2);
-    record->store_actions |= (uint32_t(attachment->storeAction()) & 3)
-                             << (index * 2);
+    MTL::LoadAction load_action = attachment->loadAction();
+    MTL::StoreAction store_action = attachment->storeAction();
+    record->load_actions |= (uint32_t(load_action) & 3) << (index * 2);
+    record->store_actions |= (uint32_t(store_action) & 3) << (index * 2);
+    if (texture->storageMode() != MTL::StorageModeMemoryless) {
+      const uint64_t pixel_bytes =
+          MetalGpuBytesPerPixel(texture->pixelFormat(), index == 5);
+      const uint64_t attachment_bytes = pixel_bytes * texture->width() *
+                                        texture->height() *
+                                        texture->sampleCount();
+      if (load_action == MTL::LoadActionLoad) {
+        record->load_bytes += attachment_bytes;
+      }
+      if (store_action == MTL::StoreActionStore ||
+          store_action == MTL::StoreActionStoreAndMultisampleResolve) {
+        record->store_bytes += attachment_bytes;
+      }
+      if (store_action == MTL::StoreActionMultisampleResolve ||
+          store_action == MTL::StoreActionStoreAndMultisampleResolve) {
+        MTL::Texture* resolve_texture = attachment->resolveTexture();
+        if (resolve_texture) {
+          record->store_bytes += pixel_bytes * resolve_texture->width() *
+                                 resolve_texture->height();
+        }
+      }
+    }
     return uint32_t(texture->pixelFormat());
   };
   for (uint32_t i = 0; i < 4; ++i) {
@@ -219,6 +324,7 @@ MTL::RenderCommandEncoder* MetalGpuPassTimer::RenderEncoder(
         describe_attachment(descriptor->colorAttachments()->object(i), i);
   }
   record->depth_format = describe_attachment(descriptor->depthAttachment(), 4);
+  describe_attachment(descriptor->stencilAttachment(), 5);
 
   MTL::RenderPassSampleBufferAttachmentDescriptor* sample_attachment =
       descriptor->sampleBufferAttachments()->object(0);
@@ -370,11 +476,39 @@ void MetalGpuPassTimer::Complete(MetalGpuPassRecord* record) {
     stats.total_ticks += total_ticks;
     stats.vertex_ticks += vertex_ticks;
     stats.fragment_ticks += fragment_ticks;
+    stats.load_bytes += record->load_bytes;
+    stats.store_bytes += record->store_bytes;
   };
   add(stats_by_label_[record->label]);
+  // Each pipeline gets the fragment time by its share of the draws and the
+  // vertex time by its share of the vertices.
+  for (const MetalGpuPassRecord::MetalGpuPassPipeline& pipeline :
+       record->pipelines) {
+    MetalGpuPassStats& stats = stats_by_pipeline_[pipeline.shaders];
+    ++stats.passes;
+    stats.draws += pipeline.draws;
+    stats.vertices += pipeline.vertices;
+    const uint64_t pipeline_vertex_ticks =
+        record->vertices
+            ? uint64_t(double(vertex_ticks) * pipeline.vertices /
+                       record->vertices)
+            : uint64_t(double(vertex_ticks) * pipeline.draws / record->draws);
+    const uint64_t pipeline_fragment_ticks =
+        uint64_t(double(fragment_ticks) * pipeline.draws / record->draws);
+    stats.vertex_ticks += pipeline_vertex_ticks;
+    stats.fragment_ticks += pipeline_fragment_ticks;
+    stats.total_ticks += pipeline_vertex_ticks + pipeline_fragment_ticks;
+    if (pipeline.pixel_translation) {
+      auto features = pixel_shader_features_.find(pipeline.pixel_translation);
+      if (features != pixel_shader_features_.end()) {
+        stats.features = features->second.first;
+        stats.texture_samples = features->second.second;
+      }
+    }
+  }
   if (record->sample_count == 4) {
     // Formats are MTL::PixelFormat values; load and store actions are 2 bits
-    // per attachment, colors 0-3 then depth, lowest first.
+    // per attachment, colors 0-3, depth, then stencil, lowest first.
     add(stats_by_pass_[fmt::format(
         "{} {}x{} x{} color {}/{}/{}/{} depth {} load {:03x} store {:03x}",
         record->label, record->width, record->height, record->samples,
@@ -397,7 +531,66 @@ void MetalGpuPassTimer::Release(MetalGpuPassRecord* record) {
   delete record;
 }
 
-void MetalGpuPassTimer::Log(uint32_t frames) {
+std::pair<uint32_t, uint32_t> MetalGpuPassTimer::MetalGpuPixelShaderFeatures(
+    MslShader::MslTranslation* pixel_translation) {
+  const std::string& source = pixel_translation->msl_source();
+  uint32_t features = 0;
+  if (source.find("discard_fragment") != std::string::npos) {
+    features |= 1;
+  }
+  if (source.find("[[depth(") != std::string::npos) {
+    features |= 2;
+  }
+  if (source.find("[[raster_order_group(") != std::string::npos) {
+    features |= 4;
+  }
+  uint32_t texture_samples = 0;
+  for (const char* call :
+       {".sample(", ".sample_compare(", ".gather(", ".read("}) {
+    for (size_t position = source.find(call); position != std::string::npos;
+         position = source.find(call, position + 1)) {
+      ++texture_samples;
+    }
+  }
+  return {features, texture_samples};
+}
+
+void MetalGpuPassTimer::NoteDraw(MetalGpuPassRecord* record,
+                                 MslShader::MslTranslation* vertex_translation,
+                                 MslShader::MslTranslation* pixel_translation,
+                                 uint64_t vertices) {
+  if (!record) {
+    return;
+  }
+  ++record->draws;
+  record->vertices += vertices;
+  if (record->pipelines.empty() ||
+      record->pipelines.back().vertex_translation != vertex_translation ||
+      record->pipelines.back().pixel_translation != pixel_translation) {
+    MetalGpuPassRecord::MetalGpuPassPipeline pipeline;
+    pipeline.vertex_translation = vertex_translation;
+    pipeline.pixel_translation = pixel_translation;
+    if (vertex_translation) {
+      pipeline.shaders[0] = vertex_translation->shader().ucode_data_hash();
+      pipeline.shaders[1] = vertex_translation->modification();
+    }
+    if (pixel_translation) {
+      pipeline.shaders[2] = pixel_translation->shader().ucode_data_hash();
+      pipeline.shaders[3] = pixel_translation->modification();
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (pixel_shader_features_.find(pixel_translation) ==
+          pixel_shader_features_.end()) {
+        pixel_shader_features_.emplace(
+            pixel_translation, MetalGpuPixelShaderFeatures(pixel_translation));
+      }
+    }
+    record->pipelines.push_back(pipeline);
+  }
+  ++record->pipelines.back().draws;
+  record->pipelines.back().vertices += vertices;
+}
+
+void MetalGpuPassTimer::Log(uint32_t frames, uint64_t window_us) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!supported_ || !frames ||
       (stats_by_label_.empty() && !untimed_passes_ && !invalid_passes_)) {
@@ -426,10 +619,17 @@ void MetalGpuPassTimer::Log(uint32_t frames) {
                           ms_per_frame(stats.vertex_ticks),
                           ms_per_frame(stats.fragment_ticks));
     }
+    if (stats.load_bytes || stats.store_bytes) {
+      text += fmt::format(", attachments {:.1f} MB loaded, {:.1f} MB stored",
+                          stats.load_bytes / 1e6 / frames,
+                          stats.store_bytes / 1e6 / frames);
+    }
     return text;
   };
-  auto by_time = [](const std::map<std::string, MetalGpuPassStats>& stats) {
-    std::vector<std::pair<const std::string*, const MetalGpuPassStats*>> sorted;
+  auto by_time = [](const auto& stats) {
+    std::vector<
+        std::pair<decltype(&stats.begin()->first), const MetalGpuPassStats*>>
+        sorted;
     for (const auto& [key, value] : stats) {
       sorted.emplace_back(&key, &value);
     }
@@ -458,10 +658,217 @@ void MetalGpuPassTimer::Log(uint32_t frames) {
     text += fmt::format("; {}: {}", *key, describe(*value));
   }
   XELOGI("Metal GPU top passes per frame{}", text);
+  // Main memory traffic estimate from the render pass attachments alone
+  // (texture sampling, vertex fetch, compute and blit traffic aren't known).
+  uint64_t load_bytes = 0;
+  uint64_t store_bytes = 0;
+  for (const auto& [key, value] : stats_by_label_) {
+    load_bytes += value.load_bytes;
+    store_bytes += value.store_bytes;
+  }
+  const double window_seconds = std::max<uint64_t>(window_us, 1) / 1e6;
+  XELOGI(
+      "Metal GPU estimated attachment traffic: {:.1f} MB per frame ({:.1f} "
+      "MB loaded, {:.1f} MB stored), {:.2f} GB/s over the window",
+      (load_bytes + store_bytes) / 1e6 / frames, load_bytes / 1e6 / frames,
+      store_bytes / 1e6 / frames,
+      (load_bytes + store_bytes) / 1e9 / window_seconds);
+  text.clear();
+  listed = 0;
+  for (const auto& [key, value] : by_time(stats_by_pipeline_)) {
+    if (++listed > 12) {
+      break;
+    }
+    std::string features;
+    if (value->features & 1) {
+      features += " discard";
+    }
+    if (value->features & 2) {
+      features += " depth-output";
+    }
+    if (value->features & 4) {
+      features += " raster-order";
+    }
+    text += fmt::format(
+        "; VS {:016X} mod {:016X} PS {:016X} mod {:016X}: ~{:.2f} ms "
+        "(vertex {:.2f}, fragment {:.2f}), {:.0f} draws, {:.0f} vertices, "
+        "{:.1f} passes, {} texture samples{}{}",
+        (*key)[0], (*key)[1], (*key)[2], (*key)[3],
+        ms_per_frame(value->total_ticks), ms_per_frame(value->vertex_ticks),
+        ms_per_frame(value->fragment_ticks), double(value->draws) / frames,
+        double(value->vertices) / frames, double(value->passes) / frames,
+        value->texture_samples, features.empty() ? "" : ",", features);
+  }
+  XELOGI(
+      "Metal GPU top pipelines per frame (pass time shared by draws and "
+      "vertices, an estimate){}",
+      text);
   stats_by_label_.clear();
   stats_by_pass_.clear();
+  stats_by_pipeline_.clear();
   untimed_passes_ = 0;
   invalid_passes_ = 0;
+}
+
+void MetalCompileStallTracker::Clear() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  pending_.clear();
+  finished_.clear();
+  for (size_t i = 0; i < 8; ++i) {
+    bucket_compiles_[i] = 0;
+    bucket_skipped_[i] = 0;
+  }
+  queue_us_ = 0;
+  compile_us_ = 0;
+}
+
+void MetalCompileStallTracker::Queued(const MetalCompileKey& key) {
+  if (!cvars::metal_gpu_pass_timing) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (pending_.find(key) == pending_.end()) {
+    MetalCompileStall stall;
+    stall.key = key;
+    stall.queued_at = std::chrono::steady_clock::now();
+    pending_.emplace(key, stall);
+  }
+}
+
+void MetalCompileStallTracker::Skipped(const MetalCompileKey& key) {
+  if (!cvars::metal_gpu_pass_timing) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  // Unknown: queued while tracking was off, or a draw that saw the compile
+  // pending just before it finished.
+  auto stall = pending_.find(key);
+  if (stall != pending_.end()) {
+    ++stall->second.skipped;
+  }
+}
+
+void MetalCompileStallTracker::Finished(const MetalCompileKey& key,
+                                        uint64_t compile_us) {
+  std::string note;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto pending = pending_.find(key);
+    if (pending == pending_.end()) {
+      return;
+    }
+    MetalCompileStall stall = pending->second;
+    pending_.erase(pending);
+    stall.pending_us =
+        uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(
+                     std::chrono::steady_clock::now() - stall.queued_at)
+                     .count());
+    stall.compile_us = std::min(compile_us, stall.pending_us);
+    static const uint64_t bucket_limits_ms[7] = {16,  33,  50,  100,
+                                                 250, 500, 1000};
+    size_t bucket = 0;
+    while (bucket < 7 && stall.pending_us > bucket_limits_ms[bucket] * 1000) {
+      ++bucket;
+    }
+    ++bucket_compiles_[bucket];
+    bucket_skipped_[bucket] += stall.skipped;
+    queue_us_ += stall.pending_us - stall.compile_us;
+    compile_us_ += stall.compile_us;
+    if (stall.skipped) {
+      finished_.push_back(stall);
+      // A note of every compile draws waited 100 ms or more for.
+      if (stall.pending_us >= 100000) {
+        note = fmt::format(
+            "Metal compile stall: {} pending {:.0f} ms (queue {:.0f} ms, "
+            "compile {:.0f} ms), {} draws skipped",
+            Describe(stall.key), stall.pending_us / 1000.0,
+            (stall.pending_us - stall.compile_us) / 1000.0,
+            stall.compile_us / 1000.0, stall.skipped);
+      }
+    }
+  }
+  if (!note.empty()) {
+    XELOGI("{}", note);
+  }
+}
+
+std::string MetalCompileStallTracker::Describe(const MetalCompileKey& key) {
+  switch (key[0]) {
+    case 1:
+      return fmt::format("VS {:016X} mod {:016X}", key[1], key[2]);
+    case 2:
+      return fmt::format("PS {:016X} mod {:016X}", key[1], key[2]);
+    default:
+      return fmt::format(
+          "pipeline VS {:016X} mod {:016X} PS {:016X} mod {:016X}", key[1],
+          key[2], key[3], key[4]);
+  }
+}
+
+void MetalCompileStallTracker::Log(uint32_t frames) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  uint64_t compiles = 0;
+  uint64_t skipped = 0;
+  for (size_t i = 0; i < 8; ++i) {
+    compiles += bucket_compiles_[i];
+    skipped += bucket_skipped_[i];
+  }
+  uint64_t waiting = 0;
+  uint64_t waiting_skipped = 0;
+  uint64_t oldest_us = 0;
+  const auto now = std::chrono::steady_clock::now();
+  for (const auto& [key, stall] : pending_) {
+    if (!stall.skipped) {
+      continue;
+    }
+    ++waiting;
+    waiting_skipped += stall.skipped;
+    oldest_us = std::max<uint64_t>(
+        oldest_us,
+        uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(
+                     now - stall.queued_at)
+                     .count()));
+  }
+  if (!compiles && !waiting) {
+    return;
+  }
+  // Draws skipped per bucket: a bounded wait as long as a bucket's limit
+  // would have drawn those (stalling the frame instead).
+  static const char* const bucket_names[8] = {
+      "<=16 ms",  "<=33 ms",  "<=50 ms", "<=100 ms",
+      "<=250 ms", "<=500 ms", "<=1 s",   ">1 s"};
+  std::string text;
+  for (size_t i = 0; i < 8; ++i) {
+    text += fmt::format("{}{} {}/{}", i ? ", " : "", bucket_names[i],
+                        bucket_compiles_[i], bucket_skipped_[i]);
+  }
+  std::sort(finished_.begin(), finished_.end(),
+            [](const MetalCompileStall& metal_perf_left,
+               const MetalCompileStall& metal_perf_right) {
+              return metal_perf_left.skipped > metal_perf_right.skipped;
+            });
+  std::string worst;
+  for (size_t i = 0; i < std::min<size_t>(finished_.size(), 8); ++i) {
+    worst += fmt::format(
+        "; {}: {} draws skipped, pending {:.0f} ms (compile "
+        "{:.0f} ms)",
+        Describe(finished_[i].key), finished_[i].skipped,
+        finished_[i].pending_us / 1000.0, finished_[i].compile_us / 1000.0);
+  }
+  XELOGI(
+      "Metal compile stalls over {} frames: {} compiles finished, {} draws "
+      "skipped for them, queue wait {:.0f} ms and compiling {:.0f} ms in "
+      "total; by time pending (compiles/draws skipped): {}; still pending "
+      "with draws skipped: {} (oldest {:.0f} ms, {} draws skipped so far){}",
+      frames, compiles, skipped, queue_us_ / 1000.0, compile_us_ / 1000.0, text,
+      waiting, oldest_us / 1000.0, waiting_skipped, worst);
+  for (size_t i = 0; i < 8; ++i) {
+    bucket_compiles_[i] = 0;
+    bucket_skipped_[i] = 0;
+  }
+  queue_us_ = 0;
+  compile_us_ = 0;
+  finished_.clear();
 }
 
 }  // namespace metal

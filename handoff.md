@@ -736,6 +736,37 @@ overlap, so the sum can exceed GPU busy. GPU ticks are calibrated against
 the steady clock (logged as "1 GPU tick = X ns"). Not timed: init/snapshot
 blits, scaled resolve buffer growth, texture dumps, the presenter.
 
+Bandwidth and pipeline diagnostics (owner's request, same switch,
+commit "[GPU] Estimate attachment traffic, time per pipeline and compile
+stalls"):
+- "Metal GPU counter sets: ..." at startup lists every hardware counter the
+  GPU offers. Apple GPUs are documented to offer only timestamps, so no
+  memory traffic counter is expected; if one is listed, it can be sampled.
+- Traffic estimate: per render pass, whole attachments loaded
+  (LoadActionLoad) and stored (Store, multisample resolve output) from size,
+  samples and format (stencil plane 1 byte, D32S8 depth plane 4). Per kind
+  and per top pass ("attachments X MB loaded, Y MB stored") and a total line
+  "Metal GPU estimated attachment traffic: ... GB/s over the window".
+  Upper bound (Apple GPUs may compress attachments); texture sampling,
+  vertex fetch, compute and blits are not included. For scale, the
+  iPhone 14 Pro Max (A16) memory is LPDDR5 at about 51 GB/s.
+- Per pipeline (VS/PS hash and modification): pass vertex time shared by
+  vertices, fragment time by draws; exact when a pipeline has a pass to
+  itself (many post-process passes). Flags from the pixel shader MSL:
+  discard (defeats hidden surface removal), depth-output, raster-order, and
+  its texture sample calls. Top 12 in "Metal GPU top pipelines per frame".
+- Compile stalls (for step 2, skip vs bounded wait): every async shader and
+  pipeline compile is timed from queueing to done, split into queue wait
+  and compile; draws skipped for it are counted. Per window: compiles and
+  draws skipped by pending-time bucket (<=16, 33, 50, 100, 250, 500 ms, 1 s,
+  more): a bounded wait as long as a bucket limit would have drawn that
+  bucket's skipped draws, at the cost of stalling. Each compile draws
+  waited 100 ms or more for is noted on its own line ("Metal compile
+  stall: ...").
+- The previous commit's doc refresh had recounted block-only names in
+  windowed_app_main_ios.mm across the whole file; fixed (see the doc's
+  Checks). The refresh script must not be run on that file again as is.
+
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 

@@ -865,6 +865,9 @@ bool MetalCommandProcessor::EnqueueMslShaderCompilation(
     request.priority = priority;
     msl_shader_compile_pending_.insert(translation);
     msl_shader_compile_queue_.push(request);
+    metal_compile_stall_tracker.Queued(
+        {translation->shader().type() == xenos::ShaderType::kVertex ? 1u : 2u,
+         request.shader_hash, request.modification, 0, 0});
   }
   msl_shader_compile_cv_.notify_one();
   return true;
@@ -899,6 +902,9 @@ bool MetalCommandProcessor::EnqueueMslPipelineCompilation(
     }
     msl_pipeline_compile_pending_.insert(request.pipeline_key);
     msl_pipeline_compile_queue_.push(queued_request);
+    metal_compile_stall_tracker.Queued(
+        {3, request.vertex_shader_hash, request.vertex_modification,
+         request.pixel_shader_hash, request.pixel_modification});
   }
 
   msl_shader_compile_cv_.notify_one();
@@ -1043,8 +1049,10 @@ void MetalCommandProcessor::MslShaderCompileThread(size_t thread_index) {
     NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
     if (process_pipeline_request) {
       std::string pipeline_error;
+      const auto compile_begin = std::chrono::steady_clock::now();
       MTL::RenderPipelineState* pipeline =
           CreateMslPipelineState(pipeline_request, &pipeline_error);
+      const uint64_t compile_us = MetalPerfMicrosecondsSince(compile_begin);
       bool compiled = pipeline != nullptr;
 
       {
@@ -1064,6 +1072,13 @@ void MetalCommandProcessor::MslShaderCompileThread(size_t thread_index) {
           --msl_shader_compile_busy_;
         }
       }
+      // After the pending entry is gone, so no draw skips for it afterwards.
+      metal_compile_stall_tracker.Finished(
+          {3, pipeline_request.vertex_shader_hash,
+           pipeline_request.vertex_modification,
+           pipeline_request.pixel_shader_hash,
+           pipeline_request.pixel_modification},
+          compile_us);
 
       if (pipeline_request.vertex_function) {
         pipeline_request.vertex_function->release();
@@ -1095,9 +1110,12 @@ void MetalCommandProcessor::MslShaderCompileThread(size_t thread_index) {
       }
     } else {
       bool compiled = false;
+      uint64_t compile_us = 0;
       if (shader_request.translation) {
+        const auto compile_begin = std::chrono::steady_clock::now();
         compiled = shader_request.translation->CompileToMsl(
             device_, shader_request.is_ios);
+        compile_us = MetalPerfMicrosecondsSince(compile_begin);
       }
 
       {
@@ -1111,6 +1129,15 @@ void MetalCommandProcessor::MslShaderCompileThread(size_t thread_index) {
         if (msl_shader_compile_busy_) {
           --msl_shader_compile_busy_;
         }
+      }
+      if (shader_request.translation) {
+        metal_compile_stall_tracker.Finished(
+            {shader_request.translation->shader().type() ==
+                     xenos::ShaderType::kVertex
+                 ? 1u
+                 : 2u,
+             shader_request.shader_hash, shader_request.modification, 0, 0},
+            compile_us);
       }
 
       if (!compiled &&
@@ -1386,6 +1413,7 @@ bool MetalCommandProcessor::SetupContext() {
   }
 
   metal_gpu_pass_timer.Initialize(device_);
+  metal_compile_stall_tracker.Clear();
 
   wait_shared_event_ = device_->newSharedEvent();
   if (wait_shared_event_) {
@@ -2643,7 +2671,8 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
         metal_perf_footprint_mb, metal_perf_available_mb,
         uint32_t(NS::ProcessInfo::processInfo()->thermalState()));
     XELOGI("Metal perf threads:{}", MetalPerfThreadCpu(metal_perf_window_us));
-    metal_gpu_pass_timer.Log(draw_stats_.frames);
+    metal_gpu_pass_timer.Log(draw_stats_.frames, metal_perf_window_us);
+    metal_compile_stall_tracker.Log(draw_stats_.frames);
     draw_stats_ = {};
   }
   saw_swap_ = true;
@@ -4336,6 +4365,9 @@ bool MetalCommandProcessor::IssueDrawMsl(
       ensure_msl_translation_ready(vertex_translation, 1);
   if (vertex_compile_status == MslShaderCompileStatus::kPending) {
     log_pending_compile(vertex_translation, "vertex");
+    metal_compile_stall_tracker.Skipped(
+        {1, vertex_translation->shader().ucode_data_hash(),
+         vertex_translation->modification(), 0, 0});
     ++draw_stats_.compile_pending;
     return true;
   }
@@ -4360,6 +4392,9 @@ bool MetalCommandProcessor::IssueDrawMsl(
         ensure_msl_translation_ready(pixel_translation, 2);
     if (pixel_compile_status == MslShaderCompileStatus::kPending) {
       log_pending_compile(pixel_translation, "pixel");
+      metal_compile_stall_tracker.Skipped(
+          {2, pixel_translation->shader().ucode_data_hash(),
+           pixel_translation->modification(), 0, 0});
       ++draw_stats_.compile_pending;
       return true;
     }
@@ -4395,6 +4430,12 @@ bool MetalCommandProcessor::IssueDrawMsl(
                               : 0,
             pixel_translation ? pixel_translation->modification() : 0);
       }
+      metal_compile_stall_tracker.Skipped(
+          {3, vertex_translation->shader().ucode_data_hash(),
+           vertex_translation->modification(),
+           pixel_translation ? pixel_translation->shader().ucode_data_hash()
+                             : 0,
+           pixel_translation ? pixel_translation->modification() : 0});
       ++draw_stats_.compile_pending;
       return true;
     }
@@ -5704,11 +5745,9 @@ bool MetalCommandProcessor::IssueDrawMsl(
   ++draw_stats_.encoded;
   draw_stats_.encoded_vertices +=
       primitive_processing_result.host_draw_vertex_count;
-  if (metal_gpu_pass_record_) {
-    ++metal_gpu_pass_record_->draws;
-    metal_gpu_pass_record_->vertices +=
-        primitive_processing_result.host_draw_vertex_count;
-  }
+  metal_gpu_pass_timer.NoteDraw(
+      metal_gpu_pass_record_, vertex_translation, pixel_translation,
+      primitive_processing_result.host_draw_vertex_count);
 
   // Handle memexport.
   if (memexport_used && shared_memory_) {
