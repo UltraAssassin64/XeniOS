@@ -6228,6 +6228,27 @@ bool MetalCommandProcessor::IssueCopy() {
         values[XE_GPU_REG_RB_COLOR1_INFO], values[XE_GPU_REG_RB_COLOR2_INFO],
         values[XE_GPU_REG_RB_COLOR3_INFO], values[XE_GPU_REG_RB_DEPTH_INFO],
         written_address, written_address + written_length);
+    // Depth resolves (the scene depth, shadow maps) are sampled once done.
+    if (register_file_->Get<reg::RB_COPY_CONTROL>().copy_src_select >=
+            xenos::kMaxColorRenderTargets &&
+        written_length) {
+      const auto dest_pitch = register_file_->Get<reg::RB_COPY_DEST_PITCH>();
+      const uint32_t dest_endian = uint32_t(
+          register_file_->Get<reg::RB_COPY_DEST_INFO>().copy_dest_endian);
+      MetalResolveProbe probe;
+      probe.address = values[XE_GPU_REG_RB_COPY_DEST_BASE] & 0x1FFFFFFF;
+      probe.written_begin = written_address;
+      probe.written_end = written_address + written_length;
+      probe.width = dest_pitch.copy_dest_pitch;
+      probe.height = dest_pitch.copy_dest_height;
+      probe.endian =
+          dest_endian <= 3 ? xenos::Endian(dest_endian) : xenos::Endian::kNone;
+      probe.is_float = register_file_->Get<reg::RB_DEPTH_INFO>().depth_format ==
+                       xenos::DepthRenderTargetFormat::kD24FS8;
+      probe.draw = frame_detail_draws_;
+      probe.submission = GetCurrentSubmission();
+      resolve_probes_.push_back(probe);
+    }
   }
 
   ReadbackResolveMode readback_mode = GetReadbackResolveMode();
@@ -6465,6 +6486,65 @@ void MetalCommandProcessor::ProcessCompletedSubmissions() {
     texture_cache_->CompletedSubmissionUpdated(completed);
   }
   ProcessCompletedZPDQueries();
+  LogResolveProbes();
+}
+
+void MetalCommandProcessor::LogResolveProbes() {
+  if (resolve_probes_.empty() || !shared_memory_ ||
+      !shared_memory_->GetBuffer()) {
+    return;
+  }
+  const uint64_t completed = GetCompletedSubmission();
+  // The resolve's writes are visible once its command buffer completed.
+  std::atomic_thread_fence(std::memory_order_acquire);
+  const uint8_t* memory =
+      static_cast<const uint8_t*>(shared_memory_->GetBuffer()->contents());
+  for (auto probe = resolve_probes_.begin(); probe != resolve_probes_.end();) {
+    if (probe->submission > completed || !probe->width || !probe->height) {
+      if (probe->submission > completed) {
+        ++probe;
+      } else {
+        probe = resolve_probes_.erase(probe);
+      }
+      continue;
+    }
+    // A 16-wide grid, as many rows as keep it about square.
+    const uint32_t probe_cols = 16;
+    const uint32_t probe_rows = std::clamp<uint32_t>(
+        (16 * probe->height + probe->width / 2) / probe->width, 1, 16);
+    XELOGI(
+        "Frame detail resolve probe after draw {}: {:08X} ({:08X} to {:08X} "
+        "written), {}x{} {} depth, {}x{} samples ('-' outside what was "
+        "written):",
+        probe->draw, probe->address, probe->written_begin, probe->written_end,
+        probe->width, probe->height, probe->is_float ? "20e4 float" : "unorm",
+        probe_cols, probe_rows);
+    for (uint32_t row = 0; row < probe_rows; ++row) {
+      const uint32_t y = (2 * row + 1) * probe->height / (2 * probe_rows);
+      std::string probe_line;
+      for (uint32_t col = 0; col < probe_cols; ++col) {
+        const uint32_t x = (2 * col + 1) * probe->width / (2 * probe_cols);
+        const uint32_t texel_address =
+            probe->address + uint32_t(texture_util::GetTiledOffset2D(
+                                 int32_t(x), int32_t(y), probe->width, 2));
+        if (texel_address < probe->written_begin ||
+            texel_address + 4 > probe->written_end ||
+            texel_address + 4 > SharedMemory::kBufferSize) {
+          probe_line += " -";
+          continue;
+        }
+        uint32_t texel;
+        std::memcpy(&texel, memory + texel_address, sizeof(texel));
+        const uint32_t depth24 = xenos::GpuSwap(texel, probe->endian) >> 8;
+        fmt::format_to(std::back_inserter(probe_line), " {:.4f}",
+                       probe->is_float ? xenos::Float20e4To32(depth24)
+                                       : float(depth24) / 16777215.0f);
+      }
+      XELOGI("Frame detail resolve probe {:08X} y {}:{}", probe->address, y,
+             probe_line);
+    }
+    probe = resolve_probes_.erase(probe);
+  }
 }
 
 bool MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(uint32_t packet,

@@ -186,6 +186,9 @@ class MetalCommandProcessor : public CommandProcessor {
   // occlusion_query_enable: writes the sample counts of guest occlusion
   // queries whose command buffers completed.
   void ProcessCompletedZPDQueries();
+  // metal_frame_detail_log: logs the sampled values of resolve_probes_ whose
+  // command buffers completed.
+  void LogResolveProbes();
   bool EnsureDrawRingCapacity();
   void UseRenderEncoderAttachmentHeaps(MTL::RenderPassDescriptor* descriptor);
   void UseRenderEncoderHeap(MTL::Heap* heap);
@@ -636,6 +639,22 @@ class MetalCommandProcessor : public CommandProcessor {
   uint32_t frame_detail_passes_ = 0;
   uint32_t frame_detail_draws_ = 0;
   DrawStats frame_detail_stats_;
+  // metal_frame_detail_log: depth resolves whose results are sampled on a
+  // grid once their command buffer completes (LogResolveProbes).
+  struct MetalResolveProbe {
+    uint32_t address = 0;  // RB_COPY_DEST_BASE.
+    // What the resolve wrote.
+    uint32_t written_begin = 0;
+    uint32_t written_end = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    xenos::Endian endian = xenos::Endian::kNone;
+    // D24FS8 (20e4) rather than 24-bit unorm depth.
+    bool is_float = false;
+    uint32_t draw = 0;
+    uint64_t submission = 0;
+  };
+  std::vector<MetalResolveProbe> resolve_probes_;
   std::chrono::steady_clock::time_point metal_perf_last_swap_{};
   std::unordered_map<uint64_t, MTL::RenderPipelineState*> msl_pipeline_cache_;
 
