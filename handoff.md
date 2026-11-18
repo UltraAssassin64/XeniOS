@@ -891,6 +891,9 @@ Changes (c0bf3f9e):
   (average rows), restarts, occlusion queries per frame (counted via
   XE_GPU_NOTE_FAKE_OCCLUSION_QUERY hook in the PM4 implementation, defined
   only by the Metal command processor).
+CI for c0bf3f9e (run 44296452338): Lint passed; "Build iOS ARM64" was
+cancelled after 15 min queued with no steps and no log (no macOS runner
+picked it up). Not a compile failure. Asked the owner whether to re-run.
 Ideas not done: real occlusion queries (port of XeniOS's Metal ZPD with
 the pre-iOS-26 readback path; see the occlusion section) if the query
 count is high; gamma render targets are RGBA8 with manual PWL unless
