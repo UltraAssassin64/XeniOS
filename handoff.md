@@ -833,6 +833,11 @@ Changes after 9583 (each separately toggleable where it changes output):
   Thread Hotspots, default on): every perf window, 16 samples 1 ms apart of
   every running guest thread, mapped to guest function / host symbol;
   "Guest thread hotspots <handle> (<name>): n/16 samples in guest code; ..."
+Build #9593 (`xenios_ios_arm64_0.2.9-9593`, commit d0e3a6e6) has all of
+the above; iOS CI passes for every commit in the series. Not yet run on
+device. Test plan given: 2 default gameplay runs (FPS, blackouts), 1 with
+Limit Render Pass Area on, 1 with Wait for Shader Compiles at 16 or 33 ms,
+a force quit, and watching stencil effects and screen regions.
 Local checks: metal_render_target_cache.cc, msl_shader.cc, shim_utils.cc
 (Apple branch forced on) and the command processor compile with clang on
 Linux against the real metal-cpp/glslang/SPIRV-Cross/Vulkan headers
