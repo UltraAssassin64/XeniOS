@@ -1800,81 +1800,12 @@ bool MetalCommandProcessor::InitializeShaderTranslation() {
 }
 
 void MetalCommandProcessor::PrepareForWait() {
-  // Flush any pending Metal command buffers before entering wait state.
-  // This is critical because:
-  // 1. The worker thread's autorelease pool will be drained when it exits
-  // 2. Metal objects in that pool might still be referenced by in-flight
-  // commands
-  // 3. Releasing those objects during pool drain can hang waiting for GPU
-  // completion
-  //
-  // By submitting and waiting for all GPU work now, we ensure clean pool
-  // drainage.
+  // Runs on every ring-empty stall, so it must not block on the GPU (as in
+  // XeniOS and xenia-edge). It used to wait for all GPU work twice here,
+  // which serialized the CPU and the GPU dozens of times per frame and, in
+  // the background, where iOS refuses GPU work, never returned.
+  EndCommandBuffer();
 
-  // End through the shared helper so per-encoder bind caches are reset too.
-  EndRenderEncoder();
-
-  if (current_command_buffer_) {
-    uint64_t wait_value = 0;
-    if (wait_shared_event_) {
-      wait_value = ++wait_shared_event_value_;
-      current_command_buffer_->encodeSignalEvent(wait_shared_event_,
-                                                 wait_value);
-    }
-#if METAL_SHADER_CONVERTER_AVAILABLE
-    ScheduleDrawRingRelease(current_command_buffer_);
-#else
-    if (UseSpirvCrossPath()) {
-      ScheduleSpirvUniformBufferRelease(current_command_buffer_);
-    }
-#endif
-    ScheduleSpirvArgumentBufferRelease(current_command_buffer_);
-    current_command_buffer_->commit();
-    if (wait_shared_event_) {
-      wait_shared_event_->waitUntilSignaledValue(
-          wait_value, std::numeric_limits<uint64_t>::max());
-    } else {
-      WaitUntilCompletedCounted(current_command_buffer_);
-    }
-    current_command_buffer_->release();
-    current_command_buffer_ = nullptr;
-#if METAL_SHADER_CONVERTER_AVAILABLE
-    SetActiveDrawRing(nullptr);
-#endif
-    current_draw_index_ = 0;
-    copy_resolve_writes_pending_ = false;
-  }
-  DrainCommandBufferAutoreleasePool();
-
-  // Even if we have no active command buffer, there might be GPU work from
-  // previously submitted command buffers that autoreleased objects depend on.
-  // Submit and wait for a dummy command buffer to ensure ALL GPU work
-  // completes.
-  if (command_queue_) {
-    NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
-    // Note: commandBuffer() returns an autoreleased object per metal-cpp docs.
-    // We do NOT call release() since we didn't retain() it.
-    // The autorelease pool will handle cleanup.
-    MTL::CommandBuffer* sync_cmd = command_queue_->commandBuffer();
-    if (sync_cmd) {
-      uint64_t wait_value = 0;
-      if (wait_shared_event_) {
-        wait_value = ++wait_shared_event_value_;
-        sync_cmd->encodeSignalEvent(wait_shared_event_, wait_value);
-      }
-      sync_cmd->commit();
-      if (wait_shared_event_) {
-        wait_shared_event_->waitUntilSignaledValue(
-            wait_value, std::numeric_limits<uint64_t>::max());
-      } else {
-        WaitUntilCompletedCounted(sync_cmd);
-      }
-      // Don't release - it's autoreleased and will be cleaned up by the pool
-    }
-    pool->release();
-  }
-
-  // Also call the base class to flush trace writer
   CommandProcessor::PrepareForWait();
 }
 
@@ -1918,8 +1849,12 @@ void MetalCommandProcessor::ShutdownContext() {
     ScheduleSpirvArgumentBufferRelease(current_command_buffer_);
     current_command_buffer_->commit();
     if (wait_shared_event_) {
-      wait_shared_event_->waitUntilSignaledValue(
-          wait_value, std::numeric_limits<uint64_t>::max());
+      // Bounded so a GPU that has stopped (in the background) can't hold up
+      // quitting. The command buffer keeps what it uses alive.
+      if (!wait_shared_event_->waitUntilSignaledValue(wait_value, 2000)) {
+        XELOGW(
+            "Metal: the last command buffer didn't finish in 2 s at shutdown");
+      }
     } else {
       WaitUntilCompletedCounted(current_command_buffer_);
     }
@@ -1947,8 +1882,11 @@ void MetalCommandProcessor::ShutdownContext() {
       }
       sync_cmd->commit();
       if (wait_shared_event_) {
-        wait_shared_event_->waitUntilSignaledValue(
-            wait_value, std::numeric_limits<uint64_t>::max());
+        // Bounded for the same reason: iOS refuses this one too in the
+        // background, and then never signals the event.
+        if (!wait_shared_event_->waitUntilSignaledValue(wait_value, 2000)) {
+          XELOGW("Metal: the GPU queue didn't drain in 2 s at shutdown");
+        }
       } else {
         WaitUntilCompletedCounted(sync_cmd);
       }

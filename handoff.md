@@ -690,6 +690,33 @@ priorities), commit "[Base] Port XeniOS's iOS thread scheduling fixes":
 Build #9578 (`xenios_ios_arm64_0.2.9-9578`, commit b4958de1): CI and CPU
 tests pass. Not yet run on device; asked the owner for 2 gameplay runs
 comparing FPS and the "Metal perf" lines, and to watch for new hangs.
+Owner's 9578 runs (zip "Quite_a_few_runs", 5 logs, plus a force-quit
+.ips): FPS unchanged; host priorities now read 31 and 47 as intended.
+Gameplay: 80-220 ms per frame, GPU busy 85-105% of wall time, about 75
+command buffers and 340-1100 draws (1.0-1.5M vertices) per frame,
+"uniforms pool busy" waits; one guest thread (XThreadDB07) at 100% of a
+core, GPU Commands under 10%. The occlusion threshold test (lower = upper
+= 100) did not stop the vignette/fog flicker, so the fake count is ruled
+out; depth handling is next.
+The .ips (bug type 509, 0x8badf00d "failed to terminate gracefully"),
+symbolicated against the 9578 binary: main thread in
+`PosixConditionBase::Wait` from applicationWillTerminate, waiting on the
+"GPU Commands" thread, which was blocked in `MetalCommandProcessor::
+PrepareForWait` in `waitUntilSignaledValue(..., UINT64_MAX)`. iOS refuses
+GPU work in the background, so the event is never signaled.
+That exposed that our `PrepareForWait`, run on every ring-empty stall,
+committed the command buffer and then waited for all GPU work twice (the
+second time with a dummy command buffer). XeniOS and xenia-edge both
+just commit there ("must not block on the GPU"). The shared-event branch
+wasn't counted by `WaitUntilCompletedCounted`, so "CPU blocked on GPU 0
+times" in the perf line was wrong: the CPU was blocked dozens of times per
+frame. Commit "[GPU] Don't block on the GPU when the ring runs empty":
+`PrepareForWait` now only calls `EndCommandBuffer()`, and the two shutdown
+waits are bounded to 2 s (XeniOS bounds the first; the second is bounded
+here too since iOS refuses the dummy command buffer in the background as
+well). Risk: no CPU-GPU sync point is left in the frame loop, as in
+xenia-edge; watch for stale resolve or readback results (UI, exposure).
+
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 
