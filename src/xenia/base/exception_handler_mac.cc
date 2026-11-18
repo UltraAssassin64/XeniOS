@@ -13,6 +13,7 @@
 
 #include <signal.h>
 #include <ucontext.h>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 
@@ -43,7 +44,10 @@ static void ExceptionHandlerCallback(int signal_number, siginfo_t* signal_info,
 #if XE_ARCH_ARM64
   // On ARM64, ucontext_t requires 16-byte alignment but the kernel may provide
   // an unaligned pointer in the signal handler. Copy to an aligned local to
-  // avoid undefined behavior from misaligned access.
+  // avoid undefined behavior from misaligned access. mcontext_t is a pointer
+  // on Darwin, so the copy's uc_mcontext still points at the kernel's saved
+  // registers: writes through it reach the kernel, and the copy itself must
+  // never be written back (see below).
   alignas(16) ucontext_t ucontext_storage;
   std::memcpy(&ucontext_storage, signal_context, sizeof(ucontext_t));
   ucontext_t* ucontext = &ucontext_storage;
@@ -180,8 +184,14 @@ static void ExceptionHandlerCallback(int signal_number, siginfo_t* signal_info,
         mcontext->__ns.__fpsr = thread_context.fpsr;
         mcontext->__ns.__fpcr = thread_context.fpcr;
       }
-      // Copy modified context back to the original signal context
-      std::memcpy(signal_context, ucontext, sizeof(ucontext_t));
+      // Do not copy ucontext_storage back over signal_context. With
+      // _XOPEN_SOURCE, ucontext_t includes a copy of the machine context
+      // taken before the handlers ran; writing it back replaced the
+      // registers changed above (the resume PC among them) with their old
+      // values, so a fault handled by emulating the instruction and moving
+      // the PC on, such as an MMIO store, re-executed the same instruction
+      // forever. As in upstream, the writes above go to the kernel's saved
+      // state through the mcontext pointer and that is all that is needed.
 #elif XE_ARCH_AMD64
       mcontext->__ss.__rip = thread_context.rip;
       mcontext->__ss.__rflags = thread_context.eflags;
@@ -208,10 +218,20 @@ static void ExceptionHandlerCallback(int signal_number, siginfo_t* signal_info,
   }
 
   // Nobody handled it. The faulting instruction is retried when we return, so
-  // a genuine host crash shows up as a hang; record where it happened.
-  XELOGE("Unhandled host exception: signal={} pc=0x{:016X} address=0x{:016X}",
-         signal_number, uint64_t(ex.pc()),
-         reinterpret_cast<uint64_t>(signal_info->si_addr));
+  // a genuine host crash shows up as a hang; record where it happened. The
+  // retry repeats millions of times a second, so log the first ten and then
+  // one in a million (build 9565 wrote 24 million of these lines, 2.4 GB).
+  static std::atomic<uint64_t> unhandled_host_exception_count{0};
+  const uint64_t unhandled_count =
+      unhandled_host_exception_count.fetch_add(1, std::memory_order_relaxed) +
+      1;
+  if (unhandled_count <= 10 || !(unhandled_count % 1000000)) {
+    XELOGE(
+        "Unhandled host exception: signal={} pc=0x{:016X} address=0x{:016X} "
+        "({} so far)",
+        signal_number, uint64_t(ex.pc()),
+        reinterpret_cast<uint64_t>(signal_info->si_addr), unhandled_count);
+  }
 }
 
 void ExceptionHandler::Install(Handler fn, void* data) {

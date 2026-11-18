@@ -235,6 +235,8 @@ further edits.
 | `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/kernel/util/shim_utils.h` | 554 | 1 |
 | `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/app/xenia_main_ios.mm` | 586 | 1 |
 
+| `unhandled_host_exception_count` | function static atomic | Unhandled host faults so far, to log only the first ten and then one in a million. | `src/xenia/base/exception_handler_mac.cc` | 224, 226 | 2 |
+| `unhandled_count` | local | This fault's number. | `src/xenia/base/exception_handler_mac.cc` | 225, 228, 233 | 4 |
 ## Total references per name
 
 | Name | Total uses in project |
@@ -443,6 +445,8 @@ further edits.
 | `kernel_call_guest_pc` | 5 |
 | `kernel_call_sample` | 3 |
 | `kernel_call_sample_pc` | 4 |
+| `unhandled_host_exception_count` | 2 |
+| `unhandled_count` | 4 |
 
 ## Checks
 
