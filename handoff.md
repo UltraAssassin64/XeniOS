@@ -615,6 +615,35 @@ Perf numbers from that run (gameplay windows of 120 guest frames):
   from 0 to 1 (fair) by the end.
 - `Metal presenter: requested the Metal performance HUD` was logged.
 
+Build #9574, four more runs (logs 23-34-11, 23-36-18, 23-39-22,
+23-43-58; config dumps show `emit_inline_mmio_checks` false, false, true,
+false at launch). Owner: the HUD shows; title screen about 10 FPS, menus
+after Press Start 13-22, cutscenes 28-30, then about 5 FPS from the
+shoulder-camera transition on, including the pause menu; it gets worse as
+the phone heats up. Numbers agree: gameplay 150-230 ms per guest frame,
+menus 34.9 ms. Inline checks on or off makes no clear difference (on:
+161-229 ms; off: 151-219 ms, within run-to-run noise).
+In every gameplay window one guest thread at host priority 32 uses 96-100%
+of a core and a second at host priority 16 uses 23-32%. Host priority 16
+is Darwin's utility band, which prefers the efficiency cores: this
+branch passes xenia's priority tiers (1/8/16/24/32) straight to
+`pthread_setschedparam(SCHED_FIFO)`.
+
+Ported from XeniOS `77cc1358` (newer than xenia-edge for these
+Apple-only paths; xenia-edge still uses plain `sched_yield` and raw
+priorities), commit "[Base] Port XeniOS's iOS thread scheduling fixes":
+- `set_priority` on Apple remaps 1..32 linearly onto Darwin's SCHED_FIFO
+  range (`sched_get_priority_min/max`, typically 15..47), so tier 16 runs
+  at about 30 and tier 32 at 47.
+- `MaybeYield` on Apple uses `thread_switch(MACH_PORT_NULL,
+  SWITCH_OPTION_NONE, 0)`: `sched_yield` is `swtch_pri`, which drops the
+  thread to the lowest priority until a 10 ms quantum passes; the guest's
+  Sleep(0) polling loops go through `MaybeYield`.
+- `PreferPerformanceCores()` (QOS_CLASS_USER_INTERACTIVE on iOS), called
+  at the start of `CommandProcessor::WorkerThreadMain` ("GPU Commands").
+Not ported: `ios_guest_threads_user_initiated_qos` is defined in
+`xthread.cc` here but never read; in XeniOS it is only a settings entry.
+
 Ideas to discuss with the owner (not started):
 1. Cache compiled shaders across runs: MTLBinaryArchive for SPIR-V-path
    pipelines (iOS 14+), or compiling libraries with

@@ -30,6 +30,8 @@
 
 #if XE_PLATFORM_APPLE
 #include <mach/mach.h>
+#include <mach/thread_switch.h>
+#include <pthread/qos.h>
 #endif
 
 #if XE_PLATFORM_ANDROID
@@ -179,11 +181,30 @@ uint32_t current_thread_system_id() {
 }
 
 void MaybeYield() {
+#if XE_PLATFORM_APPLE
+  // sched_yield on Darwin is swtch_pri, which drops the caller to the lowest
+  // priority until it runs again or a scheduler quantum (10 ms) passes, so with
+  // any other thread runnable each yield of a guest polling loop can cost
+  // milliseconds. thread_switch without an option yields the same way, but
+  // keeps the priority.
+  thread_switch(MACH_PORT_NULL, SWITCH_OPTION_NONE, 0);
+#else
   sched_yield();
+#endif
   __sync_synchronize();
 }
 
 void SyncMemory() { __sync_synchronize(); }
+
+bool PreferPerformanceCores() {
+#if XE_PLATFORM_IOS
+  // A thread left at the default QoS runs on the efficiency cores whenever
+  // the performance ones are busy, which with two of them is most of the time.
+  return pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0) == 0;
+#else
+  return false;
+#endif  // XE_PLATFORM_IOS
+}
 
 void Sleep(std::chrono::microseconds duration) {
   timespec rqtp = DurationToTimeSpec(duration);
@@ -876,7 +897,20 @@ class PosixCondition<Thread> final : public PosixConditionBase {
   void set_priority(int new_priority) const {
     WaitStarted();
     sched_param param{};
+#if XE_PLATFORM_APPLE
+    // Xenia's POSIX ThreadPriority tiers are 1/8/16/24/32. Darwin's
+    // SCHED_FIFO range is typically 15..47, so linearly remap xenia 1..32
+    // into that range to keep all five tiers distinct and monotonically
+    // ordered. Passed through unchanged, tier 16 landed in Darwin's utility
+    // band (16), which prefers the efficiency cores, and tier 1 in the
+    // background band.
+    static const int fifo_min = sched_get_priority_min(SCHED_FIFO);
+    static const int fifo_max = sched_get_priority_max(SCHED_FIFO);
+    param.sched_priority =
+        fifo_min + (new_priority - 1) * (fifo_max - fifo_min) / 31;
+#else
     param.sched_priority = new_priority;
+#endif  // XE_PLATFORM_APPLE
     int res = pthread_setschedparam(thread_, SCHED_FIFO, &param);
     if (res != 0) {
       switch (res) {
