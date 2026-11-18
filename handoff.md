@@ -586,6 +586,35 @@ so there is no upstream code to port; a real cache would be new work
 (e.g. MTLBinaryArchive for SPIR-V-path pipelines, iOS 14+, which saves the
 GPU back-end compile but not the MSL front end).
 
+Build #9574, one run with `emit_inline_mmio_checks` off (owner, log
+23-22-21): no hang, no `Unhandled host exception`, no `MMIO store
+repeated`, no `XMA register` lines; reached gameplay. The MMIO fault path
+fix looks good. (The config dump at the top of the log prints `true`; it
+did the same in build #9566's run where the loop proved the setting was
+off, so that dump does not reflect the in-app setting.)
+Perf numbers from that run (gameplay windows of 120 guest frames):
+- frame avg 164-209 ms (about 5 guest frames per second), every frame
+  over 50 ms; menus run at a steady 34.9 ms.
+- GPU busy 72-91% (sum of command buffer GPU times; it can exceed 100%
+  in places, so overlapping buffers are counted twice and this is an
+  upper bound). About 70-75 command buffers and 27-32 EDRAM resolves per
+  frame, 3,500 draws, 2.7-3.7 million vertices.
+- CPU blocked on GPU: 0 in every window, so the `waitUntilCompleted`
+  sites are not hit; owed item "reduce CPU calls scheduling the GPU" is
+  not where the time goes.
+- One guest thread (host name `XThread1EA0F (F`, truncated; guest priority
+  31-32, so the job/render thread seen in the hang work) uses 77-100% of a
+  core in every gameplay window: the game is bound by that thread's JIT
+  code. Main thread 9-19%, `XThread16D07` 16-22%, GPU Commands 18-25%.
+- Shader compile bursts: up to 118 shaders in one window taking 55 s of
+  CPU across the 4 compile threads (`?#8A21`-`8A24`, about 25% each), with
+  up to 241,000 skipped draws.
+- Uploads into shared memory: 1.2-1.4 GB per 120 frames (about 11 MB per
+  frame).
+- Memory footprint 1.2-1.9 GB, 2.2-2.9 GB available; thermal state went
+  from 0 to 1 (fair) by the end.
+- `Metal presenter: requested the Metal performance HUD` was logged.
+
 Ideas to discuss with the owner (not started):
 1. Cache compiled shaders across runs: MTLBinaryArchive for SPIR-V-path
    pipelines (iOS 14+), or compiling libraries with
