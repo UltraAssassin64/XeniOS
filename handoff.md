@@ -826,9 +826,22 @@ Changes after 9583 (each separately toggleable where it changes output):
   Limit Render Pass Area, default off, experimental): draw passes limited
   to the largest scissor so far per descriptor (32 px), restarted to grow;
   not for passes clearing on load. Top passes show the limited size.
-Next candidates: transfer passes' area limited to their rectangles (they
-still load/store 13-34 MB each); hot guest code sampling for the 94% guest
-thread; argument encoders from descriptors if argument-encoder= is large.
+- 93f1892f same switch also limits transfer passes that load their
+  destination to the bounding box of their rectangles (transfers' and the
+  resolve clear's), with the full-target scissor clamped to it.
+- d0e3a6e6 `log_guest_thread_hotspots` (Settings > Diagnostics > Guest
+  Thread Hotspots, default on): every perf window, 16 samples 1 ms apart of
+  every running guest thread, mapped to guest function / host symbol;
+  "Guest thread hotspots <handle> (<name>): n/16 samples in guest code; ..."
+Local checks: metal_render_target_cache.cc, msl_shader.cc, shim_utils.cc
+(Apple branch forced on) and the command processor compile with clang on
+Linux against the real metal-cpp/glslang/SPIRV-Cross/Vulkan headers
+(submodules fetched with --depth 1; Apple system headers and generated
+shader bytecode headers stubbed in scratchpad stubs/ and genstubs/). The
+command processor's only error there is the Linux-only SpirvShaderTranslator
+constructor parameter.
+Next candidates: argument encoders from descriptors if argument-encoder=
+is large; what the hot guest thread runs (from the hotspot lines).
 
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
