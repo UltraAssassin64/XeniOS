@@ -295,6 +295,24 @@ A -> B ...; guest lr … r3 … r6 …` and the guest stack, then again every
 100 thresholds. Works at any log level and for high-frequency exports.
 It cannot see loops that make no kernel calls (like the MMIO store loop).
 
+Results on build #9561, eight runs in three sets (owner's pattern: run 1
+hangs after Press Start, run 2 hangs after the first cutscene, run 3
+reaches gameplay unless a skip is rushed):
+
+- No `XMA register` lines: the inline MMIO default fixed the store loop.
+- Hung runs: the main thread `F8000008` loops "KeDelayExecutionThread ->
+  RtlTryEnterCriticalSection -> RtlLeaveCriticalSection" at guest lr
+  `8227EC40`/`8227EC60` with critical section `832E5B74`, 2 to 4 million
+  times: a sleep-and-poll wait for another thread's job (a load). Runs
+  that progress only show short bursts of about 20,000.
+- Idle worker threads (`F8000078`, `F80000E0`) loop on KeDelayExecutionThread
+  alone; that is normal and is no longer reported.
+
+Next build: at a report (first, then every tenth threshold) it logs every
+guest thread: `Kernel thread <handle> (<name>): inside|last called <export>
+for <ms>, guest lr …, <n> calls`, plus 64 words of guest code around the
+looping caller (`Kernel calls repeating: code …`).
+
 ## JIT automation
 
 Settings > Automation has "Auto-Enable JIT via StikDebug" (stikjit://) and,

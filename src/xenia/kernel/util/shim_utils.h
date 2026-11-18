@@ -546,6 +546,8 @@ XE_NOALIAS void PrintKernelCall(cpu::Export* export_entry,
 // when one call, or a short cycle of calls, repeats many times in a row
 // (kernel_call_repeat_threshold).
 void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context);
+// Marks the end of the kernel call NoteKernelCall reported on this thread.
+void NoteKernelCallDone();
 
 template <typename F, typename Tuple, std::size_t... I>
 XE_FORCEINLINE static auto KernelTrampoline(F&& f, Tuple&& t,
@@ -569,7 +571,8 @@ struct ExportRegistrerHelper {
         new cpu::Export(ORDINAL, xe::cpu::Export::Type::kFunction, name, TAGS);
     struct X {
       static void Trampoline(PPCContext* ppc_context) {
-        if (cvars::kernel_call_repeat_threshold) {
+        const bool kernel_call_noted = cvars::kernel_call_repeat_threshold != 0;
+        if (kernel_call_noted) {
           NoteKernelCall(export_entry, ppc_context);
         }
         Param::Init init = {
@@ -598,6 +601,9 @@ struct ExportRegistrerHelper {
               (xe::cpu::ExportTag::kLog | xe::cpu::ExportTag::kLogResult)) {
             // TODO(benvanik): log result.
           }
+        }
+        if (kernel_call_noted) {
+          NoteKernelCallDone();
         }
       }
     };

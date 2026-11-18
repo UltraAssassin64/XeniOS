@@ -165,23 +165,42 @@ further edits.
 | `kEmitInlineMmioChecksDefault` | file-scope constexpr | Default of the `emit_inline_mmio_checks` cvar: true on iOS, false elsewhere. | `src/xenia/memory.cc` | 42, 44, 46 | 3 |
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.cc` | 18 | 1 |
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.h` | 16 | 1 |
-| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.h` | 547, 572 | 2 |
-| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.cc` | 49 | 1 |
-| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.h` | 548, 573 | 2 |
-| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.cc` | 29 | 1 |
-| `kernel_call_history` | thread_local array | The thread's last eight kernel exports, newest first. | `src/xenia/kernel/util/shim_utils.cc` | 33, 37, 44, 45, 47, 66 | 6 |
-| `kernel_call_runs` | thread_local array | For cycle lengths 1-4, how many calls in a row matched the call that many places earlier. | `src/xenia/kernel/util/shim_utils.cc` | 34, 38, 40, 52 | 4 |
-| `kernel_call_period` | local | Cycle length being checked (1-4). | `src/xenia/kernel/util/shim_utils.cc` | 35, 36, 37, 38, 40, 50, 51, 52, 61 | 11 |
-| `kernel_call_index` | local | Index into the history. | `src/xenia/kernel/util/shim_utils.cc` | 43, 44, 45, 61, 62, 66 | 9 |
-| `kernel_call_threshold` | local | Copy of the cvar for this call. | `src/xenia/kernel/util/shim_utils.cc` | 49, 55, 56, 57, 76 | 5 |
-| `kernel_call_run` | local | Run length for the cycle length being checked. | `src/xenia/kernel/util/shim_utils.cc` | 52, 55, 56, 57, 72, 76 | 6 |
-| `kernel_call_names` | local | Text of the repeating cycle, e.g. "A -> B". | `src/xenia/kernel/util/shim_utils.cc` | 60, 63, 64, 66, 73 | 5 |
-| `kernel_call_thread` | local | Current guest XThread, for its handle. | `src/xenia/kernel/util/shim_utils.cc` | 68, 72 | 3 |
-| `kernel_call_memory` | local | Guest memory, for the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 79, 88, 95 | 3 |
-| `kernel_call_frame` | local | Guest stack frame being walked. | `src/xenia/kernel/util/shim_utils.cc` | 80, 84, 88, 89, 97 | 6 |
-| `kernel_call_stack` | local | Text of the guest return addresses. | `src/xenia/kernel/util/shim_utils.cc` | 81, 93, 99 | 3 |
-| `kernel_call_depth` | local | Depth in the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 82, 83 | 3 |
-| `kernel_call_caller_frame` | local | Back-chain pointer to the caller's frame. | `src/xenia/kernel/util/shim_utils.cc` | 87, 89, 90, 96, 97 | 5 |
+| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.h` | 547, 574 | 2 |
+| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.cc` | 112 | 1 |
+| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.h` | 548, 549, 576 | 3 |
+| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.cc` | 77 | 1 |
+| `kernel_call_history` | thread_local array | The thread's last eight kernel exports, newest first. | `src/xenia/kernel/util/shim_utils.cc` | 96, 100, 107, 108, 110, 127, 141 | 7 |
+| `kernel_call_runs` | thread_local array | For cycle lengths 1-4, how many calls in a row matched the call that many places earlier. | `src/xenia/kernel/util/shim_utils.cc` | 97, 101, 103, 115 | 4 |
+| `kernel_call_period` | local | Cycle length being checked (1-4). | `src/xenia/kernel/util/shim_utils.cc` | 98, 99, 100, 101, 103, 113, 114, 115, 125, 136 | 12 |
+| `kernel_call_index` | local | Index into the history. | `src/xenia/kernel/util/shim_utils.cc` | 106, 107, 108, 125, 126, 127, 136, 137, 141 | 13 |
+| `kernel_call_threshold` | local | Copy of the cvar for this call. | `src/xenia/kernel/util/shim_utils.cc` | 112, 118, 119, 120, 151, 195, 196 | 7 |
+| `kernel_call_run` | local | Run length for the cycle length being checked. | `src/xenia/kernel/util/shim_utils.cc` | 115, 118, 119, 120, 147, 151, 195, 196 | 8 |
+| `kernel_call_names` | local | Text of the repeating cycle, e.g. "A -> B". | `src/xenia/kernel/util/shim_utils.cc` | 135, 138, 139, 141, 148 | 5 |
+| `kernel_call_thread` | local | Current guest XThread, for its handle. | `src/xenia/kernel/util/shim_utils.cc` | 143, 147 | 3 |
+| `kernel_call_memory` | local | Guest memory, for the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 154, 163, 170, 185 | 4 |
+| `kernel_call_frame` | local | Guest stack frame being walked. | `src/xenia/kernel/util/shim_utils.cc` | 155, 159, 163, 164, 172 | 6 |
+| `kernel_call_stack` | local | Text of the guest return addresses. | `src/xenia/kernel/util/shim_utils.cc` | 156, 168, 174 | 3 |
+| `kernel_call_depth` | local | Depth in the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 157, 158 | 3 |
+| `kernel_call_caller_frame` | local | Back-chain pointer to the caller's frame. | `src/xenia/kernel/util/shim_utils.cc` | 162, 164, 165, 171, 172 | 5 |
+| `NoteKernelCallDone` | function, kernel shim | Clears the thread's in-call mark after every kernel export returns. | `src/xenia/kernel/util/shim_utils.h` | 550, 606 | 2 |
+| `NoteKernelCallDone` | function, kernel shim | Clears the thread's in-call mark after every kernel export returns. | `src/xenia/kernel/util/shim_utils.cc` | 70 | 1 |
+| `kernel_call_noted` | local in the export trampoline | Whether this call was reported to NoteKernelCall (so NoteKernelCallDone is called). | `src/xenia/kernel/util/shim_utils.h` | 574, 575, 605 | 3 |
+| `KernelCallThreadState` | struct (anonymous namespace) | One guest thread's kernel-call state, readable from any thread. | `src/xenia/kernel/util/shim_utils.cc` | 38, 48, 49, 54, 79 | 5 |
+| `kernel_call_threads_mutex` | file-static mutex | Guards kernel_call_threads. | `src/xenia/kernel/util/shim_utils.cc` | 47, 53, 84 | 3 |
+| `kernel_call_threads` | file-static vector | Every thread's KernelCallThreadState; entries are never freed. | `src/xenia/kernel/util/shim_utils.cc` | 48, 54, 85 | 3 |
+| `kernel_call_this_thread` | thread_local pointer | This thread's KernelCallThreadState. | `src/xenia/kernel/util/shim_utils.cc` | 49, 71, 72, 73, 78, 79, 81, 82, 85, 87, 88, 89, 90, 91 | 14 |
+| `LogKernelCallThreads` | function (anonymous namespace) | Logs every thread: inside or last kernel call, for how long, guest lr, call count. | `src/xenia/kernel/util/shim_utils.cc` | 51, 197 | 2 |
+| `kernel_call_now` | local | Current host uptime in ms. | `src/xenia/kernel/util/shim_utils.cc` | 52, 64 | 2 |
+| `kernel_call_lock` | local | Lock on kernel_call_threads_mutex. | `src/xenia/kernel/util/shim_utils.cc` | 53, 84 | 2 |
+| `kernel_call_state` | local | Thread state being logged. | `src/xenia/kernel/util/shim_utils.cc` | 54, 55, 56, 60, 64, 65 | 8 |
+| `kernel_call_last` | local | That thread's last export. | `src/xenia/kernel/util/shim_utils.cc` | 55, 62 | 3 |
+| `kernel_call_inside` | local | Whether that thread is inside a kernel call now. | `src/xenia/kernel/util/shim_utils.cc` | 56, 61, 63 | 3 |
+| `kernel_call_owner` | local | The new thread's XThread, for handle and name. | `src/xenia/kernel/util/shim_utils.cc` | 80, 81, 82 | 3 |
+| `kernel_call_only_sleeps` | local | True when the repeating cycle is only KeDelayExecutionThread (idle, not reported). | `src/xenia/kernel/util/shim_utils.cc` | 124, 129, 132 | 3 |
+| `kernel_call_code` | local | Guest address the code dump starts at (lr - 0x80). | `src/xenia/kernel/util/shim_utils.cc` | 176, 186, 189 | 3 |
+| `kernel_call_line` | local | First word of the dump line. | `src/xenia/kernel/util/shim_utils.cc` | 178, 179, 181, 182, 189 | 6 |
+| `kernel_call_words` | local | Text of one dump line. | `src/xenia/kernel/util/shim_utils.cc` | 180, 183, 189 | 3 |
+| `kernel_call_word` | local | Word being added to the line. | `src/xenia/kernel/util/shim_utils.cc` | 181, 182, 186 | 4 |
 
 ## Total references per name
 
@@ -328,20 +347,38 @@ further edits.
 | `xma_symbol` | 10 |
 | `kEmitInlineMmioChecksDefault` | 3 |
 | `kernel_call_repeat_threshold` | 5 |
-| `NoteKernelCall` | 3 |
-| `kernel_call_history` | 6 |
+| `NoteKernelCall` | 4 |
+| `kernel_call_history` | 7 |
 | `kernel_call_runs` | 4 |
-| `kernel_call_period` | 11 |
-| `kernel_call_index` | 9 |
-| `kernel_call_threshold` | 5 |
-| `kernel_call_run` | 6 |
+| `kernel_call_period` | 12 |
+| `kernel_call_index` | 13 |
+| `kernel_call_threshold` | 7 |
+| `kernel_call_run` | 8 |
 | `kernel_call_names` | 5 |
 | `kernel_call_thread` | 3 |
-| `kernel_call_memory` | 3 |
+| `kernel_call_memory` | 4 |
 | `kernel_call_frame` | 6 |
 | `kernel_call_stack` | 3 |
 | `kernel_call_depth` | 3 |
 | `kernel_call_caller_frame` | 5 |
+| `NoteKernelCallDone` | 3 |
+| `kernel_call_noted` | 3 |
+| `KernelCallThreadState` | 5 |
+| `kernel_call_threads_mutex` | 3 |
+| `kernel_call_threads` | 3 |
+| `kernel_call_this_thread` | 14 |
+| `LogKernelCallThreads` | 2 |
+| `kernel_call_now` | 2 |
+| `kernel_call_lock` | 2 |
+| `kernel_call_state` | 8 |
+| `kernel_call_last` | 3 |
+| `kernel_call_inside` | 3 |
+| `kernel_call_owner` | 3 |
+| `kernel_call_only_sleeps` | 3 |
+| `kernel_call_code` | 3 |
+| `kernel_call_line` | 6 |
+| `kernel_call_words` | 3 |
+| `kernel_call_word` | 4 |
 
 ## Checks
 
@@ -371,3 +408,5 @@ further edits.
   `LSApplicationQueriesSchemes` in `src/xenia/app/Info_ios.plist`.
 - `xma_thread_state` is declared in two files (`xboxkrnl_audio_xma.cc` and
   `xma_decoder.cc`); both are function locals and unrelated.
+- `KernelCallThreadState` fields (`last_export`, `call_count`, `enter_ms`,
+  `in_call`, `handle`, `lr`, `name`) are only used in `shim_utils.cc`.
