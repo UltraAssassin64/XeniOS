@@ -313,6 +313,36 @@ guest thread: `Kernel thread <handle> (<name>): inside|last called <export>
 for <ms>, guest lr …, <n> calls`, plus 64 words of guest code around the
 looping caller (`Kernel calls repeating: code …`).
 
+Results on build #9562 (logs named by time; 19-29 and 19-34 hung at the
+first cutscene, 19-41 is an empty log from a launch that failed after a
+reinstall, followed by a phone crash; 19-44 after a reboot reached gameplay):
+
+- The main thread's 2-4 million poll at `8227EC40` happens in the good run
+  too. It is a slow load, not the hang itself.
+- In both hung runs, thread `F8000040` (opens `\BmGame\CookedXenon`, the
+  package loader) goes from about 21,000 kernel calls to **268-271
+  million**, then waits in NtWaitForSingleObjectEx (lr `82399190`) for
+  good. In the good run it ends at 58,106. The repeat detector never
+  reported it, so its loop is longer than four calls or varies.
+- At the end of a hung run, every game thread is waiting: the main thread
+  (short waits), `F8000040`, and the movie thread `F80000E0`/`E4` (opens
+  `\BmGame\Movies`, spins KfAcquire/ReleaseSpinLock at lr `823582BC`; it
+  does the same in the good run). The GPU still draws a static frame
+  (480 draws per 120 frames).
+- Threads shown "inside ExTerminateThread" have exited; the next build
+  leaves them out.
+
+Next build (commit "[Kernel] Report kernel call storms and what blocked
+threads wait on"):
+- `Kernel call storm on thread …: 1000000 calls in <ms> ms …; last 32
+  calls: Export@lr …` whenever a thread makes a million calls in under a
+  second (first time, then every tenth), plus its guest stack.
+- Cycle detection up to eight calls long.
+- In the thread table, each thread inside a call for a second or more
+  gets a second line: r3 (with the object type and name if it is a
+  handle; XObject::Type numbers: 2 Event, 3 File, 4 IOCompletion,
+  6 Mutant, 8 Semaphore, 12 Thread, 13 Timer), r4 and its guest stack.
+
 ## JIT automation
 
 Settings > Automation has "Auto-Enable JIT via StikDebug" (stikjit://) and,
