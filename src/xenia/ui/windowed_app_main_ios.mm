@@ -3720,6 +3720,15 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "the busy ones spend their time (\"Guest thread hotspots\" lines). Adds "
                  "a ~20 ms pause each time.",
                  true);
+  AddChoiceSetting(
+      diagnostics.items, IOSConfigControlType::kChoiceInt32, "metal_frame_detail_log",
+      "Frame Detail Log",
+      "Pick a number of frames during the game (In-Game Menu > Settings) and "
+      "save: those frames are logged pass by pass and draw by draw, with "
+      "textures, resolves and occlusion queries (\"Frame detail\" lines, about "
+      "1 MB per gameplay frame). For another capture, pick a different number, "
+      "or Off and save, then the number again.",
+      0, {{"Off", 0}, {"1 frame", 1}, {"4 frames", 4}, {"16 frames", 16}, {"60 frames", 60}});
   AddActionSetting(diagnostics.items, IOSConfigAction::kViewRecentLog, "View Live Log",
                    "Open a live-updating xenia.log viewer so you can capture boot failures "
                    "without Xcode.");

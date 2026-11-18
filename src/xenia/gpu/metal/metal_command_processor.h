@@ -630,6 +630,12 @@ class MetalCommandProcessor : public CommandProcessor {
     uint32_t frames_over_50ms = 0;
   };
   DrawStats draw_stats_;
+  // metal_frame_detail_log: its value when last seen (a change starts a
+  // capture), and the passes, draws and draw_stats_ at the frame start.
+  int32_t frame_detail_setting_ = 0;
+  uint32_t frame_detail_passes_ = 0;
+  uint32_t frame_detail_draws_ = 0;
+  DrawStats frame_detail_stats_;
   std::chrono::steady_clock::time_point metal_perf_last_swap_{};
   std::unordered_map<uint64_t, MTL::RenderPipelineState*> msl_pipeline_cache_;
 

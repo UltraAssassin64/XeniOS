@@ -96,6 +96,13 @@ DEFINE_int32(
     "SPIRV-Cross path may have in flight before draws wait for the GPU to "
     "retire one. 0 for the default (96 on iOS, 12 elsewhere).",
     "Metal");
+DEFINE_int32(
+    metal_frame_detail_log, 0,
+    "Changed to N while a game runs: logs every render pass, draw (shaders, "
+    "state and texture fetch constants), resolve, render target transfer and "
+    "occlusion query of the next N frames. Change it again for another "
+    "capture.",
+    "Metal");
 DEFINE_bool(
     metal_render_pass_area_from_scissor, false,
     "Limit each guest draw render pass to the area its draws' scissors cover, "
@@ -1470,6 +1477,8 @@ bool MetalCommandProcessor::ConsumeSwapDestSwap(uint32_t dest_base,
 }
 
 bool MetalCommandProcessor::SetupContext() {
+  // A capture starts when the setting changes, not at every launch.
+  frame_detail_setting_ = cvars::metal_frame_detail_log;
   saw_swap_ = false;
   last_swap_ptr_ = 0;
   last_swap_width_ = 0;
@@ -2675,6 +2684,39 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
                                       uint32_t frontbuffer_width,
                                       uint32_t frontbuffer_height) {
   ProcessCompletedSubmissions();
+  // metal_frame_detail_log: the end of a logged frame, and the start of a
+  // capture when the setting changed. draw_stats_ may have been reset since
+  // the frame started.
+  if (uint32_t frames = metal_perf_counters.frame_detail_frames.load(
+          std::memory_order_relaxed)) {
+    const DrawStats& frame_start =
+        draw_stats_.frames >= frame_detail_stats_.frames ? frame_detail_stats_
+                                                         : DrawStats{};
+    XELOGI(
+        "Frame detail: frame ended ({} more to log) with a swap of {:08X} "
+        "({}x{}): {} passes, {} draws issued, {} encoded, {} skipped for "
+        "compiles, {} rasterize nothing, {} without vertices, {} resolves",
+        frames - 1, frontbuffer_ptr, frontbuffer_width, frontbuffer_height,
+        frame_detail_passes_, draw_stats_.issued - frame_start.issued,
+        draw_stats_.encoded - frame_start.encoded,
+        draw_stats_.compile_pending - frame_start.compile_pending,
+        draw_stats_.no_rasterization - frame_start.no_rasterization,
+        draw_stats_.no_vertices - frame_start.no_vertices,
+        draw_stats_.copies - frame_start.copies);
+    metal_perf_counters.frame_detail_frames.store(frames - 1,
+                                                  std::memory_order_relaxed);
+  }
+  if (cvars::metal_frame_detail_log != frame_detail_setting_) {
+    frame_detail_setting_ = cvars::metal_frame_detail_log;
+    if (frame_detail_setting_ > 0) {
+      XELOGI("Frame detail: logging the next {} frames", frame_detail_setting_);
+      metal_perf_counters.frame_detail_frames.store(
+          uint32_t(frame_detail_setting_), std::memory_order_relaxed);
+    }
+  }
+  frame_detail_passes_ = 0;
+  frame_detail_draws_ = 0;
+  frame_detail_stats_ = draw_stats_;
   // Host time between guest swaps, for the perf line below.
   const auto metal_perf_swap_time = std::chrono::steady_clock::now();
   if (metal_perf_last_swap_.time_since_epoch().count()) {
@@ -5589,6 +5631,58 @@ bool MetalCommandProcessor::IssueDrawMsl(
     bind_msl_samplers(msl_pixel_shader, pixel_translation, true);
   }
 
+  if (metal_perf_counters.frame_detail_frames.load(std::memory_order_relaxed)) {
+    // Texture fetch constants as they are (6 dwords), marked when their base
+    // is in memory a resolve wrote.
+    std::string frame_detail_textures;
+    uint32_t fetch_bits = used_texture_mask;
+    uint32_t fetch_index = 0;
+    while (xe::bit_scan_forward(fetch_bits, &fetch_index)) {
+      fetch_bits &= ~(uint32_t(1) << fetch_index);
+      const uint32_t* fetch =
+          &regs.values[XE_GPU_REG_SHADER_CONSTANT_FETCH_00_0 + fetch_index * 6];
+      fmt::format_to(
+          std::back_inserter(frame_detail_textures),
+          " t{} {:08X} {:08X} {:08X} {:08X} {:08X} {:08X}{}", fetch_index,
+          fetch[0], fetch[1], fetch[2], fetch[3], fetch[4], fetch[5],
+          IsResolvedMemory(regs.GetTextureFetch(fetch_index).base_address << 12,
+                           1)
+              ? " resolved"
+              : "");
+    }
+    XELOGI(
+        "Frame detail draw {} (pass {}): VS {:016X} mod {:X}, PS {:016X} mod "
+        "{:X}, guest primitive {} ({} vertices), host {} ({} vertices), "
+        "COLOR_MASK {:08X} DEPTHCONTROL {:08X} STENCILREFMASK {:08X} "
+        "BLENDCONTROL0 {:08X} COLORCONTROL {:08X} SC_MODE_CNTL {:08X} "
+        "scissor {:08X} {:08X}, viewport scale {} {} {} offset {} {} {}, "
+        "counting a query {}; textures:{}",
+        ++frame_detail_draws_, frame_detail_passes_,
+        vertex_translation->shader().ucode_data_hash(),
+        vertex_translation->modification(),
+        pixel_translation ? pixel_translation->shader().ucode_data_hash() : 0,
+        pixel_translation ? pixel_translation->modification() : 0,
+        uint32_t(primitive_processing_result.guest_primitive_type),
+        primitive_processing_result.guest_draw_vertex_count,
+        uint32_t(primitive_processing_result.host_primitive_type),
+        primitive_processing_result.host_draw_vertex_count,
+        regs.values[XE_GPU_REG_RB_COLOR_MASK],
+        regs.values[XE_GPU_REG_RB_DEPTHCONTROL],
+        regs.values[XE_GPU_REG_RB_STENCILREFMASK],
+        regs.values[XE_GPU_REG_RB_BLENDCONTROL0],
+        regs.values[XE_GPU_REG_RB_COLORCONTROL],
+        regs.values[XE_GPU_REG_PA_SU_SC_MODE_CNTL],
+        regs.values[XE_GPU_REG_PA_SC_WINDOW_SCISSOR_TL],
+        regs.values[XE_GPU_REG_PA_SC_WINDOW_SCISSOR_BR],
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_XSCALE),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_YSCALE),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_ZSCALE),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_XOFFSET),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_YOFFSET),
+        regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_ZOFFSET), zpd_query_active_,
+        frame_detail_textures);
+  }
+
   // occlusion_query_enable: count the draw's samples for the guest's query,
   // in a slot of its own for each render pass.
   if (zpd_query_active_ && !zpd_segment_open_ && !zpd_query_.inexact) {
@@ -6018,6 +6112,23 @@ bool MetalCommandProcessor::IssueCopy() {
     XELOGE("MetalCommandProcessor::IssueCopy - Resolve failed");
     return false;
   }
+  if (metal_perf_counters.frame_detail_frames.load(std::memory_order_relaxed)) {
+    const uint32_t* values = register_file_->values;
+    XELOGI(
+        "Frame detail resolve after draw {}: COPY_CONTROL {:08X} DEST_BASE "
+        "{:08X} DEST_PITCH {:08X} DEST_INFO {:08X} SURFACE_SLICE {:08X} "
+        "SURFACE_INFO {:08X} COLOR_INFO {:08X} {:08X} {:08X} {:08X} "
+        "DEPTH_INFO {:08X}; wrote {:08X} to {:08X}",
+        frame_detail_draws_, values[XE_GPU_REG_RB_COPY_CONTROL],
+        values[XE_GPU_REG_RB_COPY_DEST_BASE],
+        values[XE_GPU_REG_RB_COPY_DEST_PITCH],
+        values[XE_GPU_REG_RB_COPY_DEST_INFO],
+        values[XE_GPU_REG_RB_COPY_SURFACE_SLICE],
+        values[XE_GPU_REG_RB_SURFACE_INFO], values[XE_GPU_REG_RB_COLOR_INFO],
+        values[XE_GPU_REG_RB_COLOR1_INFO], values[XE_GPU_REG_RB_COLOR2_INFO],
+        values[XE_GPU_REG_RB_COLOR3_INFO], values[XE_GPU_REG_RB_DEPTH_INFO],
+        written_address, written_address + written_length);
+  }
 
   ReadbackResolveMode readback_mode = GetReadbackResolveMode();
   bool do_readback = (readback_mode != ReadbackResolveMode::kDisabled);
@@ -6299,6 +6410,11 @@ bool MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(uint32_t packet,
     }
   }
   if (!real_queries) {
+    if (metal_perf_counters.frame_detail_frames.load(
+            std::memory_order_relaxed)) {
+      XELOGI("Frame detail query {} at {:08X} after draw {} (faked)",
+             is_end ? "end" : "begin", sample_count_addr, frame_detail_draws_);
+    }
     return CommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(packet, count);
   }
 
@@ -6312,6 +6428,11 @@ bool MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(uint32_t packet,
     zpd_query_ = {};
     zpd_query_active_ = true;
     zpd_compile_pending_at_begin_ = draw_stats_.compile_pending;
+    if (metal_perf_counters.frame_detail_frames.load(
+            std::memory_order_relaxed)) {
+      XELOGI("Frame detail query begin at {:08X} after draw {}",
+             sample_count_addr, frame_detail_draws_);
+    }
     return true;
   }
 
@@ -6359,6 +6480,12 @@ bool MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(uint32_t packet,
   // The lane D3D waits on, last.
   std::atomic_thread_fence(std::memory_order_release);
   sample_counts->ZPass_A = samples;
+  if (metal_perf_counters.frame_detail_frames.load(std::memory_order_relaxed)) {
+    XELOGI(
+        "Frame detail query end at {:08X} after draw {}: wrote {} (0 if "
+        "nothing was drawn, else a guess)",
+        sample_count_addr, frame_detail_draws_, samples);
+  }
   return true;
 }
 
@@ -6420,6 +6547,11 @@ void MetalCommandProcessor::ProcessCompletedZPDQueries() {
           sample_counts->ZPass_A = count;
           metal_perf_counters.zpd_queries_corrected.fetch_add(
               1, std::memory_order_relaxed);
+        }
+        if (metal_perf_counters.frame_detail_frames.load(
+                std::memory_order_relaxed)) {
+          XELOGI("Frame detail query at {:08X} counted {} (guessed {})",
+                 query.address, count, query.guess);
         }
       }
     }
@@ -6745,6 +6877,45 @@ void MetalCommandProcessor::BeginCommandBuffer() {
     ff_blend_factor_valid_ = false;
     current_render_pass_descriptor_ = pass_descriptor;
     UseRenderEncoderAttachmentHeaps(pass_descriptor);
+    if (metal_perf_counters.frame_detail_frames.load(
+            std::memory_order_relaxed) &&
+        register_file_) {
+      // Host attachments: size, MTL::PixelFormat, samples, load and store
+      // actions; guest render target registers as they are.
+      std::string frame_detail_attachments;
+      auto add_attachment =
+          [&](const char* name,
+              MTL::RenderPassAttachmentDescriptor* attachment) {
+            MTL::Texture* texture =
+                attachment ? attachment->texture() : nullptr;
+            if (texture) {
+              fmt::format_to(std::back_inserter(frame_detail_attachments),
+                             " {} {}x{} format {} x{} load {} store {}", name,
+                             texture->width(), texture->height(),
+                             uint32_t(texture->pixelFormat()),
+                             texture->sampleCount(),
+                             uint32_t(attachment->loadAction()),
+                             uint32_t(attachment->storeAction()));
+            }
+          };
+      static const char* const kColorNames[] = {"c0", "c1", "c2", "c3"};
+      for (uint32_t i = 0; i < 4; ++i) {
+        add_attachment(kColorNames[i],
+                       pass_descriptor->colorAttachments()->object(i));
+      }
+      add_attachment("depth", pass_descriptor->depthAttachment());
+      const uint32_t* values = register_file_->values;
+      XELOGI(
+          "Frame detail pass {}: area {}x{} (0 for all), SURFACE_INFO {:08X} "
+          "COLOR_INFO {:08X} {:08X} {:08X} {:08X} DEPTH_INFO {:08X} "
+          "MODECONTROL {:08X}, query buffer {};{}",
+          ++frame_detail_passes_, area_width, area_height,
+          values[XE_GPU_REG_RB_SURFACE_INFO], values[XE_GPU_REG_RB_COLOR_INFO],
+          values[XE_GPU_REG_RB_COLOR1_INFO], values[XE_GPU_REG_RB_COLOR2_INFO],
+          values[XE_GPU_REG_RB_COLOR3_INFO], values[XE_GPU_REG_RB_DEPTH_INFO],
+          values[XE_GPU_REG_RB_MODECONTROL], render_encoder_has_zpd_visibility_,
+          frame_detail_attachments);
+    }
   }
 
   // Derive viewport/scissor from the actual bound render target rather than

@@ -4984,6 +4984,26 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
   if (!any_work) {
     return;
   }
+  if (metal_perf_counters.frame_detail_frames.load(std::memory_order_relaxed)) {
+    // metal_frame_detail_log: what each render target gets its contents from.
+    for (uint32_t i = 0; i < render_target_count; ++i) {
+      if (!render_targets[i] || render_target_transfers[i].empty()) {
+        continue;
+      }
+      std::string frame_detail_sources;
+      for (const Transfer& transfer : render_target_transfers[i]) {
+        fmt::format_to(std::back_inserter(frame_detail_sources),
+                       " [{}, tiles {}-{}{}]",
+                       transfer.source->key().GetDebugName(),
+                       transfer.start_tiles, transfer.end_tiles,
+                       transfer.host_depth_source ? ", host depth" : "");
+      }
+      XELOGI("Frame detail transfer to {}{}:{}",
+             render_targets[i]->key().GetDebugName(),
+             resolve_clear_needed ? " (and a resolve clear)" : "",
+             frame_detail_sources);
+    }
+  }
 
   MTL::CommandBuffer* cmd = command_buffer;
   if (!cmd) {

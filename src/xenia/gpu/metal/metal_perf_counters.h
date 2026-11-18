@@ -68,6 +68,9 @@ struct MetalPerfCounters {
   std::atomic<uint64_t> zpd_pass_restarts{0};
   // Guest memory copied into the GPU's shared memory buffer.
   std::atomic<uint64_t> upload_bytes{0};
+  // metal_frame_detail_log: frames left to log in detail (counted down at
+  // swaps by the command processor; read by the render target cache).
+  std::atomic<uint32_t> frame_detail_frames{0};
 };
 
 inline MetalPerfCounters metal_perf_counters;
