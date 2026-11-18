@@ -574,6 +574,18 @@ native input layouts that need the game's declarations up front), and its
 one speed trick, skipping the control-flow loop for shaders without
 jumps, is already in `SpirvShaderTranslator` (`has_main_switch`).
 
+"Persistent Shader Cache" (`store_shaders`) on iOS: it gates
+`InitializeShaderStorage`, whose non-MSC branch (the one iOS builds) only
+sets the MSL source cache directory (saves SPIRV-Cross, about 5 ms per
+shader). `g_metal_shader_cache` is initialized but `MslShader` never uses
+it; the pipeline disk cache, MTLBinaryArchive and prewarm all sit in the
+`METAL_SHADER_CONVERTER_AVAILABLE` (macOS) branch. So `newLibrary` from
+source (50-90 ms) and `newRenderPipelineState` run again every run, as the
+logs show. XeniOS HEAD's SPIR-V path is the same (MSL source cache only),
+so there is no upstream code to port; a real cache would be new work
+(e.g. MTLBinaryArchive for SPIR-V-path pipelines, iOS 14+, which saves the
+GPU back-end compile but not the MSL front end).
+
 Ideas to discuss with the owner (not started):
 1. Cache compiled shaders across runs: MTLBinaryArchive for SPIR-V-path
    pipelines (iOS 14+), or compiling libraries with
