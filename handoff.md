@@ -890,6 +890,11 @@ fix. Compare against both upstreams (standing rule 10).
   exists in the tree.
 - CI signs with `xenia_ios.entitlements`, not
   `xenia_ios_trollstore.entitlements`.
+  Both include `com.apple.developer.kernel.increased-memory-limit` and
+  `com.apple.developer.kernel.extended-virtual-addressing` (true); checked
+  in the signature of build 9578's binary (owner asked, 2026-11-18). The
+  perf lines' footprint + available memory always sums to 4095 MB, so the
+  increased limit is in effect; gameplay peaks near 1.9 GB.
 - The unhandled host fault path in `exception_handler_mac.cc` only logs and
   retries; making it fatal was tried and reverted because the JIT may rely on
   the retry.
