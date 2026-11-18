@@ -772,6 +772,64 @@ stalls"):
   windowed_app_main_ios.mm across the whole file; fixed (see the doc's
   Checks). The refresh script must not be run on that file again as is.
 
+Build 9583 results (owner, zip "As_many_runs_as_I_can_do", 6 logs: 4 with
+pass timing off, 2 on; plus a force-quit .ips):
+- FPS unchanged by the ring-empty fix: gameplay 150-220 ms per frame, menus
+  35 ms. No new glitches reported.
+- Counter sets: only "timestamp: GPUTimestamp" (no hardware memory
+  counters on iOS 16 / A16, as expected). GPU tick = 1 ns.
+- GPU time per gameplay frame (pass timing): rt transfer 60-156 ms (49-85
+  passes), draws 13-30 ms (54-167 passes, 300-3500 draws, 0.8-3.4M
+  vertices), texture load + upload blit 4-11 ms, resolve + edram dump 2-5
+  ms. Top passes: rt transfer 640x1024 x4 D32S8 (load/store depth+stencil)
+  ~45-75 ms for ~15 per frame; rt transfer 1280x2048 x1 D32S8 13-24 ms.
+  Even a menu frame spends 7.25 ms on one 640x1024 x4 depth transfer.
+  Cause: every depth transfer = stencil clear + depth draw + 8 per-bit
+  stencil draws, each shaded per sample at 4x MSAA.
+- Attachment traffic estimate up to 7.5 GB per frame, 43 GB/s (A16 ~51
+  GB/s): draw passes load and store whole 1280x2048 targets (34 MB per
+  pass for RGBA16F+D32S8); a menu pass with one 4-vertex draw = 0.53 ms.
+- Top pipelines: nothing dominant at runtime (~2 ms each at most); one
+  pixel shader with 64 texture samples (~1 ms, 1 draw); few use discard.
+- Compile stalls: ~640 compiles per 120-frame window when gameplay starts,
+  ~100k draws skipped, queue wait totals ~1,100 s vs ~97 s compiling;
+  228 compiles pending over 1 s, oldest 10.8 s. Compile timings over all
+  logs: median 300 ms per shader, of which spirv-cross ~1.6 ms, Metal
+  library 0.3 ms after the first run (190 ms on the first, cold system
+  cache), and ~290 ms unaccounted every run (784 s of 911 s).
+  Found: AddEntryPointCandidatesFromMslSource ran two backtracking
+  std::regex over the ~60 KB MSL; locally libc++ takes 72 ms on 57 KB
+  (libstdc++ 18 ms) on a desktop core. Both upstreams still have it.
+- Compile threads are plain std::threads (default QoS; their reported
+  priority 16-17 is Darwin's decay of CPU-bound threads), 4 of them, ~52%
+  CPU each. One guest thread (XThreadE10F) at ~94% of a core.
+- Force quit no longer hangs, but crashed (SIGSEGV 0x191, main thread,
+  EmulatorThread's exit lambda run from ExecutePendingFunctionsFromUIThread
+  after the app was destroyed).
+
+Changes after 9583 (each separately toggleable where it changes output):
+- 1ff156a7 native stencil output in transfers (port of XeniOS/xenia-edge,
+  probe at startup, `native_stencil_value_output`, Settings > Performance >
+  Native Stencil Output, default on): one draw instead of ten per depth
+  transfer. Shader checked locally as C++ with a stub metal_stdlib for 8
+  define combinations (gen in scratchpad mslcheck/).
+- adce620f entry-point regex only when no named candidate resolves;
+  argument-encoder time added to the compile timings line; compile threads
+  named "Metal Shaders N".
+- 16eb1471 force-quit crash: exit notification not queued during OnDestroy,
+  and OnDestroy runs queued UI functions after joining the emulator thread.
+- 6797a3d8 compile queues FIFO within a priority (queue_arrival);
+  `metal_async_compile_wait_ms` (Settings > Performance > Wait for Shader
+  Compiles, default off): draws wait up to N ms per frame for compiles;
+  perf line "draws waited for compiles N times, X ms".
+- dfafc8eb `metal_render_pass_area_from_scissor` (Settings > Performance >
+  Limit Render Pass Area, default off, experimental): draw passes limited
+  to the largest scissor so far per descriptor (32 px), restarted to grow;
+  not for passes clearing on load. Top passes show the limited size.
+Next candidates: transfer passes' area limited to their rectangles (they
+still load/store 13-34 MB each); hot guest code sampling for the 94% guest
+thread; argument encoders from descriptors if argument-encoder= is large.
+
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 
