@@ -650,6 +650,11 @@ void EmulatorAppIOS::OnDestroy() {
     emulator_thread_.join();
     emulator_thread_running_.store(false, std::memory_order_release);
   }
+  // The emulator thread queues UI functions that use this app when it ends
+  // (the game exit notification). Run them now, while the app still exists:
+  // left queued, the context's destructor ran them after the app was gone,
+  // crashing a force quit (SIGSEGV at 0x191 in build 9583).
+  app_context().ExecutePendingFunctionsFromUIThread();
   {
     std::lock_guard<std::mutex> lock(launch_mutex_);
     emulator_.reset();
@@ -670,7 +675,9 @@ void EmulatorAppIOS::EmulatorThread(const std::filesystem::path& game_path,
       }
     }
   } notify_exit{[this, launched_with_game]() {
-    if (!launched_with_game) {
+    // Not while the app is being destroyed (OnDestroy): nothing is left to
+    // return to the library.
+    if (!launched_with_game || shutting_down_.load(std::memory_order_acquire)) {
       return;
     }
     app_context().CallInUIThread([this]() {
