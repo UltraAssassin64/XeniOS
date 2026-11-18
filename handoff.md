@@ -838,6 +838,64 @@ the above; iOS CI passes for every commit in the series. Not yet run on
 device. Test plan given: 2 default gameplay runs (FPS, blackouts), 1 with
 Limit Render Pass Area on, 1 with Wait for Shader Compiles at 16 or 33 ms,
 a force quit, and watching stencil effects and screen regions.
+Build 9593 results (owner, zip "Wow_i_can_t_believe_it_s_not_native", 4
+logs; runs 1-3 defaults with Wait for Shader Compiles toggled in-session,
+run 4 Limit Render Pass Area on):
+- Gameplay 57-90 ms per frame (was 150-220): "just over double" FPS. Title
+  ~+5 FPS (15 -> 20), save select ~27 FPS. Menus still 35 ms.
+- GPU per gameplay frame: rt transfer 24-26 ms (61-70 passes, fragment
+  ~14 ms), draws 20-23 ms (108-122 passes, 1500-2500 draws, 1.9-2.7M
+  vertices), texture load + upload ~7 ms, resolve + dump ~5 ms. GPU busy
+  57-85%. Passes cost a fixed ~0.5-0.7 ms each even nearly empty (e.g. 28
+  draws in 4 passes = 2.74 ms), ~180 passes per frame.
+- Attachment traffic estimate reached 82-97 GB/s, above the A16's ~51
+  GB/s: it overcounts (compression, or untouched tiles skipped); use it as
+  a relative measure only.
+- Limit Render Pass Area (run 4) didn't limit anything: top passes stayed
+  1280x2048 / 640x1024. Cause: scissors are the whole surface and the area
+  kept the session maximum per descriptor.
+- Compiles: the regex fix worked (unaccounted ~1 ms, was ~290 ms). After
+  each install the first run recompiles everything (Metal's system cache is
+  per binary: 610 shaders, avg 436 ms); later runs avg 7-69 ms.
+  argument-encoder p90 297 ms on cold compiles (sum 70 s across the logs).
+  Blackouts now only at loads/transitions.
+- Guest thread hotspots: the 98% thread (XThread13807, F8000078, start
+  823EBAC8) spends ~60-80% of samples in 82A23160 and ~25% in 8229AC60.
+  82A23160 is a spin-wait: mtctr; 8x "or r31,r31,r31" (db16cyc delay) and
+  bdnz; then reads a flag at r29+0x2ABD and calls 82311598 (returns a
+  field of the current thread). 8229AC60 loops calling it until a counter
+  catches up (cmplw/blt). Reads as UE3's game thread waiting for the
+  render thread (one frame ahead at most); the render thread (XThread13407,
+  ~31-35%) mostly sleeps (__semwait_signal) and decodes audio
+  (ff_wma_*). So the limit is the GPU, not guest CPU work.
+- Owner: decals and shadows flicker (shadows always did), lighting on
+  characters slightly off (AO?), FPS dips near NPCs even off-camera
+  (culling?).
+Changes (c0bf3f9e):
+- `metal_shader_preserve_invariance` (default on, Settings > Accuracy >
+  Consistent Vertex Positions): MTLCompileOptions.preserveInvariance. The
+  SPIR-V has Invariant position and NoContraction everywhere; SPIRV-Cross
+  emits [[position, invariant]], which Metal only honours with that option
+  (iOS 14+); with fast math and the NoContraction optnone wrappers stripped
+  (metal_spirvcross_strip_nocontract_optnone), positions could differ
+  between a depth pre-pass and later passes: z-fighting flicker. Neither
+  upstream sets it.
+- Settings > Accuracy also: "Fast Shader Math"
+  (metal_spirvcross_strip_nocontract_optnone) and "Exact 24-bit Float
+  Depth" (depth_float24_convert_in_pixel_shader).
+- Render area v2: needed height = min(scissor bottom,
+  RenderTargetCache::last_update_height_used() (draw_extent_estimator_));
+  per descriptor {this frame, previous frame} maxima instead of the session
+  maximum.
+- "Metal render area and queries" line: draw/transfer passes limited of all
+  (average rows), restarts, occlusion queries per frame (counted via
+  XE_GPU_NOTE_FAKE_OCCLUSION_QUERY hook in the PM4 implementation, defined
+  only by the Metal command processor).
+Ideas not done: real occlusion queries (port of XeniOS's Metal ZPD with
+the pre-iOS-26 readback path; see the occlusion section) if the query
+count is high; gamma render targets are RGBA8 with manual PWL unless
+metal_allow_gamma_unorm16 ("known issues") - a lighting suspect;
+argument encoders from descriptors for cold-cache compiles.
 Local checks: metal_render_target_cache.cc, msl_shader.cc, shim_utils.cc
 (Apple branch forced on) and the command processor compile with clang on
 Linux against the real metal-cpp/glslang/SPIRV-Cross/Vulkan headers
