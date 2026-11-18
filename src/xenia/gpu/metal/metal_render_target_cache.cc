@@ -730,6 +730,15 @@ bool MetalRenderTargetCache::Initialize() {
   // Metal version currently is MacOS 15 / Metal 3
   msaa_2x_supported_ = device_->supportsTextureSampleCount(2);
 
+  native_stencil_output_probed_ = ProbeNativeStencilOutputSupport();
+  XELOGI(
+      "MetalRenderTargetCache: pixel shader stencil output {}; depth "
+      "transfers {}",
+      native_stencil_output_probed_ ? "supported" : "not supported",
+      UseNativeStencilOutputInTransfers()
+          ? "write stencil with depth in one draw"
+          : "use a stencil clear and eight per-bit draws");
+
   gamma_render_target_as_unorm16_ = ::cvars::gamma_render_target_as_unorm16 &&
                                     ::cvars::metal_allow_gamma_unorm16;
   if (::cvars::gamma_render_target_as_unorm16 &&
@@ -857,6 +866,10 @@ void MetalRenderTargetCache::Shutdown(bool from_destructor) {
   if (transfer_depth_state_) {
     transfer_depth_state_->release();
     transfer_depth_state_ = nullptr;
+  }
+  if (transfer_depth_stencil_output_state_) {
+    transfer_depth_stencil_output_state_->release();
+    transfer_depth_stencil_output_state_ = nullptr;
   }
   if (transfer_depth_state_none_) {
     transfer_depth_state_none_->release();
@@ -6006,7 +6019,12 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
             transfers_for_shaders.size(), i);
       }
     } else if (!transfers_for_shaders.empty()) {
-      bool need_stencil_bit_draws = dest_is_depth;
+      // The depth draw carries the guest stencil where the device allows it,
+      // which leaves nothing for the clear and the per-bit draws to do (as in
+      // XeniOS and xenia-edge).
+      bool use_native_stencil_output =
+          dest_is_depth && UseNativeStencilOutputInTransfers();
+      bool need_stencil_bit_draws = dest_is_depth && !use_native_stencil_output;
       bool stencil_clear_needed = need_stencil_bit_draws;
 
       transfer_invocations_.clear();
@@ -6079,6 +6097,8 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
                     xenos::MsaaSamples::k1X;
                 shader_key.host_depth_source_is_copy = 0;
               }
+              shader_key.native_stencil_output =
+                  use_native_stencil_output ? 1u : 0u;
             } else {
               shader_key.mode = source_key.is_depth
                                     ? TransferMode::kDepthToColor
@@ -6334,10 +6354,14 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
           const TransferModeInfo& mode_info =
               kTransferModeInfos[size_t(shader_key.mode)];
           bool is_stencil_bit = mode_info.output == TransferOutput::kStencilBit;
+          bool writes_stencil_with_depth =
+              shader_key.native_stencil_output &&
+              mode_info.output == TransferOutput::kDepth;
           bool needs_source_stencil =
               !mode_info.source_is_color &&
               (mode_info.output == TransferOutput::kColor ||
-               mode_info.output == TransferOutput::kStencilBit);
+               mode_info.output == TransferOutput::kStencilBit ||
+               writes_stencil_with_depth);
 
           auto* source_rt = static_cast<MetalRenderTarget*>(transfer.source);
           if (!source_rt) {
@@ -6354,6 +6378,13 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
 
           if (is_stencil_bit) {
             // Depth/stencil state set per-bit below.
+          } else if (writes_stencil_with_depth) {
+            MTL::DepthStencilState* depth_stencil_output_state =
+                GetTransferDepthAndStencilOutputState();
+            if (!depth_stencil_output_state) {
+              continue;
+            }
+            bind_transfer_depth_state(depth_stencil_output_state);
           } else if (dest_is_depth) {
             bind_transfer_depth_state(GetTransferDepthStencilState(true));
           } else {
@@ -6918,9 +6949,13 @@ MTL::RenderPipelineState* MetalRenderTargetCache::GetOrCreateTransferPipelines(
         (dest_color_format == xenos::ColorRenderTargetFormat::k_8_8_8_8_GAMMA &&
          gamma_render_target_as_unorm16_);
   }
+  // Depth output writes the guest stencil too.
+  bool native_stencil_output =
+      key.native_stencil_output && output == TransferOutput::kDepth;
   bool source_needs_stencil =
-      !source_is_color && (output == TransferOutput::kColor ||
-                           output == TransferOutput::kStencilBit);
+      !source_is_color &&
+      (output == TransferOutput::kColor ||
+       output == TransferOutput::kStencilBit || native_stencil_output);
 
   uint32_t dest_component_count = 1;
   if (output == TransferOutput::kColor) {
@@ -6984,6 +7019,8 @@ MTL::RenderPipelineState* MetalRenderTargetCache::GetOrCreateTransferPipelines(
                 output == TransferOutput::kDepth ? 1 : 0);
   append_define(source, "XE_TRANSFER_OUTPUT_STENCIL_BIT",
                 output == TransferOutput::kStencilBit ? 1 : 0);
+  append_define(source, "XE_TRANSFER_STENCIL_OUTPUT",
+                native_stencil_output ? 1 : 0);
   append_define(source, "XE_TRANSFER_TILE_INSTANCED", tile_instanced ? 1 : 0);
   append_define(source, "XE_TRANSFER_FAST_DIVMOD",
                 ::cvars::metal_transfer_fast_divmod ? 1 : 0);
@@ -8156,6 +8193,9 @@ fragment TransferColorOut transfer_ps(
 #elif XE_TRANSFER_OUTPUT_DEPTH || XE_TRANSFER_OUTPUT_STENCIL_BIT
 struct TransferDepthOut {
   float depth [[depth(any)]];
+#if XE_TRANSFER_STENCIL_OUTPUT
+  uint stencil [[stencil]];
+#endif
 #if XE_TRANSFER_DEST_IS_MULTISAMPLE
   uint sample_mask [[sample_mask]];
 #endif
@@ -8470,6 +8510,13 @@ fragment TransferDepthOut transfer_ps(
 #if !XE_TRANSFER_OUTPUT_STENCIL_BIT
   bool packed_only_depth = false;
 #endif
+#if XE_TRANSFER_STENCIL_OUTPUT && XE_TRANSFER_SOURCE_IS_COLOR && \
+    !XE_GAMMA_RT_AS_UNORM16
+  // The per-bit stencil draws pack gamma color after converting it, the depth
+  // bits before: keep the stencil the per-bit draws would have written.
+  uint stencil_packed = 0u;
+  bool stencil_packed_set = false;
+#endif
 #if XE_TRANSFER_SOURCE_IS_COLOR
   #if XE_TRANSFER_SOURCE_IS_UINT
   switch (XE_TRANSFER_SOURCE_FORMAT) {
@@ -8501,6 +8548,13 @@ fragment TransferDepthOut transfer_ps(
       // 8:31 of the packed 32bpp color word rather than treating depth as a
       // standalone component.
       packed = XePackColorRGBA8(color);
+#if XE_TRANSFER_STENCIL_OUTPUT && !XE_GAMMA_RT_AS_UNORM16
+      if (XE_TRANSFER_SOURCE_FORMAT == XE_FMT_8_8_8_8_GAMMA) {
+        stencil_packed = XePackColorRGBA8(float4(
+            XeLinearToPWLGamma3(source_color0.rgb), source_color0.a));
+        stencil_packed_set = true;
+      }
+#endif
     } break;
     case XE_FMT_2_10_10_10:
     case XE_FMT_2_10_10_10_AS_10_10_10_10: {
@@ -8552,6 +8606,20 @@ fragment TransferDepthOut transfer_ps(
 #endif
   return out;
 #else
+#if XE_TRANSFER_STENCIL_OUTPUT
+  // The guest stencil, as the per-bit draws would test it: the low 8 bits of
+  // a color source's packed word, or the depth source's stencil.
+#if XE_TRANSFER_SOURCE_IS_COLOR
+#if !XE_GAMMA_RT_AS_UNORM16
+  uint transfer_stencil =
+      (stencil_packed_set ? stencil_packed : packed) & 0xFFu;
+#else
+  uint transfer_stencil = packed & 0xFFu;
+#endif
+#else
+  uint transfer_stencil = source_stencil0 & 0xFFu;
+#endif
+#endif
   uint guest_depth24 = packed;
   if (!packed_only_depth) {
     guest_depth24 = packed >> 8u;
@@ -8709,6 +8777,9 @@ fragment TransferDepthOut transfer_ps(
 
   TransferDepthOut out;
   out.depth = fragment_depth;
+#if XE_TRANSFER_STENCIL_OUTPUT
+  out.stencil = transfer_stencil;
+#endif
 #if XE_TRANSFER_DEST_IS_MULTISAMPLE
   out.sample_mask = 1u << dest_sample_id;
 #endif
@@ -9052,6 +9123,105 @@ MTL::DepthStencilState* MetalRenderTargetCache::GetTransferDepthStencilState(
   transfer_depth_state_ = device_->newDepthStencilState(desc);
   desc->release();
   return transfer_depth_state_;
+}
+
+MTL::DepthStencilState*
+MetalRenderTargetCache::GetTransferDepthAndStencilOutputState() {
+  if (transfer_depth_stencil_output_state_) {
+    return transfer_depth_stencil_output_state_;
+  }
+  bool not_equal_test = ::cvars::depth_transfer_not_equal_test;
+  MTL::DepthStencilDescriptor* desc =
+      MTL::DepthStencilDescriptor::alloc()->init();
+  desc->setDepthCompareFunction(not_equal_test ? MTL::CompareFunctionNotEqual
+                                               : MTL::CompareFunctionAlways);
+  desc->setDepthWriteEnabled(true);
+  MTL::StencilDescriptor* stencil = MTL::StencilDescriptor::alloc()->init();
+  // Always, not not-equal, so a differing stencil doesn't suppress the depth
+  // write - and with the not-equal depth test, replacing on depth failure so
+  // matching depth still gets its stencil written.
+  stencil->setStencilCompareFunction(MTL::CompareFunctionAlways);
+  stencil->setStencilFailureOperation(MTL::StencilOperationKeep);
+  stencil->setDepthFailureOperation(not_equal_test
+                                        ? MTL::StencilOperationReplace
+                                        : MTL::StencilOperationKeep);
+  stencil->setDepthStencilPassOperation(MTL::StencilOperationReplace);
+  stencil->setReadMask(0xFF);
+  stencil->setWriteMask(0xFF);
+  desc->setFrontFaceStencil(stencil);
+  desc->setBackFaceStencil(stencil);
+  transfer_depth_stencil_output_state_ = device_->newDepthStencilState(desc);
+  stencil->release();
+  desc->release();
+  return transfer_depth_stencil_output_state_;
+}
+
+bool MetalRenderTargetCache::UseNativeStencilOutputInTransfers() const {
+  return ::cvars::native_stencil_value_output && native_stencil_output_probed_;
+}
+
+bool MetalRenderTargetCache::ProbeNativeStencilOutputSupport() {
+  // Metal has no query for fragment stencil output, and it decides which draws
+  // a stencil transfer needs, so build a pipeline that uses it up front rather
+  // than discovering it half way through a batch.
+  static const char kProbeSource[] = R"METAL(
+#include <metal_stdlib>
+using namespace metal;
+
+vertex float4 xe_stencil_probe_vs() {
+  return float4(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+struct XeStencilProbeOut {
+  uint stencil [[stencil]];
+};
+
+fragment XeStencilProbeOut xe_stencil_probe_ps() {
+  XeStencilProbeOut out;
+  out.stencil = 0u;
+  return out;
+}
+)METAL";
+
+  NS::Error* error = nullptr;
+  MTL::Library* lib = device_->newLibrary(
+      NS::String::string(kProbeSource, NS::UTF8StringEncoding), nullptr,
+      &error);
+  if (!lib) {
+    return false;
+  }
+  MTL::Function* vs = lib->newFunction(
+      NS::String::string("xe_stencil_probe_vs", NS::UTF8StringEncoding));
+  MTL::Function* ps = lib->newFunction(
+      NS::String::string("xe_stencil_probe_ps", NS::UTF8StringEncoding));
+  MTL::RenderPipelineState* pipeline = nullptr;
+  if (vs && ps) {
+    MTL::PixelFormat depth_format =
+        GetDepthPixelFormat(xenos::DepthRenderTargetFormat::kD24S8);
+    MTL::RenderPipelineDescriptor* desc =
+        MTL::RenderPipelineDescriptor::alloc()->init();
+    desc->setVertexFunction(vs);
+    desc->setFragmentFunction(ps);
+    desc->setDepthAttachmentPixelFormat(depth_format);
+    if (depth_format == MTL::PixelFormatDepth32Float_Stencil8 ||
+        depth_format == MTL::PixelFormatDepth24Unorm_Stencil8) {
+      desc->setStencilAttachmentPixelFormat(depth_format);
+    }
+    pipeline = device_->newRenderPipelineState(desc, &error);
+    desc->release();
+  }
+  if (vs) {
+    vs->release();
+  }
+  if (ps) {
+    ps->release();
+  }
+  lib->release();
+  if (!pipeline) {
+    return false;
+  }
+  pipeline->release();
+  return true;
 }
 
 MTL::DepthStencilState*

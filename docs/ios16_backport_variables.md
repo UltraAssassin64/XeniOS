@@ -268,7 +268,7 @@ further edits.
 | `metal_perf_begin` | parameter / local | Start time of a timed operation. | `src/xenia/gpu/metal/metal_perf_counters.h` | 46, 48, 55, 58 | 4 |
 | `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_perf_counters.h` | 53 | 1 |
 | `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1379, 1538, 3127 | 3 |
-| `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3317, 4319, 4875 | 3 |
+| `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3330, 4332, 4888 | 3 |
 | `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1892, 1924 | 2 |
 | `metal_perf_command_buffer` | parameter | Command buffer waited on. | `src/xenia/gpu/metal/metal_perf_counters.h` | 54, 56 | 2 |
 | `MetalPerfThreadCpu` | function (anonymous namespace) | Host CPU share of every thread since the previous call, busiest first, with name, ID and host priority (Apple only). | `src/xenia/gpu/metal/metal_command_processor.cc` | 520, 2673 | 2 |
@@ -359,14 +359,14 @@ further edits.
 | `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 74, 81 | 2 |
 | `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 270 | 1 |
 | `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6187 | 1 |
-| `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3999, 5995 | 2 |
+| `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4012, 6008 | 2 |
 | `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 74, 84 | 2 |
 | `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 355 | 1 |
-| `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4012, 4120, 4843, 5039 | 4 |
+| `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4025, 4133, 4856, 5052 | 4 |
 | `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1112 | 1 |
 | `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 75, 86 | 2 |
 | `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 378 | 1 |
-| `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5570 | 1 |
+| `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5583 | 1 |
 | `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1241 | 1 |
 | `Log` | MetalGpuPassTimer and MetalCompileStallTracker member function | Logs and resets the window totals. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 95, 165 | 2 |
 | `Log` | MetalGpuPassTimer and MetalCompileStallTracker member function | Logs and resets the window totals. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 593, 808 | 2 |
@@ -422,7 +422,7 @@ further edits.
 | `stats_by_pass_` | MetalGpuPassTimer member | Totals per render pass configuration. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 112, 512, 519, 654, 707 | 5 |
 | `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 150 | 1 |
 | `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1388, 2646, 6187 | 3 |
-| `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3999, 4012, 4120, 4843, 5039, 5570, 5995 | 7 |
+| `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4012, 4025, 4133, 4856, 5052, 5583, 6008 | 7 |
 | `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1112, 1241 | 2 |
 | `metal_gpu_pass_timing` | cvar (Metal); iOS settings key | Turns pass timing, the traffic estimate, per-pipeline time and compile stall tracking on (default) or off; Diagnostics section toggle. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 10, 19, 217, 221, 726, 739 | 7 |
 | `metal_gpu_pass_timing` | cvar (Metal); iOS settings key | Turns pass timing, the traffic estimate, per-pipeline time and compile stall tracking on (default) or off; Diagnostics section toggle. | `src/xenia/ui/windowed_app_main_ios.mm` | 3658 | 1 |
@@ -550,6 +550,12 @@ further edits.
 | `oldest_us` | local in Log | Age of the oldest of them. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 818, 826, 827, 864 | 4 |
 | `bucket_names` | function static in Log | Bucket labels. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 837, 842 | 2 |
 | `worst` | local in Log | Text of the 8 compiles with the most skipped draws. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 850, 852, 864 | 3 |
+| `XE_TRANSFER_STENCIL_OUTPUT` | MSL preprocessor define (transfer shaders) | 1 when a depth-output transfer shader also writes the guest stencil through [[stencil]]. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 7022, 8196, 8513, 8551, 8609, 8780 | 6 |
+| `stencil` | TransferDepthOut member (MSL) | The [[stencil]] output of a depth transfer with native stencil output (only these two lines; the word is common in the file). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 735, 739, 740, 1894, 1955, 2072, 2131, 2248, 2304, 3602, 3603, 3957, 3966, 6022, 6380, 6952, 8197, 8515, 8516, 8610, 8611, 8781, 9139, 9140, 9142, 9143, 9144, 9145, 9148, 9149, 9150, 9151, 9152, 9154, 9164, 9165, 9176, 9181, 9249, 9250, 9251, 9252, 9253, 9254, 9255, 9256, 9257, 9259, 9272, 9273, 9274, 9275, 9276, 9277, 9278, 9279, 9280, 9282, 9300, 9301, 9302, 9303, 9304, 9305, 9306, 9307, 9308, 9310 | 71 |
+| `stencil_packed` | local in transfer_ps (MSL) | Gamma color packed after conversion, as the per-bit stencil draws pack it. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8517, 8553, 8615 | 3 |
+| `stencil_packed_set` | local in transfer_ps (MSL) | stencil_packed was computed (8_8_8_8_GAMMA source). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8518, 8555, 8615 | 3 |
+| `transfer_stencil` | local in transfer_ps (MSL) | Guest stencil written with the depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8614, 8617, 8620, 8781 | 4 |
+| `depth_stencil_output_state` | local in PerformTransfersAndResolveClears | GetTransferDepthAndStencilOutputState() for a draw writing stencil with depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6382, 6384, 6387 | 3 |
 ## Total references per name
 
 | Name | Total uses in project |
@@ -902,7 +908,7 @@ further edits.
 | `pixel_shader_features_` | 7 |
 | `window_us` | 4 |
 | `MetalGpuBytesPerPixel` | 2 |
-| `stencil` | 7 |
+| `stencil` | 78 |
 | `load_action` | 3 |
 | `store_action` | 6 |
 | `pixel_bytes` | 3 |
@@ -944,6 +950,12 @@ further edits.
 | `oldest_us` | 4 |
 | `bucket_names` | 2 |
 | `worst` | 3 |
+| `XE_TRANSFER_STENCIL_OUTPUT` | 6 |
+| `stencil` (TransferDepthOut member) | 3 |
+| `stencil_packed` | 3 |
+| `stencil_packed_set` | 3 |
+| `transfer_stencil` | 4 |
+| `depth_stencil_output_state` | 3 |
 
 ## Checks
 
@@ -1004,3 +1016,12 @@ further edits.
   `windowed_app_main_ios.mm`. Those rows are re-derived here from the commit
   that wrote them, mapped to the current line numbers; names counted across
   the whole file are recounted across it.
+- Native stencil output in render target transfers is ported from XeniOS
+  77cc1358 (xenia-edge has the same): `native_stencil_output` (a
+  `TransferShaderKey` field here, a `TransferPipelineKey` field there),
+  `transfer_depth_stencil_output_state_`, `native_stencil_output_probed_`,
+  `GetTransferDepthAndStencilOutputState`, `UseNativeStencilOutputInTransfers`,
+  `ProbeNativeStencilOutputSupport` (with its `kProbeSource`,
+  `XeStencilProbeOut`, `xe_stencil_probe_vs`/`ps` and locals),
+  `use_native_stencil_output` and `writes_stencil_with_depth` have the same
+  names and roles there, so they are not listed.

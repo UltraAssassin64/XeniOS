@@ -295,6 +295,9 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
     uint32_t dest_resource_format;
     uint32_t dest_sample_id_from_sample;
     uint32_t host_depth_source_is_copy;
+    // Depth output also writes the guest stencil through the pixel shader's
+    // stencil output, in place of the clear and eight per-bit draws.
+    uint32_t native_stencil_output;
 
     bool operator==(const TransferShaderKey& other) const {
       return mode == other.mode &&
@@ -305,7 +308,8 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
              source_resource_format == other.source_resource_format &&
              dest_resource_format == other.dest_resource_format &&
              dest_sample_id_from_sample == other.dest_sample_id_from_sample &&
-             host_depth_source_is_copy == other.host_depth_source_is_copy;
+             host_depth_source_is_copy == other.host_depth_source_is_copy &&
+             native_stencil_output == other.native_stencil_output;
     }
     bool operator!=(const TransferShaderKey& other) const {
       return !(*this == other);
@@ -334,7 +338,10 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
       if (dest_sample_id_from_sample != other.dest_sample_id_from_sample) {
         return dest_sample_id_from_sample < other.dest_sample_id_from_sample;
       }
-      return host_depth_source_is_copy < other.host_depth_source_is_copy;
+      if (host_depth_source_is_copy != other.host_depth_source_is_copy) {
+        return host_depth_source_is_copy < other.host_depth_source_is_copy;
+      }
+      return native_stencil_output < other.native_stencil_output;
     }
 
     struct Hasher {
@@ -347,6 +354,7 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
         h ^= (size_t(key.dest_resource_format) << 24);
         h ^= (size_t(key.dest_sample_id_from_sample) << 28);
         h ^= (size_t(key.host_depth_source_is_copy) << 29);
+        h ^= (size_t(key.native_stencil_output) << 30);
         return h ^ (h >> 16);
       }
     };
@@ -405,6 +413,10 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
   MTL::DepthStencilState* transfer_depth_clear_state_ = nullptr;
   MTL::DepthStencilState* transfer_stencil_clear_state_ = nullptr;
   MTL::DepthStencilState* transfer_stencil_bit_states_[8] = {};
+  // Depth written, and stencil replaced by the pixel shader's stencil output.
+  MTL::DepthStencilState* transfer_depth_stencil_output_state_ = nullptr;
+  // A pipeline with a pixel shader stencil output could be created.
+  bool native_stencil_output_probed_ = false;
   MTL::Buffer* transfer_dummy_buffer_ = nullptr;
   MTL::Texture* transfer_dummy_color_float_[3] = {};
   MTL::Texture* transfer_dummy_color_uint_[3] = {};
@@ -486,6 +498,10 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
   MTL::Buffer* GetTransferDummyBuffer();
   MTL::DepthStencilState* GetTransferDepthStencilState(bool depth_write);
   MTL::DepthStencilState* GetTransferNoDepthStencilState();
+  MTL::DepthStencilState* GetTransferDepthAndStencilOutputState();
+  // Ported from XeniOS (77cc1358).
+  bool UseNativeStencilOutputInTransfers() const;
+  bool ProbeNativeStencilOutputSupport();
   MTL::DepthStencilState* GetTransferDepthClearState();
   MTL::DepthStencilState* GetTransferStencilClearState();
   MTL::DepthStencilState* GetTransferStencilBitState(uint32_t bit);
