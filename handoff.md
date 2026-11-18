@@ -687,6 +687,9 @@ priorities), commit "[Base] Port XeniOS's iOS thread scheduling fixes":
   Sleep(0) polling loops go through `MaybeYield`.
 - `PreferPerformanceCores()` (QOS_CLASS_USER_INTERACTIVE on iOS), called
   at the start of `CommandProcessor::WorkerThreadMain` ("GPU Commands").
+Build #9578 (`xenios_ios_arm64_0.2.9-9578`, commit b4958de1): CI and CPU
+tests pass. Not yet run on device; asked the owner for 2 gameplay runs
+comparing FPS and the "Metal perf" lines, and to watch for new hangs.
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 
