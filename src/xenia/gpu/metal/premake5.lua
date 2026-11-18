@@ -60,6 +60,8 @@ project("xenia-gpu-metal")
       "metal_shader_cache.h",
       "metal_texture_cache.cc",
       "metal_texture_cache.h",
+      "metal_zpd_visibility_pool.cc",
+      "metal_zpd_visibility_pool.h",
       "msl_bindings.h",
       "msl_shader.cc",
       "msl_shader.h",
