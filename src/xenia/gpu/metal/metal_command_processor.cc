@@ -43,8 +43,8 @@
 #include "xenia/gpu/draw_util.h"
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/graphics_system.h"
-#include "xenia/gpu/metal/metal_graphics_system.h"
 #include "xenia/gpu/metal/metal_gpu_pass_timing.h"
+#include "xenia/gpu/metal/metal_graphics_system.h"
 #include "xenia/gpu/metal/metal_perf_counters.h"
 #include "xenia/gpu/metal/metal_shader_cache.h"
 #include "xenia/gpu/packet_disassembler.h"
@@ -53,6 +53,7 @@
 #include "xenia/gpu/xenos.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/user_module.h"
+#include "xenia/kernel/util/shim_utils.h"
 #include "xenia/ui/metal/metal_presenter.h"
 
 #if METAL_SHADER_CONVERTER_AVAILABLE
@@ -2737,6 +2738,7 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
     XELOGI("Metal perf threads:{}", MetalPerfThreadCpu(metal_perf_window_us));
     metal_gpu_pass_timer.Log(draw_stats_.frames, metal_perf_window_us);
     metal_compile_stall_tracker.Log(draw_stats_.frames);
+    xe::kernel::shim::LogGuestThreadHotspots();
     draw_stats_ = {};
   }
   saw_swap_ = true;

@@ -552,6 +552,10 @@ void NoteKernelCallDone();
 // last returned from, for how long, its guest lr and call count, and for a
 // thread blocked a second or more, its wait object and guest stack.
 void LogKernelCallThreads();
+// Samples every running guest thread 16 times, 1 ms apart, and logs where
+// each one that isn't only waiting spends its time (log_guest_thread_hotspots;
+// Apple ARM64 only).
+void LogGuestThreadHotspots();
 
 template <typename F, typename Tuple, std::size_t... I>
 XE_FORCEINLINE static auto KernelTrampoline(F&& f, Tuple&& t,

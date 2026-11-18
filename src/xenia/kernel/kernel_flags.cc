@@ -21,6 +21,13 @@ DEFINE_uint32(
     "kernel calls, this many times in a row. 0 disables it.",
     "Logging");
 DEFINE_bool(
+    log_guest_thread_hotspots, true,
+    "Diagnostics: with the Metal perf lines (every 120 frames), sample every "
+    "running guest thread 16 times, 1 ms apart, and log where each one that "
+    "isn't only waiting spends its time (guest functions or host functions). "
+    "Apple ARM64 only.",
+    "Logging");
+DEFINE_bool(
     guest_scheduler, false,
     "Run guest threads as cooperative fibers driven by an in-kernel scheduler "
     "instead of mapping each to its own host OS thread. Experimental; off by "

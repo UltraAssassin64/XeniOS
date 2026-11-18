@@ -3685,6 +3685,11 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "(\"Metal GPU\" and \"Metal compile stall\" lines). Turn off to check "
                  "whether it costs any speed.",
                  true);
+  AddBoolSetting(diagnostics.items, "log_guest_thread_hotspots", "Guest Thread Hotspots",
+                 "Every 120 frames, samples the game's threads for a moment and logs where "
+                 "the busy ones spend their time (\"Guest thread hotspots\" lines). Adds "
+                 "a ~20 ms pause each time.",
+                 true);
   AddActionSetting(diagnostics.items, IOSConfigAction::kViewRecentLog, "View Live Log",
                    "Open a live-updating xenia.log viewer so you can capture boot failures "
                    "without Xcode.");

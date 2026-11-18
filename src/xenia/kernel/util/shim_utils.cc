@@ -9,8 +9,10 @@
 
 #include "xenia/kernel/util/shim_utils.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -329,6 +331,104 @@ void LogKernelCallThreads() {
     }
   }
 }
+
+void LogGuestThreadHotspots() {
+  if (!cvars::log_guest_thread_hotspots) {
+    return;
+  }
+#if XE_PLATFORM_APPLE && XE_ARCH_ARM64
+  auto& hotspot_global = xe::global_critical_region::mutex();
+  if (!hotspot_global.try_lock()) {
+    return;
+  }
+  auto hotspot_xthreads =
+      kernel_state()->object_table()->GetObjectsByType<XThread>();
+  hotspot_global.unlock();
+  struct HotspotThread {
+    object_ref<XThread> xthread;
+    xe::threading::Thread* host_thread;
+    // Where each sample was: a guest function's address, or a host symbol.
+    std::map<std::string, uint32_t> places;
+    uint32_t guest_samples = 0;
+    uint32_t samples = 0;
+  };
+  std::vector<HotspotThread> hotspot_threads;
+  for (auto& hotspot_xthread : hotspot_xthreads) {
+    if (hotspot_xthread->is_guest_thread() && hotspot_xthread->is_running() &&
+        hotspot_xthread->thread()) {
+      hotspot_threads.push_back(
+          {hotspot_xthread, hotspot_xthread->thread(), {}, 0, 0});
+    }
+  }
+  if (hotspot_threads.empty()) {
+    return;
+  }
+  auto* hotspot_code_cache =
+      kernel_state()->processor()->backend()->code_cache();
+  // Each round stops every thread just long enough to read its program
+  // counter; the lookups run after it has resumed.
+  constexpr uint32_t kHotspotRounds = 16;
+  for (uint32_t hotspot_round = 0; hotspot_round < kHotspotRounds;
+       ++hotspot_round) {
+    if (hotspot_round) {
+      xe::threading::Sleep(std::chrono::milliseconds(1));
+    }
+    for (HotspotThread& hotspot_thread : hotspot_threads) {
+      const uint64_t hotspot_pc =
+          SampleKernelCallHostPc(hotspot_thread.host_thread);
+      if (!hotspot_pc) {
+        continue;
+      }
+      ++hotspot_thread.samples;
+      std::string hotspot_place = "host";
+      if (cpu::GuestFunction* hotspot_function =
+              hotspot_code_cache->LookupFunction(hotspot_pc)) {
+        hotspot_place = fmt::format("{:08X}", hotspot_function->address());
+        ++hotspot_thread.guest_samples;
+      } else {
+        Dl_info hotspot_symbol;
+        if (dladdr(reinterpret_cast<void*>(hotspot_pc), &hotspot_symbol) &&
+            hotspot_symbol.dli_sname) {
+          hotspot_place = hotspot_symbol.dli_sname;
+        }
+      }
+      ++hotspot_thread.places[hotspot_place];
+    }
+  }
+  for (HotspotThread& hotspot_thread : hotspot_threads) {
+    // A thread whose samples were all in a host wait is idle.
+    bool hotspot_busy = hotspot_thread.guest_samples != 0;
+    for (const auto& [hotspot_place, hotspot_count] : hotspot_thread.places) {
+      if (hotspot_place.find("wait") == std::string::npos &&
+          hotspot_place.find("mach_msg") == std::string::npos &&
+          hotspot_place.find("nanosleep") == std::string::npos &&
+          hotspot_place.find("switch_pri") == std::string::npos &&
+          hotspot_place.find("thread_switch") == std::string::npos) {
+        hotspot_busy = true;
+      }
+    }
+    if (!hotspot_busy) {
+      continue;
+    }
+    std::vector<std::pair<uint32_t, std::string>> hotspot_sorted;
+    for (const auto& [hotspot_place, hotspot_count] : hotspot_thread.places) {
+      hotspot_sorted.emplace_back(hotspot_count, hotspot_place);
+    }
+    std::sort(hotspot_sorted.rbegin(), hotspot_sorted.rend());
+    std::string hotspot_text;
+    for (size_t i = 0; i < std::min<size_t>(hotspot_sorted.size(), 6); ++i) {
+      hotspot_text += fmt::format("{} {} x{}", i ? "," : "",
+                                  hotspot_sorted[i].second,
+                                  hotspot_sorted[i].first);
+    }
+    XELOGI(
+        "Guest thread hotspots {:08X} ({}): {}/{} samples in guest code;{}",
+        hotspot_thread.xthread->handle(), hotspot_thread.host_thread->name(),
+        hotspot_thread.guest_samples, hotspot_thread.samples, hotspot_text);
+  }
+#endif  // XE_PLATFORM_APPLE && XE_ARCH_ARM64
+}
+
 void NoteKernelCallDone() {
   if (kernel_call_this_thread) {
     kernel_call_this_thread->enter_ms = Clock::QueryHostUptimeMillis();
