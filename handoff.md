@@ -29,6 +29,23 @@ you need nothing from the earlier conversation.
 7. If there is a problem, stop and ask the owner with full context.
 8. `AGENTS.md`: never commit `NEXT_STEPS.md`.
 9. Commit messages and code must not name any AI model.
+10. **Upstream references are two repositories, used together:**
+    `https://github.com/xenios-jp/XeniOS` (the iOS/ARM64 project) **and**
+    `https://github.com/has207/xenia-edge` (the project XeniOS itself is
+    based on). xenia-edge also has an ARM64 backend, but compare against its
+    **x64** logic (`src/xenia/cpu/backend/x64`): the x64 backend is more
+    mature and handles more edge cases. Treat xenia-edge's x64 changes as
+    the analogue of XeniOS's ARM64 changes; for shared code (base, kernel,
+    GPU), compare the two directly. Whichever of the two is newer for the
+    behaviour in question is the one to retrofit into this branch, as with
+    earlier ports. If choosing between them is too difficult, stop and give
+    the owner a rundown of the options instead of picking.
+    Fetch with `git fetch --depth=1 https://github.com/has207/xenia-edge HEAD`
+    and `git fetch --depth=1 https://github.com/xenios-jp/XeniOS HEAD` (or a
+    tag); this chat kept them as `refs/remotes/xenia-edge/HEAD` and
+    `refs/remotes/xenios/HEAD`. At the time this rule was added (2026-11-18)
+    XeniOS HEAD was `77cc1358` (= `release-v2.3.3-build-11940`, 2026-11-15)
+    and xenia-edge HEAD was `4fb8372d` (2026-11-18).
 
 ## How the branch relates to upstream
 
@@ -472,6 +489,19 @@ gameplay, 21-52-49 first-cutscene hang, 21-58-49 with
 - Storms: job threads spin on KeDelayExecutionThread at lr `82D29D1C`
   (1 million calls in 300-400 ms); `XThread::Delay` turns sub-millisecond
   sleeps into `MaybeYield()`. This burns a core but is not the hang.
+- Checked against both upstreams: xenia-edge `4fb8372d` and XeniOS
+  `77cc1358` both contain the same "arm suspend_count_ in the same lock"
+  fix, so the port matches both.
+- XeniOS (newer for iOS) uses `XE_PLATFORM_APPLE` for the pthread cleanup
+  push in `XThread::Create`/`Restore` and for skipping the direct
+  `ReleaseHandle()` in `Exit`/`Terminate`; xenia-edge uses `XE_PLATFORM_MAC`
+  (it does not target iOS). This branch mixes the two (cleanup push on
+  `MAC`, skip on `APPLE`), which is the iOS handle leak below. Candidate
+  next port: XeniOS's `APPLE` form.
+- Both upstreams join exited threads outside the handle lock
+  (`post_execution_unlocked`, "Terminate() can signal before the thread
+  exits; join unlocked, once"), as part of a larger rewrite of
+  `threading_posix.cc` (suspend gate semaphore, multi-wait registration).
 - Not changed, noted for later: `PosixCondition<Thread>::post_execution`
   calls pthread_join while the waiter still holds the handle's mutex
   (upstream moved the join outside the lock); on iOS the
