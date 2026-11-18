@@ -969,6 +969,60 @@ Changes for the next build:
 - Build #9606 (`xenios_ios_arm64_0.2.9-9606.6`, d27a059a, run 44361266692
   attempt 6) built and uploaded; it has all of the above.
 
+### Build 9606 results (owner, zip "I_think_occlusion_query_definitely_helped")
+
+Three runs: real queries off with a 4-frame capture; on with 16 frames; on
+with 16+60+16 frames (the 60 span a cutscene into gameplay). Owner: the
+title screen flicker is gone in every run (even with queries off); real
+queries did not slow the title screen but seemed to affect gameplay.
+- Real queries work: ~65% of gameplay queries come back with no samples,
+  no guesses kept, one pass restart per frame. Title-screen GPU time looked
+  ~45% higher with queries on, but every pass type (compute included) was
+  ~45% slower in that run: thermal throttling (state 2), not the queries.
+- Gameplay (queries on, 2x MSAA 1280x720 scene, ~3,300 draws, ~2.8M vertices,
+  61 ms frames): the command processor waited ~21 ms per frame for uniform
+  buffers and ended ~17 command buffers per frame for want of one (96 cap,
+  8 draws per 384 KB buffer); the game's render thread spun at 99%. GPU per
+  frame: rt transfers 25 ms in 62 passes, draws 21.6 ms in 110 passes (the
+  1280x2048 RGBA16F+D32S8 target: 27 passes, 923 MB loaded and stored),
+  ~6 GB attachment traffic. Limit Render Pass Area was off in all runs.
+- Cutscene end: two frames skipped ~1,450 draws each for compiles
+  (metal_async_compile_wait_ms was 0; 334 of 532 compiles finished within
+  16 ms).
+- Shadows (UE3 modulated shadows, ~9 per frame): per shadow the game clears
+  depth through a 4x MSAA alias of the same EDRAM (UE3's fast clear; each
+  alias switch is two full depth transfers), draws the casters' depth at
+  tile 1440 (D24S8, 512x512), resolves it to 151A8000 (k_24_8), marks
+  stencil with the shadow box (VS 6C5E1DC495A6B168, z test GreaterEqual
+  against a just-cleared depth) and projects with VS B5A1208D037C2F4F /
+  PS 6C76CC934779C668 (t0 = scene depth 15C78000 k_24_8_FLOAT from the 2x
+  scene depth resolve, t1 = scene color 15540000, t2 = shadow map, t3 =
+  64x64 noise). Texture formats, sizes and addresses match the resolves; the
+  scene depth float load is upstream's shader. Not found yet; the shader is
+  needed (metal_log_shader_hashes, below). The cutscene capture alternates
+  frames with and without the shadow passes (gameplay frames have them
+  every frame).
+- Found: the 2x MSAA EDRAM dumps (resolves) read host sample 0 for the
+  guest's top sample; draws, transfers and the host depth store use host
+  sample 1 (upstream's GetD3D10SampleIndexForGuest2xMSAA). Sub-pixel for
+  depth, so not the shadow bug by itself.
+
+Changes for the next build:
+- aea02862: 2x MSAA dumps swap the sample (color 32/64bpp, depth).
+- d2f6d0d4: metal_inline_shader_constants (default on): constant blocks via
+  setVertexBytes/setFragmentBytes when their version changes in the encoder;
+  no pooled uniform buffer per command buffer or per 8 draws. Defaults with
+  one-time config updates (kLastCommittedUpdateDate 2026-11-18 21h):
+  metal_render_pass_area_from_scissor on, metal_async_compile_wait_ms 16.
+- 1ff32888: metal_log_shader_hashes: listed shaders' microcode disassembly
+  and MSL logged at translation ("Shader log"), and their float constants
+  per draw in the frame detail log.
+Next candidates: recognize UE3's 4x-alias clear draws (full-target depth
+write, always pass) and skip transferring the old contents into the alias
+(~25 ms of transfers per frame in gameplay, ~27 ms on the title screen);
+the forced command buffer split when a draw samples memory just resolved
+(once per shadow).
+
 Test plan sent to the owner: default run (title screen, then gameplay) for
 the uniform line; same with Real Occlusion Queries on (FPS near the NPCs,
 flicker, pop-in; the occlusion line); Frame Detail Log of 4 frames on the
