@@ -22,6 +22,9 @@ namespace xe {
 namespace gpu {
 namespace metal {
 
+// metal_log_shader_hashes lists the ucode hash.
+bool ShouldLogMslShader(uint64_t shader_hash);
+
 // Metal shader translated via SPIR-V -> SPIRV-Cross -> MSL path.
 // Inherits from SpirvShader (not DxbcShader), removing the MSC dependency.
 class MslShader : public SpirvShader {

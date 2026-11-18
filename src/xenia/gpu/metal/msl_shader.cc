@@ -13,6 +13,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -48,6 +49,13 @@ DEFINE_bool(
     "differently in a depth pre-pass and the pass drawing over it, and "
     "equal-depth tests and decals flicker (z-fighting).",
     "GPU");
+DEFINE_string(
+    metal_log_shader_hashes, "",
+    "Comma-separated vertex or pixel shader ucode hashes (hex, as logged, for "
+    "example 6C76CC934779C668) whose Xbox 360 microcode disassembly and "
+    "generated Metal source are written to the log when they are translated "
+    "(\"Shader log\" lines).",
+    "Metal");
 
 namespace xe {
 namespace gpu {
@@ -242,6 +250,27 @@ uint64_t GetMslSourceCacheKey(const MslShader::MslTranslation& translation,
 }
 
 }  // namespace
+
+bool ShouldLogMslShader(uint64_t shader_hash) {
+  const std::string& list = cvars::metal_log_shader_hashes;
+  size_t begin = 0;
+  while (begin < list.size()) {
+    size_t end = list.find(',', begin);
+    if (end == std::string::npos) {
+      end = list.size();
+    }
+    std::string entry = list.substr(begin, end - begin);
+    entry.erase(std::remove_if(entry.begin(), entry.end(),
+                               [](char c) { return std::isspace(uint8_t(c)); }),
+                entry.end());
+    if (!entry.empty() &&
+        std::strtoull(entry.c_str(), nullptr, 16) == shader_hash) {
+      return true;
+    }
+    begin = end + 1;
+  }
+  return false;
+}
 
 void SetMslShaderSourceCacheDirectory(const std::filesystem::path& cache_dir) {
   std::lock_guard<std::mutex> lock(g_msl_source_cache_mutex);
@@ -1176,6 +1205,27 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
           "for shader {:016X}",
           stripped, shader().ucode_data_hash());
     }
+  }
+
+  if (ShouldLogMslShader(shader().ucode_data_hash())) {
+    const char* stage_name =
+        shader().type() == xenos::ShaderType::kVertex ? "VS" : "PS";
+    auto log_shader_lines = [&](const char* what, const std::string& text) {
+      size_t line_begin = 0;
+      while (line_begin < text.size()) {
+        size_t line_end = text.find('\n', line_begin);
+        if (line_end == std::string::npos) {
+          line_end = text.size();
+        }
+        XELOGI(
+            "Shader log {} {:016X} mod {:016X} {}: {}", stage_name,
+            shader().ucode_data_hash(), modification(), what,
+            std::string_view(text).substr(line_begin, line_end - line_begin));
+        line_begin = line_end + 1;
+      }
+    };
+    log_shader_lines("ucode", shader().ucode_disassembly());
+    log_shader_lines("msl", msl_source_);
   }
 
   // Get the entry point name that SPIRV-Cross chose.

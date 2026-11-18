@@ -5754,6 +5754,33 @@ bool MetalCommandProcessor::IssueDrawMsl(
         regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_YOFFSET),
         regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_ZOFFSET), zpd_query_active_,
         frame_detail_textures);
+    // The float constants of shaders listed in metal_log_shader_hashes.
+    for (MslShader* frame_detail_shader :
+         {msl_vertex_shader, msl_pixel_shader}) {
+      if (!frame_detail_shader ||
+          !ShouldLogMslShader(frame_detail_shader->ucode_data_hash())) {
+        continue;
+      }
+      const bool is_pixel = frame_detail_shader == msl_pixel_shader;
+      std::string frame_detail_constants;
+      const Shader::ConstantRegisterMap& map =
+          frame_detail_shader->constant_register_map();
+      for (uint32_t i = 0; i < 256; ++i) {
+        if (!(map.float_bitmap[i >> 6] & (uint64_t(1) << (i & 63)))) {
+          continue;
+        }
+        const uint32_t reg = (is_pixel ? XE_GPU_REG_SHADER_CONSTANT_256_X
+                                       : XE_GPU_REG_SHADER_CONSTANT_000_X) +
+                             i * 4;
+        fmt::format_to(std::back_inserter(frame_detail_constants),
+                       " c{} ({} {} {} {})", i, regs.Get<float>(reg),
+                       regs.Get<float>(reg + 1), regs.Get<float>(reg + 2),
+                       regs.Get<float>(reg + 3));
+      }
+      XELOGI("Frame detail draw {} {} {:016X} float constants:{}",
+             frame_detail_draws_, is_pixel ? "PS" : "VS",
+             frame_detail_shader->ucode_data_hash(), frame_detail_constants);
+    }
   }
 
   // occlusion_query_enable: count the draw's samples for the guest's query,
