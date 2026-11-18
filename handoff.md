@@ -516,7 +516,53 @@ since this session, "Auto-Enable JIT via TrollStore"
 (`apple-magnifier://enable-jit?bundle-id=<bundle ID>`). TrollStore is tried
 first when both are on. Not yet confirmed on the device.
 
-## Performance (reported on build #9543, not yet investigated)
+## Occlusion queries (owner's question, 2026-11-18; not started)
+
+Owner reports flickering of a vignette and of fog decals on the main menu
+(Unreal Engine 3), and asked how upstream implements occlusion queries
+and their fake results.
+
+This branch: only the old fake path. `ExecutePacketType3_EVENT_WRITE_ZPD`
+in `pm4_command_processor_implement.h` writes a made-up sample count into
+the report on each query end: it starts at
+`query_occlusion_sample_upper_threshold` (100) and goes down by one per
+query to `query_occlusion_sample_lower_threshold` (80), then wraps
+(ZPass and Total both set to it). Metal has no override; D3D12 and Vulkan
+do. `occlusion_query_enable` (gpu_flags.cc) is not used by Metal.
+Note: a count that changes on every query is a plausible cause of
+flicker in effects that scale with visible pixels. Cheap test without a
+build: set `query_occlusion_sample_lower_threshold = 100` (equal to the
+upper one) so the fake count is constant.
+
+Upstream (XeniOS `77cc1358` and xenia-edge `4fb8372d`): a shared ZPD
+system in `CommandProcessor` (`command_processor.cc/.h`, about 120
+references), `xenos_zpd_report.h` (identical in both), per-backend query
+pools (D3D12, Vulkan, and Metal `metal_zpd_visibility_pool.cc/.h`), and
+`EVENT_WRITE_ZPD` handling in `pm4_command_processor_implement.h`.
+Settings: `occlusion_query` = `fake` | `fast` (default: ask the GPU, write
+a cached result at once, update when the GPU answers, biased to visible)
+| `fast-alt` (keeps cached zero results) | `strict` (waits for the real
+result); `occlusion_query_fake_lower/upper_threshold` (renamed from the
+`query_occlusion_*` names here); `occlusion_query_log`;
+`occlusion_query_viz` (VIZ_QUERY, the 360's predicated rendering, can skip
+occluded draws); `occlusion_query_full_counters` (in-shader ZFail,
+StencilFail and Total; off by default, slow).
+Which is newer: xenia-edge's HEAD date is later, but for this feature
+XeniOS is ahead: its shared code has `ApplyZPDMode`/`ReloadZPDMode` and
+inexact-report stats, and its Metal pool has a path for devices without
+the iOS 26 accumulate visibility result type (copies each render pass's
+slots to a readback buffer when the pass ends). xenia-edge's Metal pool
+lacks that path, so on iOS 16 only the XeniOS version can work. Metal
+uses `setVisibilityResultMode(Counting/Disabled, offset)` on the render
+encoder and `setVisibilityResultBuffer` on the pass descriptor (both
+iOS 8+); the accumulate type (`setVisibilityResultType`) is iOS 26 and
+not in this tree's metal-cpp `MTL::RenderPassDescriptor`, so the port
+would keep only the readback path.
+Port size: this branch's `command_processor.cc` is 957 lines against
+1,847 in XeniOS, so the shared ZPD code cannot be copied without the
+parts of the newer `CommandProcessor` it relies on (half-port risk).
+
+
 
 ### Findings on build #9568 (three runs into gameplay, 2026-11-18)
 
