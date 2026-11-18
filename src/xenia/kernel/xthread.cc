@@ -503,7 +503,7 @@ X_STATUS XThread::Create() {
       cpu::ThreadState::Bind(this->thread_state());
       running_ = true;
 
-#if XE_PLATFORM_LINUX || XE_PLATFORM_ANDROID || XE_PLATFORM_MAC
+#if XE_PLATFORM_LINUX || XE_PLATFORM_ANDROID || XE_PLATFORM_APPLE
       pthread_cleanup_push(HostThreadExitCleanupThunk, this);
       Execute();
       pthread_cleanup_pop(1);
@@ -664,7 +664,7 @@ X_STATUS XThread::Terminate(int exit_code) {
       scheduler->NotifyThreadExited(this);
       scheduler->YieldToScheduler();  // never returns
     }
-#if !(XE_PLATFORM_LINUX || XE_PLATFORM_ANDROID || XE_PLATFORM_MAC)
+#if !(XE_PLATFORM_LINUX || XE_PLATFORM_ANDROID || XE_PLATFORM_APPLE)
     ReleaseHandle();
 #endif
     xe::threading::Thread::Exit(exit_code);
