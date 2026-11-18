@@ -556,6 +556,24 @@ per-thread CPU numbers"), printed with the draw stats every 120 frames:
 - Metal HUD: commit "[iOS] Ask for the Metal performance HUD in code as
   well" (MTL_HUD_ENABLED env at main, layer developerHUDProperties).
 
+Owner's answers (2026-11-18): options 1-2 relate to the existing
+"Async Shader Compilation" setting; option 3 should be an entry in the
+game's long-press context menu; 4-5 wait for the diagnostics.
+Checked: `async_shader_compilation` (default on) only chooses skip vs wait.
+On: MslShader and pipelines compile on worker threads and draws are skipped
+until ready (the blackouts). Off: compiled on the GPU thread, which waits
+(hitches, no blackout). Neither keeps compiled Metal libraries or
+pipelines between runs, so option 1 is still open. Worker count is
+`metal_pipeline_creation_threads` (default -1 = 3/4 of the cores, so 4 on
+a 6-core iPhone, competing with the guest threads during compile bursts).
+XenosRecomp (hedge-dev, 70a084c) was reviewed: it is less exact than this
+translator for emulation (plain multiply without the Xenos 0 * x = 0 rule,
+rcp/rsq/log clamped to [FLT_MIN, FLT_MAX] which drops negative signs, no
+dynamic register indexing or integer constants, vertex fetch replaced by
+native input layouts that need the game's declarations up front), and its
+one speed trick, skipping the control-flow loop for shaders without
+jumps, is already in `SpirvShaderTranslator` (`has_main_switch`).
+
 Ideas to discuss with the owner (not started):
 1. Cache compiled shaders across runs: MTLBinaryArchive for SPIR-V-path
    pipelines (iOS 14+), or compiling libraries with
