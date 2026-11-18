@@ -1206,8 +1206,10 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
   if (entry_point_candidates.empty()) {
     entry_point_candidates.push_back("main0");
   }
-  AddEntryPointCandidatesFromMslSource(msl_source_, shader().type(),
-                                       &entry_point_candidates);
+  // Entry points named in the MSL source are only searched for if none of
+  // these resolves (below): the regular expression search took hundreds of
+  // milliseconds per shader on iOS (libc++ std::regex over ~60 KB of MSL),
+  // most of every compile, for candidates that come after these anyway.
   entry_point_name_ = entry_point_candidates.front();
   XELOGD("MslShader: Compiled SPIR-V to MSL ({} bytes, entries: {})",
          msl_source_.size(), JoinStringList(entry_point_candidates));
@@ -1329,6 +1331,17 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
     }
   }
   if (!metal_function_) {
+    const size_t named_candidate_count = entry_point_candidates.size();
+    AddEntryPointCandidatesFromMslSource(msl_source_, shader().type(),
+                                         &entry_point_candidates);
+    for (size_t i = named_candidate_count; i < entry_point_candidates.size();
+         ++i) {
+      if (try_bind_function(entry_point_candidates[i])) {
+        break;
+      }
+    }
+  }
+  if (!metal_function_) {
     NS::Array* function_names = metal_library_->functionNames();
     if (function_names) {
       for (NS::UInteger i = 0; i < function_names->count(); ++i) {
@@ -1381,6 +1394,7 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
   function_resolve_ms =
       to_ms(std::chrono::steady_clock::now() - function_resolve_begin);
 
+  const auto argument_encoder_begin = std::chrono::steady_clock::now();
   if (uses_argument_buffers_ && has_argument_buffer_resources) {
     argument_encoder_ = metal_function_->newArgumentEncoder(
         MslBufferIndex::kArgumentBufferTexturesSamplers);
@@ -1404,6 +1418,9 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
     argument_encoder_encoded_length_ = 0;
   }
 
+  const double argument_encoder_ms =
+      to_ms(std::chrono::steady_clock::now() - argument_encoder_begin);
+
   pool->release();
 
   const double total_compile_ms =
@@ -1415,20 +1432,20 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
     XELOGW(
         "MslShader: Compile timings shader={:016X} stage={} spirv={}B "
         "msl={}B total={:.2f}ms (spirv-cross={:.2f}ms, metal-library={:.2f}ms, "
-        "entry-resolve={:.2f}ms)",
+        "entry-resolve={:.2f}ms, argument-encoder={:.2f}ms)",
         shader().ucode_data_hash(),
         shader().type() == xenos::ShaderType::kVertex ? "vertex" : "fragment",
         spirv_size_bytes, msl_source_.size(), total_compile_ms, spirv_cross_ms,
-        metal_library_ms, function_resolve_ms);
+        metal_library_ms, function_resolve_ms, argument_encoder_ms);
   } else {
     XELOGD(
         "MslShader: Compile timings shader={:016X} stage={} total={:.2f}ms "
         "(spirv-cross={:.2f}ms, metal-library={:.2f}ms, "
-        "entry-resolve={:.2f}ms)",
+        "entry-resolve={:.2f}ms, argument-encoder={:.2f}ms)",
         shader().ucode_data_hash(),
         shader().type() == xenos::ShaderType::kVertex ? "vertex" : "fragment",
-        total_compile_ms, spirv_cross_ms, metal_library_ms,
-        function_resolve_ms);
+        total_compile_ms, spirv_cross_ms, metal_library_ms, function_resolve_ms,
+        argument_encoder_ms);
   }
 
   XELOGD("MslShader: Successfully created Metal function '{}'",

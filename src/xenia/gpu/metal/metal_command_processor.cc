@@ -1021,6 +1021,8 @@ MTL::RenderPipelineState* MetalCommandProcessor::CreateMslPipelineState(
 }
 
 void MetalCommandProcessor::MslShaderCompileThread(size_t thread_index) {
+  // Named as in XeniOS, so the thread CPU report shows them.
+  xe::threading::set_name(fmt::format("Metal Shaders {}", thread_index));
   while (true) {
     MslShaderCompileRequest shader_request;
     MslPipelineCompileRequest pipeline_request;
