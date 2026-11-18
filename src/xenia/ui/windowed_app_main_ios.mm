@@ -11948,6 +11948,10 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
   NSLog(@"iOS: skipping ptrace/debugger JIT setup; using normal W^X app flow.");
+  // Ask Metal for its performance HUD (iOS 16+). Metal reads this before the
+  // first device is created; the MetalHudEnabled key in Info.plist and the
+  // layer's developerHUDProperties (metal_presenter.mm) ask for the same.
+  setenv("MTL_HUD_ENABLED", "1", 0);
   @autoreleasepool {
     return UIApplicationMain(argc, argv, nil,
                              NSStringFromClass([XeniaAppDelegate class]));

@@ -883,6 +883,20 @@ MetalPresenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
   // Configure the metal layer for our device using Objective-C syntax.
   metal_layer.device = (__bridge id<MTLDevice>)device_;
   metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+#if XE_PLATFORM_IOS
+  // Turn on the Metal performance HUD for this layer (CAMetalLayer
+  // developerHUDProperties, iOS 16+). Set through key-value coding, after
+  // checking the layer has the property, so the build does not depend on the
+  // SDK declaring it.
+  if ([metal_layer respondsToSelector:NSSelectorFromString(@"setDeveloperHUDProperties:")]) {
+    [metal_layer setValue:@{@"mode" : @"default", @"logging" : @"default"}
+                   forKey:@"developerHUDProperties"];
+    XELOGI("Metal presenter: requested the Metal performance HUD");
+  } else {
+    XELOGW("Metal presenter: this system's CAMetalLayer has no "
+           "developerHUDProperties; the Metal performance HUD is unavailable");
+  }
+#endif  // XE_PLATFORM_IOS
   if (surface_scale <= 0.0) {
     surface_scale = 1.0;
   }
