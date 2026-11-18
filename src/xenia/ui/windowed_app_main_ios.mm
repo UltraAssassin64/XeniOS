@@ -3567,6 +3567,12 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "memory between render targets (one draw instead of ten). Turn off if "
                  "shadows, decals or masked effects look wrong.",
                  true);
+  AddBoolSetting(performance.items, "metal_render_pass_area_from_scissor", "Limit Render Pass Area",
+                 "Experimental. Each render pass only loads and stores the part of the "
+                 "render target the game draws to, instead of the whole 1280x2048 "
+                 "surface, cutting GPU memory traffic. Turn off if parts of the screen "
+                 "stop updating or flicker.",
+                 false);
   if (!performance.items.empty()) {
     sections.push_back(std::move(performance));
   }

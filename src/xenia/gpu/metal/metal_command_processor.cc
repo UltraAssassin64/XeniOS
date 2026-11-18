@@ -89,6 +89,14 @@ using BYTE = uint8_t;
 
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
+DEFINE_bool(
+    metal_render_pass_area_from_scissor, false,
+    "Limit each guest draw render pass to the area its draws' scissors cover "
+    "instead of the whole render target (which spans all of EDRAM, 2048 rows "
+    "at 1280 wide). A tile-based GPU loads and stores every tile of the "
+    "area, so this cuts memory traffic; a pass is restarted if a later draw "
+    "needs more.",
+    "Metal");
 DEFINE_int32(
     metal_async_compile_wait_ms, 0,
     "With async shader compilation, how long draws may wait per frame for a "
@@ -3108,6 +3116,25 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
           "failed");
       return false;
     }
+  }
+
+  // The render area this draw needs (metal_render_pass_area_from_scissor),
+  // for BeginCommandBuffer, which grows the pass to it if needed.
+  render_area_needed_width_ = 0;
+  render_area_needed_height_ = 0;
+  if (cvars::metal_render_pass_area_from_scissor) {
+    draw_util::Scissor area_scissor;
+    draw_util::GetScissor(regs, area_scissor);
+    uint32_t area_scale_x =
+        texture_cache_ ? texture_cache_->draw_resolution_scale_x() : 1;
+    uint32_t area_scale_y =
+        texture_cache_ ? texture_cache_->draw_resolution_scale_y() : 1;
+    render_area_needed_width_ = std::max(
+        (area_scissor.offset[0] + area_scissor.extent[0]) * area_scale_x,
+        uint32_t(1));
+    render_area_needed_height_ = std::max(
+        (area_scissor.offset[1] + area_scissor.extent[1]) * area_scale_y,
+        uint32_t(1));
   }
 
   // Begin command buffer if needed (will use cache-provided render targets).
@@ -6171,6 +6198,8 @@ void MetalCommandProcessor::EndRenderEncoder() {
   current_render_encoder_->release();
   current_render_encoder_ = nullptr;
   metal_gpu_pass_record_ = nullptr;
+  current_render_area_width_ = 0;
+  current_render_area_height_ = 0;
   current_render_pass_descriptor_ = nullptr;
   ResetMslRenderEncoderStateCache();
 }
@@ -6287,16 +6316,75 @@ void MetalCommandProcessor::BeginCommandBuffer() {
       current_render_pass_descriptor_ != pass_descriptor) {
     EndRenderEncoder();
   }
+  // A pass with a limited render area that the current draw needs more of is
+  // restarted with a larger area (its attachments are loaded, see below).
+  if (current_render_encoder_ && current_render_area_width_ &&
+      (render_area_needed_width_ > current_render_area_width_ ||
+       render_area_needed_height_ > current_render_area_height_)) {
+    EndRenderEncoder();
+  }
 
   if (!current_render_encoder_) {
     // If some path cleared the encoder without going through EndRenderEncoder,
     // avoid leaking cached binding state into the new encoder.
     ResetMslRenderEncoderStateCache();
+    // Limit the render area to what the draws need, unless an attachment is
+    // cleared on load (a restart to grow the area would clear it again).
+    uint32_t area_width = 0;
+    uint32_t area_height = 0;
+    if (render_area_needed_width_ && render_area_needed_height_) {
+      uint32_t attachments_width = UINT32_MAX;
+      uint32_t attachments_height = UINT32_MAX;
+      bool clears_on_load = false;
+      auto limit_to_attachment =
+          [&](MTL::RenderPassAttachmentDescriptor* attachment) {
+            MTL::Texture* texture =
+                attachment ? attachment->texture() : nullptr;
+            if (!texture) {
+              return;
+            }
+            attachments_width =
+                std::min(attachments_width, uint32_t(texture->width()));
+            attachments_height =
+                std::min(attachments_height, uint32_t(texture->height()));
+            clears_on_load |= attachment->loadAction() == MTL::LoadActionClear;
+          };
+      for (uint32_t i = 0; i < 4; ++i) {
+        limit_to_attachment(pass_descriptor->colorAttachments()->object(i));
+      }
+      limit_to_attachment(pass_descriptor->depthAttachment());
+      limit_to_attachment(pass_descriptor->stencilAttachment());
+      if (!clears_on_load && attachments_width != UINT32_MAX) {
+        auto& known_area = render_area_by_descriptor_[pass_descriptor];
+        known_area.first = std::max(known_area.first,
+                                    xe::align(render_area_needed_width_, 32u));
+        known_area.second = std::max(
+            known_area.second, xe::align(render_area_needed_height_, 32u));
+        area_width = std::min(known_area.first, attachments_width);
+        area_height = std::min(known_area.second, attachments_height);
+        if (area_width >= attachments_width &&
+            area_height >= attachments_height) {
+          area_width = 0;
+          area_height = 0;
+        }
+      }
+    }
+    if (area_width) {
+      pass_descriptor->setRenderTargetWidth(area_width);
+      pass_descriptor->setRenderTargetHeight(area_height);
+    }
     // Note: renderCommandEncoder() returns an autoreleased object, we must
     // retain it.
     current_render_encoder_ = metal_gpu_pass_timer.RenderEncoder(
         current_command_buffer_, pass_descriptor, "draws",
         &metal_gpu_pass_record_);
+    if (area_width) {
+      // The descriptor is the render target cache's, reused for other passes.
+      pass_descriptor->setRenderTargetWidth(0);
+      pass_descriptor->setRenderTargetHeight(0);
+    }
+    current_render_area_width_ = current_render_encoder_ ? area_width : 0;
+    current_render_area_height_ = current_render_encoder_ ? area_height : 0;
     if (!current_render_encoder_) {
       XELOGE("Failed to create render command encoder");
       return;
@@ -6317,6 +6405,10 @@ void MetalCommandProcessor::BeginCommandBuffer() {
   uint32_t rt_height = 1;
   GetBoundRenderTargetSize(render_target_cache_.get(), render_target_width_,
                            render_target_height_, rt_width, rt_height);
+  if (current_render_area_width_) {
+    rt_width = std::min(rt_width, current_render_area_width_);
+    rt_height = std::min(rt_height, current_render_area_height_);
+  }
 
   // Set viewport
   MTL::Viewport viewport = {

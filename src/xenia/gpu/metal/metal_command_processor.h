@@ -436,6 +436,17 @@ class MetalCommandProcessor : public CommandProcessor {
   MTL::RenderPassDescriptor* current_render_pass_descriptor_ = nullptr;
   // GPU pass timing record of the current render encoder, for its draw count.
   MetalGpuPassRecord* metal_gpu_pass_record_ = nullptr;
+  // metal_render_pass_area_from_scissor: the render area the current draw
+  // needs (its scissor's right and bottom edges; 0 for the whole target),
+  // the area of the current render encoder (0 for the whole target), and the
+  // largest area so far per render pass descriptor, so steady-state frames
+  // don't restart passes to grow them.
+  uint32_t render_area_needed_width_ = 0;
+  uint32_t render_area_needed_height_ = 0;
+  uint32_t current_render_area_width_ = 0;
+  uint32_t current_render_area_height_ = 0;
+  std::unordered_map<MTL::RenderPassDescriptor*, std::pair<uint32_t, uint32_t>>
+      render_area_by_descriptor_;
   NS::AutoreleasePool* command_buffer_autorelease_pool_ = nullptr;
 
   // Tracks resources marked via useResource for the current render encoder

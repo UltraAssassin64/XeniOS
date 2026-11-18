@@ -286,9 +286,18 @@ MTL::RenderCommandEncoder* MetalGpuPassTimer::RenderEncoder(
     if (!texture) {
       return 0;
     }
+    // The render area, if the pass is limited to one, else the attachment.
+    uint32_t pass_width = uint32_t(texture->width());
+    uint32_t pass_height = uint32_t(texture->height());
+    if (descriptor->renderTargetWidth() && descriptor->renderTargetHeight()) {
+      pass_width =
+          std::min(pass_width, uint32_t(descriptor->renderTargetWidth()));
+      pass_height =
+          std::min(pass_height, uint32_t(descriptor->renderTargetHeight()));
+    }
     if (!record->width) {
-      record->width = uint32_t(texture->width());
-      record->height = uint32_t(texture->height());
+      record->width = pass_width;
+      record->height = pass_height;
       record->samples = uint32_t(texture->sampleCount());
     }
     MTL::LoadAction load_action = attachment->loadAction();
@@ -298,9 +307,8 @@ MTL::RenderCommandEncoder* MetalGpuPassTimer::RenderEncoder(
     if (texture->storageMode() != MTL::StorageModeMemoryless) {
       const uint64_t pixel_bytes =
           MetalGpuBytesPerPixel(texture->pixelFormat(), index == 5);
-      const uint64_t attachment_bytes = pixel_bytes * texture->width() *
-                                        texture->height() *
-                                        texture->sampleCount();
+      const uint64_t attachment_bytes =
+          pixel_bytes * pass_width * pass_height * texture->sampleCount();
       if (load_action == MTL::LoadActionLoad) {
         record->load_bytes += attachment_bytes;
       }
@@ -312,8 +320,11 @@ MTL::RenderCommandEncoder* MetalGpuPassTimer::RenderEncoder(
           store_action == MTL::StoreActionStoreAndMultisampleResolve) {
         MTL::Texture* resolve_texture = attachment->resolveTexture();
         if (resolve_texture) {
-          record->store_bytes += pixel_bytes * resolve_texture->width() *
-                                 resolve_texture->height();
+          record->store_bytes += pixel_bytes *
+                                 std::min(uint64_t(resolve_texture->width()),
+                                          uint64_t(pass_width)) *
+                                 std::min(uint64_t(resolve_texture->height()),
+                                          uint64_t(pass_height));
         }
       }
     }
