@@ -40,6 +40,14 @@ DEFINE_bool(
     "variants). This avoids severe strict-math performance regressions on some "
     "Apple GPUs while keeping NoContraction semantics enabled.",
     "GPU");
+DEFINE_bool(
+    metal_shader_preserve_invariance, true,
+    "Compile Metal shaders with preserveInvariance, so vertex positions the "
+    "guest marks invariant come out bit-identical from different vertex "
+    "shaders. Without it, fast math may compute the same position slightly "
+    "differently in a depth pre-pass and the pass drawing over it, and "
+    "equal-depth tests and decals flicker (z-fighting).",
+    "GPU");
 
 namespace xe {
 namespace gpu {
@@ -1274,6 +1282,10 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
   // Use fast math for better performance (matches Xbox 360 behavior better
   // than strict IEEE — the 360's ALU doesn't fully conform to IEEE anyway).
   compile_options->setFastMathEnabled(true);
+  // SPIRV-Cross marks the position [[invariant]]; Metal only honours that
+  // with invariance preserved (iOS 14+).
+  compile_options->setPreserveInvariance(
+      cvars::metal_shader_preserve_invariance);
   // Match the Metal compiler language version to SPIRV-Cross output.
   compile_options->setLanguageVersion(language_version);
 

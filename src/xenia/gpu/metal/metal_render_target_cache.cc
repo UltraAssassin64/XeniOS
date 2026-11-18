@@ -5985,6 +5985,10 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
           MTL::RenderPassDescriptor::renderPassDescriptor();
       // Only for a pass that loads its attachments: a clear on load must cover
       // the whole target, and don't-care is for a target overwritten whole.
+      if (::cvars::metal_render_pass_area_from_scissor) {
+        metal_perf_counters.render_area_transfer_passes.fetch_add(
+            1, std::memory_order_relaxed);
+      }
       if (::cvars::metal_render_pass_area_from_scissor &&
           transfer_load_action == MTL::LoadActionLoad) {
         uint32_t area_right = 0;
@@ -6026,6 +6030,10 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
             transfer_area_height = area_height;
             rp->setRenderTargetWidth(area_width);
             rp->setRenderTargetHeight(area_height);
+            metal_perf_counters.render_area_transfer_limited.fetch_add(
+                1, std::memory_order_relaxed);
+            metal_perf_counters.render_area_transfer_rows.fetch_add(
+                area_height, std::memory_order_relaxed);
           }
         }
       }

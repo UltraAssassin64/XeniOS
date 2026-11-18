@@ -3577,6 +3577,30 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
     sections.push_back(std::move(performance));
   }
 
+  IOSConfigSection accuracy;
+  accuracy.title = "Accuracy";
+  accuracy.footer =
+      "Shader settings apply to shaders compiled afterwards: restart the game after changing "
+      "them.";
+  AddBoolSetting(accuracy.items, "metal_shader_preserve_invariance", "Consistent Vertex Positions",
+                 "Makes every shader compute the same vertex position bit for bit. Games that "
+                 "draw the same geometry twice (a depth pre-pass, then the surface or decals "
+                 "over it) flicker without it.",
+                 true);
+  AddBoolSetting(accuracy.items, "metal_spirvcross_strip_nocontract_optnone", "Fast Shader Math",
+                 "Lets the shader compiler merge and reorder floating-point math. Turn off for "
+                 "exact Xbox 360 math everywhere, if flickering remains (much slower shaders).",
+                 true);
+  AddBoolSetting(accuracy.items, "depth_float24_convert_in_pixel_shader",
+                 "Exact 24-bit Float Depth",
+                 "Converts depth to the Xbox 360's 24-bit floating-point format in every pixel "
+                 "shader, for games using float depth: fixes striped or flickering surfaces "
+                 "drawn in several passes, at some GPU cost.",
+                 false);
+  if (!accuracy.items.empty()) {
+    sections.push_back(std::move(accuracy));
+  }
+
   IOSConfigSection audio;
   audio.title = "Audio";
   audio.footer = "These settings control mute state and XMA decoding behavior.";

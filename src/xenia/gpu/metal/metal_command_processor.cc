@@ -2736,6 +2736,37 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
         metal_perf_footprint_mb, metal_perf_available_mb,
         uint32_t(NS::ProcessInfo::processInfo()->thermalState()));
     XELOGI("Metal perf threads:{}", MetalPerfThreadCpu(metal_perf_window_us));
+    {
+      auto take = [](std::atomic<uint64_t>& counter) {
+        return counter.exchange(0, std::memory_order_relaxed);
+      };
+      const uint64_t area_draw_passes =
+          take(metal_perf_counters.render_area_draw_passes);
+      const uint64_t area_draw_limited =
+          take(metal_perf_counters.render_area_draw_limited);
+      const uint64_t area_draw_rows =
+          take(metal_perf_counters.render_area_draw_rows);
+      const uint64_t area_transfer_passes =
+          take(metal_perf_counters.render_area_transfer_passes);
+      const uint64_t area_transfer_limited =
+          take(metal_perf_counters.render_area_transfer_limited);
+      const uint64_t area_transfer_rows =
+          take(metal_perf_counters.render_area_transfer_rows);
+      XELOGI(
+          "Metal render area and queries over {} frames: draw passes limited "
+          "{} of {} (average {} rows), restarted {}; transfer passes limited "
+          "{} of {} (average {} rows); occlusion queries {:.1f} per frame "
+          "(faked as visible), {} query events",
+          draw_stats_.frames, area_draw_limited, area_draw_passes,
+          area_draw_limited ? area_draw_rows / area_draw_limited : 0,
+          take(metal_perf_counters.render_area_restarts), area_transfer_limited,
+          area_transfer_passes,
+          area_transfer_limited ? area_transfer_rows / area_transfer_limited
+                                : 0,
+          double(take(metal_perf_counters.occlusion_queries)) /
+              draw_stats_.frames,
+          take(metal_perf_counters.occlusion_query_events));
+    }
     metal_gpu_pass_timer.Log(draw_stats_.frames, metal_perf_window_us);
     metal_compile_stall_tracker.Log(draw_stats_.frames);
     xe::kernel::shim::LogGuestThreadHotspots();
@@ -2743,6 +2774,13 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
   }
   saw_swap_ = true;
   msl_compile_wait_used_us_ = 0;
+  // A frame later, the render areas only remember this frame's.
+  for (auto& [area_descriptor, known_area] : render_area_by_descriptor_) {
+    known_area[2] = known_area[0];
+    known_area[3] = known_area[1];
+    known_area[0] = 0;
+    known_area[1] = 0;
+  }
   last_swap_ptr_ = frontbuffer_ptr;
   last_swap_width_ = frontbuffer_width;
   last_swap_height_ = frontbuffer_height;
@@ -3132,12 +3170,20 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
         texture_cache_ ? texture_cache_->draw_resolution_scale_x() : 1;
     uint32_t area_scale_y =
         texture_cache_ ? texture_cache_->draw_resolution_scale_y() : 1;
+    uint32_t area_bottom = area_scissor.offset[1] + area_scissor.extent[1];
+    // The scissor is often the whole surface; the height the render target
+    // cache estimated the draw uses (from the viewport and the vertex
+    // shader), which its EDRAM ownership is based on, is usually far lower.
+    if (render_target_cache_ &&
+        render_target_cache_->last_update_height_used()) {
+      area_bottom = std::min(area_bottom,
+                             render_target_cache_->last_update_height_used());
+    }
     render_area_needed_width_ = std::max(
         (area_scissor.offset[0] + area_scissor.extent[0]) * area_scale_x,
         uint32_t(1));
-    render_area_needed_height_ = std::max(
-        (area_scissor.offset[1] + area_scissor.extent[1]) * area_scale_y,
-        uint32_t(1));
+    render_area_needed_height_ =
+        std::max(area_bottom * area_scale_y, uint32_t(1));
   }
 
   // Begin command buffer if needed (will use cache-provided render targets).
@@ -6325,6 +6371,8 @@ void MetalCommandProcessor::BeginCommandBuffer() {
       (render_area_needed_width_ > current_render_area_width_ ||
        render_area_needed_height_ > current_render_area_height_)) {
     EndRenderEncoder();
+    metal_perf_counters.render_area_restarts.fetch_add(
+        1, std::memory_order_relaxed);
   }
 
   if (!current_render_encoder_) {
@@ -6359,12 +6407,14 @@ void MetalCommandProcessor::BeginCommandBuffer() {
       limit_to_attachment(pass_descriptor->stencilAttachment());
       if (!clears_on_load && attachments_width != UINT32_MAX) {
         auto& known_area = render_area_by_descriptor_[pass_descriptor];
-        known_area.first = std::max(known_area.first,
-                                    xe::align(render_area_needed_width_, 32u));
-        known_area.second = std::max(
-            known_area.second, xe::align(render_area_needed_height_, 32u));
-        area_width = std::min(known_area.first, attachments_width);
-        area_height = std::min(known_area.second, attachments_height);
+        known_area[0] =
+            std::max(known_area[0], xe::align(render_area_needed_width_, 32u));
+        known_area[1] =
+            std::max(known_area[1], xe::align(render_area_needed_height_, 32u));
+        area_width =
+            std::min(std::max(known_area[0], known_area[2]), attachments_width);
+        area_height = std::min(std::max(known_area[1], known_area[3]),
+                               attachments_height);
         if (area_width >= attachments_width &&
             area_height >= attachments_height) {
           area_width = 0;
@@ -6388,6 +6438,16 @@ void MetalCommandProcessor::BeginCommandBuffer() {
     }
     current_render_area_width_ = current_render_encoder_ ? area_width : 0;
     current_render_area_height_ = current_render_encoder_ ? area_height : 0;
+    if (render_area_needed_width_ && current_render_encoder_) {
+      metal_perf_counters.render_area_draw_passes.fetch_add(
+          1, std::memory_order_relaxed);
+      if (area_width) {
+        metal_perf_counters.render_area_draw_limited.fetch_add(
+            1, std::memory_order_relaxed);
+        metal_perf_counters.render_area_draw_rows.fetch_add(
+            area_height, std::memory_order_relaxed);
+      }
+    }
     if (!current_render_encoder_) {
       XELOGE("Failed to create render command encoder");
       return;
@@ -10707,6 +10767,16 @@ void MetalCommandProcessor::UpdateSystemConstantValues(
 #endif  // METAL_SHADER_CONVERTER_AVAILABLE
 
 #define COMMAND_PROCESSOR MetalCommandProcessor
+// Counts the guest's occlusion queries for the perf log.
+#define XE_GPU_NOTE_FAKE_OCCLUSION_QUERY(query_ended)     \
+  do {                                                    \
+    metal_perf_counters.occlusion_query_events.fetch_add( \
+        1, std::memory_order_relaxed);                    \
+    if (query_ended) {                                    \
+      metal_perf_counters.occlusion_queries.fetch_add(    \
+          1, std::memory_order_relaxed);                  \
+    }                                                     \
+  } while (false)
 #include "../pm4_command_processor_implement.h"
 #undef COMMAND_PROCESSOR
 

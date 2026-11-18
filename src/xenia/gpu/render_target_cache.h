@@ -205,6 +205,11 @@ class RenderTargetCache {
   uint32_t GetLastUpdateBoundRenderTargets(
       uint32_t* depth_and_color_formats_out = nullptr) const;
 
+  // The height, in guest pixels before resolution scaling, the last Update
+  // estimated the draw uses (what the render targets' EDRAM ownership is
+  // based on), or 0 if it didn't get to estimate it.
+  uint32_t last_update_height_used() const { return last_update_height_used_; }
+
  protected:
   RenderTargetCache(const RegisterFile& register_file, const Memory& memory,
                     TraceWriter* trace_writer, uint32_t draw_resolution_scale_x,
@@ -601,6 +606,7 @@ class RenderTargetCache {
   uint32_t draw_resolution_scale_y_;
 
   DrawExtentEstimator draw_extent_estimator_;
+  uint32_t last_update_height_used_ = 0;
 
   // For host render targets.
 

@@ -571,6 +571,7 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
                                const Shader& vertex_shader) {
   const RegisterFile& regs = register_file();
   bool interlock_barrier_only = GetPath() == Path::kPixelShaderInterlock;
+  last_update_height_used_ = 0;
 
   auto rb_surface_info = regs.Get<reg::RB_SURFACE_INFO>();
   xenos::MsaaSamples msaa_samples = rb_surface_info.msaa_samples;
@@ -755,6 +756,7 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
               ? cvars::execute_unclipped_draw_vs_on_cpu_for_psi_render_backend
               : true,
           vertex_shader));
+  last_update_height_used_ = height_used;
 
   // Sorted by EDRAM base and then by index in the pipeline - for simplicity,
   // treat render targets placed closer to the end of the EDRAM as truncating

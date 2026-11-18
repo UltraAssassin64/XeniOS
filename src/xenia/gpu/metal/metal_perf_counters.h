@@ -39,6 +39,20 @@ struct MetalPerfCounters {
   // Draws waiting for a compile (metal_async_compile_wait_ms).
   std::atomic<uint64_t> compile_waits{0};
   std::atomic<uint64_t> compile_wait_us{0};
+  // metal_render_pass_area_from_scissor: guest draw and transfer render
+  // passes, how many got a limited render area and its total height, and
+  // draw passes restarted to grow their area.
+  std::atomic<uint64_t> render_area_draw_passes{0};
+  std::atomic<uint64_t> render_area_draw_limited{0};
+  std::atomic<uint64_t> render_area_draw_rows{0};
+  std::atomic<uint64_t> render_area_restarts{0};
+  std::atomic<uint64_t> render_area_transfer_passes{0};
+  std::atomic<uint64_t> render_area_transfer_limited{0};
+  std::atomic<uint64_t> render_area_transfer_rows{0};
+  // Guest occlusion queries (EVENT_WRITE_ZPD): every event, and the query
+  // ends, which get a made-up sample count.
+  std::atomic<uint64_t> occlusion_query_events{0};
+  std::atomic<uint64_t> occlusion_queries{0};
   // Guest memory copied into the GPU's shared memory buffer.
   std::atomic<uint64_t> upload_bytes{0};
 };
