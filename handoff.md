@@ -576,6 +576,31 @@ request and has not been confirmed to work on iOS 16.
   probe and, if the owner agrees, the draw stats. Update the variable sheet
   when doing so.
 
+### Owed once the threading hangs are resolved (owner's request, 2026-11-18)
+
+Both are held so they are not tested at the same time as the thread start
+fix. Compare against both upstreams (standing rule 10).
+
+1. **Thread handle leak on iOS.** `XThread::Create`/`Restore` only push the
+   pthread cleanup handler (`HostThreadExitCleanupThunk` →
+   `OnHostThreadExitCleanup` → `ReleaseHandle`) on `XE_PLATFORM_MAC`, while
+   `XThread::Exit`/`Terminate` skip their own `ReleaseHandle()` on
+   `XE_PLATFORM_APPLE`. On iOS neither runs, so every guest thread that
+   exits keeps its handle and object. XeniOS (`77cc1358`) uses
+   `XE_PLATFORM_APPLE` in all of these places; xenia-edge uses `MAC` because
+   it does not target iOS. Port the XeniOS form. Related: both upstreams
+   join exited threads outside the handle lock (`post_execution_unlocked`),
+   part of a larger `threading_posix.cc` rewrite.
+2. **MMIO fault path does not resume on iOS.** With
+   `emit_inline_mmio_checks` off, the XMA context-clear store (guest
+   `7FEA1A84`) faults, `MMIOHandler::ExceptionCallback` handles it, but the
+   resume PC written back by `exception_handler_mac.cc` is not taken, so
+   the store repeats forever (build #9566 log 21-58-49). Inline checks on
+   iOS avoid it. Compare the exception and MMIO handling with xenia-edge's
+   x64 backend and exception handler (more mature, more edge cases) and
+   with XeniOS's ARM64 code; port the newer, or bring the owner the
+   options if they diverge too much.
+
 ## Known loose ends (left alone on purpose)
 
 - A stray tracked path named `“third_party/xbyak_aarch64”` (with curly quotes)
