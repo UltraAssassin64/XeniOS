@@ -70,6 +70,8 @@ DEFINE_bool(
     metal_transfer_msaa_sample_id, true,
     "Use sample_id in Metal transfer shaders for MSAA (sample-rate shading)",
     "GPU");
+DECLARE_bool(metal_render_pass_area_from_scissor);
+
 DEFINE_int32(metal_memory_log_rate, 0,
              "Log Metal render target/pipeline/instance buffer sizes every N "
              "frames (0 to disable)",
@@ -5971,12 +5973,62 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
     }
 
     MTL::RenderCommandEncoder* transfer_encoder = nullptr;
+    // With metal_render_pass_area_from_scissor, the transfer pass's render
+    // area: the bounding box of everything drawn in it (0: the whole target).
+    uint32_t transfer_area_width = 0;
+    uint32_t transfer_area_height = 0;
     auto ensure_transfer_encoder = [&]() -> MTL::RenderCommandEncoder* {
       if (transfer_encoder) {
         return transfer_encoder;
       }
       MTL::RenderPassDescriptor* rp =
           MTL::RenderPassDescriptor::renderPassDescriptor();
+      // Only for a pass that loads its attachments: a clear on load must cover
+      // the whole target, and don't-care is for a target overwritten whole.
+      if (::cvars::metal_render_pass_area_from_scissor &&
+          transfer_load_action == MTL::LoadActionLoad) {
+        uint32_t area_right = 0;
+        uint32_t area_bottom = 0;
+        auto add_to_area = [&](const Transfer::Rectangle& rect) {
+          uint32_t scaled_x = 0;
+          uint32_t scaled_y = 0;
+          uint32_t scaled_width = 0;
+          uint32_t scaled_height = 0;
+          if (get_scaled_rect(rect, scaled_x, scaled_y, scaled_width,
+                              scaled_height)) {
+            area_right = std::max(area_right, scaled_x + scaled_width);
+            area_bottom = std::max(area_bottom, scaled_y + scaled_height);
+          }
+        };
+        // The transfers' rectangles (also those of the stencil clear before
+        // the per-bit draws), and the resolve clear drawn after them.
+        for (const Transfer& transfer : transfers_for_shaders) {
+          Transfer::Rectangle rectangles[Transfer::kMaxRectanglesWithCutout];
+          uint32_t rectangle_count = transfer.GetRectangles(
+              dest_key.base_tiles, dest_key.GetPitchTiles(),
+              dest_key.msaa_samples, IsKey64bpp(dest_key), rectangles,
+              resolve_clear_rectangle);
+          for (uint32_t rect_index = 0; rect_index < rectangle_count;
+               ++rect_index) {
+            add_to_area(rectangles[rect_index]);
+          }
+        }
+        if (resolve_clear_needed && resolve_clear_rectangle) {
+          add_to_area(*resolve_clear_rectangle);
+        }
+        if (area_right && area_bottom) {
+          uint32_t area_width =
+              std::min(xe::align(area_right, 32u), dest_width);
+          uint32_t area_height =
+              std::min(xe::align(area_bottom, 32u), dest_height);
+          if (area_width < dest_width || area_height < dest_height) {
+            transfer_area_width = area_width;
+            transfer_area_height = area_height;
+            rp->setRenderTargetWidth(area_width);
+            rp->setRenderTargetHeight(area_height);
+          }
+        }
+      }
       if (dest_is_depth) {
         auto* da = rp->depthAttachment();
         da->setTexture(dest_texture);
@@ -6313,6 +6365,12 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
           scissor.y = 0;
           scissor.width = dest_width;
           scissor.height = dest_height;
+          if (transfer_area_width) {
+            // Within the pass's limited render area, which holds every
+            // rectangle drawn.
+            scissor.width = transfer_area_width;
+            scissor.height = transfer_area_height;
+          }
           bind_transfer_scissor(scissor);
         };
 

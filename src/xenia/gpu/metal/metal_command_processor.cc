@@ -91,10 +91,11 @@ DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
 DEFINE_bool(
     metal_render_pass_area_from_scissor, false,
-    "Limit each guest draw render pass to the area its draws' scissors cover "
-    "instead of the whole render target (which spans all of EDRAM, 2048 rows "
-    "at 1280 wide). A tile-based GPU loads and stores every tile of the "
-    "area, so this cuts memory traffic; a pass is restarted if a later draw "
+    "Limit each guest draw render pass to the area its draws' scissors cover, "
+    "and each render target transfer pass to the rectangles it draws, instead "
+    "of the whole render target (which spans all of EDRAM, 2048 rows at 1280 "
+    "wide). A tile-based GPU loads and stores every tile of the area, so "
+    "this cuts memory traffic; a draw pass is restarted if a later draw "
     "needs more.",
     "Metal");
 DEFINE_int32(

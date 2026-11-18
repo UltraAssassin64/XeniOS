@@ -3568,10 +3568,10 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "shadows, decals or masked effects look wrong.",
                  true);
   AddBoolSetting(performance.items, "metal_render_pass_area_from_scissor", "Limit Render Pass Area",
-                 "Experimental. Each render pass only loads and stores the part of the "
-                 "render target the game draws to, instead of the whole 1280x2048 "
-                 "surface, cutting GPU memory traffic. Turn off if parts of the screen "
-                 "stop updating or flicker.",
+                 "Experimental. Each draw and render target copy pass only loads and "
+                 "stores the part of the render target it touches, instead of the whole "
+                 "1280x2048 surface, cutting GPU memory traffic. Turn off if parts of the "
+                 "screen stop updating, flicker or turn black.",
                  false);
   if (!performance.items.empty()) {
     sections.push_back(std::move(performance));
