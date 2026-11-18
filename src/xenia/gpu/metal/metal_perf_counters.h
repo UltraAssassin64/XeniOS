@@ -39,6 +39,11 @@ struct MetalPerfCounters {
   // Draws waiting for a compile (metal_async_compile_wait_ms).
   std::atomic<uint64_t> compile_waits{0};
   std::atomic<uint64_t> compile_wait_us{0};
+  // Draws waiting for a free SPIRV-Cross uniform buffer, and command buffers
+  // ended because none was free.
+  std::atomic<uint64_t> uniform_waits{0};
+  std::atomic<uint64_t> uniform_wait_us{0};
+  std::atomic<uint64_t> uniform_rollovers{0};
   // metal_render_pass_area_from_scissor: guest draw and transfer render
   // passes, how many got a limited render area and its total height, and
   // draw passes restarted to grow their area.

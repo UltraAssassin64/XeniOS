@@ -90,6 +90,12 @@ using BYTE = uint8_t;
 
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
+DEFINE_int32(
+    metal_uniform_buffers_max, 0,
+    "Most uniform buffers (each holding the constants of 8 draws) the "
+    "SPIRV-Cross path may have in flight before draws wait for the GPU to "
+    "retire one. 0 for the default (96 on iOS, 12 elsewhere).",
+    "Metal");
 DEFINE_bool(
     metal_render_pass_area_from_scissor, false,
     "Limit each guest draw render pass to the area its draws' scissors cover, "
@@ -126,6 +132,20 @@ bool UseSpirvCrossPath() {
 #else
   return true;
 #endif  // METAL_SHADER_CONVERTER_AVAILABLE
+}
+
+// metal_uniform_buffers_max, or its default.
+size_t MetalUniformBuffersMax() {
+  if (cvars::metal_uniform_buffers_max > 0) {
+    return size_t(cvars::metal_uniform_buffers_max);
+  }
+#if XE_PLATFORM_IOS
+  // 24 left draws waiting for the GPU hundreds of times per second in
+  // gameplay (~3600 draws per frame, 8 per buffer); 96 x 384 KB = 36 MB.
+  return 96;
+#else
+  return 12;
+#endif
 }
 
 void GetBoundRenderTargetSize(const MetalRenderTargetCache* render_target_cache,
@@ -2736,6 +2756,19 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
         metal_perf_footprint_mb, metal_perf_available_mb,
         uint32_t(NS::ProcessInfo::processInfo()->thermalState()));
     XELOGI("Metal perf threads:{}", MetalPerfThreadCpu(metal_perf_window_us));
+    XELOGI(
+        "Metal uniforms over {} frames: draws waited for a free uniform buffer "
+        "{} times, {:.1f} ms; command buffers ended for want of one {} times "
+        "(at most {} buffers)",
+        draw_stats_.frames,
+        metal_perf_counters.uniform_waits.exchange(0,
+                                                   std::memory_order_relaxed),
+        metal_perf_counters.uniform_wait_us.exchange(
+            0, std::memory_order_relaxed) /
+            1000.0,
+        metal_perf_counters.uniform_rollovers.exchange(
+            0, std::memory_order_relaxed),
+        MetalUniformBuffersMax());
     {
       auto take = [](std::atomic<uint64_t>& counter) {
         return counter.exchange(0, std::memory_order_relaxed);
@@ -4951,10 +4984,27 @@ bool MetalCommandProcessor::IssueDrawMsl(
                                    XE_GPU_REG_SHADER_CONSTANT_256_X);
     msl_float_constants_dirty_pixel_ = false;
   }
-  std::memcpy(uniforms_vertex + kFloatConstantOffset,
-              msl_cached_float_constants_vertex_.data(), kCBVSize);
-  std::memcpy(uniforms_pixel + kFloatConstantOffset,
-              msl_cached_float_constants_pixel_.data(), kCBVSize);
+  // Only the packed constants the shaders read (4 KB each was copied for every
+  // draw, ~29 MB per frame at 3600 draws).
+  const size_t float_constants_vertex_size = std::min<size_t>(
+      kCBVSize, size_t(float_constant_map_vertex.float_count) * 16);
+  if (float_constants_vertex_size) {
+    std::memcpy(uniforms_vertex + kFloatConstantOffset,
+                msl_cached_float_constants_vertex_.data(),
+                float_constants_vertex_size);
+  }
+  const size_t float_constants_pixel_size =
+      msl_pixel_shader
+          ? std::min<size_t>(
+                kCBVSize,
+                size_t(msl_pixel_shader->constant_register_map().float_count) *
+                    16)
+          : 0;
+  if (float_constants_pixel_size) {
+    std::memcpy(uniforms_pixel + kFloatConstantOffset,
+                msl_cached_float_constants_pixel_.data(),
+                float_constants_pixel_size);
+  }
 
   // b2 (msl_buffer 4): Bool/loop constants.
   const size_t kBoolLoopConstantOffset = 2 * kCBVSize;
@@ -6541,13 +6591,10 @@ bool MetalCommandProcessor::EnsureSpirvUniformBuffer() {
   // Keep a slightly larger initial pool on iOS to reduce early-frame pressure.
 #if XE_PLATFORM_IOS
   constexpr size_t kUniformsBuffersInFlightInitial = 6;
-  // iOS commonly needs extra headroom to avoid command-buffer churn when
-  // submissions retire later than the CPU draw cadence.
-  constexpr size_t kUniformsBuffersInFlightMax = 24;
 #else
   constexpr size_t kUniformsBuffersInFlightInitial = 4;
-  constexpr size_t kUniformsBuffersInFlightMax = 12;
 #endif
+  const size_t kUniformsBuffersInFlightMax = MetalUniformBuffersMax();
 
   if (!spirv_uniforms_pool_initialized_) {
     size_t requested_ring_count = std::max<size_t>(1, draw_ring_count_);
@@ -6711,8 +6758,13 @@ bool MetalCommandProcessor::EnsureSpirvUniformBuffer() {
       } else {
         ++suppressed_wait_logs;
       }
+      const auto uniform_wait_begin = std::chrono::steady_clock::now();
       dispatch_semaphore_wait(spirv_uniforms_available_semaphore_,
                               DISPATCH_TIME_FOREVER);
+      metal_perf_counters.uniform_waits.fetch_add(1, std::memory_order_relaxed);
+      metal_perf_counters.uniform_wait_us.fetch_add(
+          MetalPerfMicrosecondsSince(uniform_wait_begin),
+          std::memory_order_relaxed);
     }
   }
 
@@ -6771,11 +6823,7 @@ bool MetalCommandProcessor::EnsureSpirvUniformBufferCapacity() {
     return false;
   };
 
-#if XE_PLATFORM_IOS
-  constexpr size_t kUniformsBuffersInFlightMax = 24;
-#else
-  constexpr size_t kUniformsBuffersInFlightMax = 12;
-#endif
+  const size_t kUniformsBuffersInFlightMax = MetalUniformBuffersMax();
   const auto try_grow_uniforms_pool = [&]() -> bool {
     if (!device_) {
       return false;
@@ -6821,6 +6869,7 @@ bool MetalCommandProcessor::EnsureSpirvUniformBufferCapacity() {
     return true;
   }
 
+  metal_perf_counters.uniform_rollovers.fetch_add(1, std::memory_order_relaxed);
   static bool rollover_logged = false;
   if (!rollover_logged) {
     rollover_logged = true;
