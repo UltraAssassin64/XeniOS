@@ -36,6 +36,9 @@ struct MetalPerfCounters {
   // Render pipeline state creation.
   std::atomic<uint64_t> pipeline_compiles{0};
   std::atomic<uint64_t> pipeline_compile_us{0};
+  // Draws waiting for a compile (metal_async_compile_wait_ms).
+  std::atomic<uint64_t> compile_waits{0};
+  std::atomic<uint64_t> compile_wait_us{0};
   // Guest memory copied into the GPU's shared memory buffer.
   std::atomic<uint64_t> upload_bytes{0};
 };

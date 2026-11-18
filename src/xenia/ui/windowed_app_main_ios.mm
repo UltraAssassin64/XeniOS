@@ -3550,6 +3550,23 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "stutter. New effects may appear a moment late; turn this off if you "
                  "prefer blocking correctness over smoother frame pacing.",
                  false);
+  AddChoiceSetting(performance.items, IOSConfigControlType::kChoiceInt32,
+                   "metal_async_compile_wait_ms", "Wait for Shader Compiles",
+                   "With async compilation, how long draws may wait each frame for a shader "
+                   "still compiling before they are skipped. Skipped draws show as missing "
+                   "or black scenery; waiting shows as a stutter instead.",
+                   0,
+                   {{"Off (skip draws)", 0},
+                    {"8 ms per frame", 8},
+                    {"16 ms per frame", 16},
+                    {"33 ms per frame", 33},
+                    {"50 ms per frame", 50},
+                    {"100 ms per frame", 100}});
+  AddBoolSetting(performance.items, "native_stencil_value_output", "Native Stencil Output",
+                 "Writes the stencil in the same draw as the depth when the game reuses "
+                 "memory between render targets (one draw instead of ten). Turn off if "
+                 "shadows, decals or masked effects look wrong.",
+                 true);
   if (!performance.items.empty()) {
     sections.push_back(std::move(performance));
   }

@@ -90,6 +90,13 @@ using BYTE = uint8_t;
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
 DEFINE_int32(
+    metal_async_compile_wait_ms, 0,
+    "With async shader compilation, how long draws may wait per frame for a "
+    "shader or pipeline still compiling before they are skipped (the "
+    "blackouts while compiling). 0 never waits; larger values trade skipped "
+    "draws for stalls.",
+    "Metal");
+DEFINE_int32(
     metal_pipeline_creation_threads, -1,
     "Number of threads used for SPIRV-Cross shader and render pipeline "
     "compilation in the Metal backend. -1 to calculate automatically (75% of "
@@ -781,6 +788,7 @@ void MetalCommandProcessor::ShutdownMslAsyncCompilation() {
     msl_shader_compile_shutdown_ = true;
   }
   msl_shader_compile_cv_.notify_all();
+  msl_compile_done_cv_.notify_all();
 
   for (std::thread& thread : msl_shader_compile_threads_) {
     if (thread.joinable()) {
@@ -835,6 +843,39 @@ MetalCommandProcessor::GetMslShaderCompileStatus(
                                  : MslShaderCompileStatus::kNotQueued;
 }
 
+bool MetalCommandProcessor::WaitForMslCompileProgress() {
+  const int32_t wait_ms = cvars::metal_async_compile_wait_ms;
+  if (wait_ms <= 0) {
+    return false;
+  }
+  const uint64_t budget_us = uint64_t(wait_ms) * 1000;
+  if (msl_compile_wait_used_us_ >= budget_us) {
+    return false;
+  }
+  const auto wait_begin = std::chrono::steady_clock::now();
+  {
+    std::unique_lock<std::mutex> lock(msl_shader_compile_mutex_);
+    if (msl_shader_compile_shutdown_) {
+      return false;
+    }
+    const uint64_t completions = msl_compile_completions_;
+    msl_compile_done_cv_.wait_until(
+        lock,
+        wait_begin +
+            std::chrono::microseconds(budget_us - msl_compile_wait_used_us_),
+        [&]() {
+          return msl_compile_completions_ != completions ||
+                 msl_shader_compile_shutdown_;
+        });
+  }
+  const uint64_t waited_us = MetalPerfMicrosecondsSince(wait_begin);
+  msl_compile_wait_used_us_ += waited_us;
+  metal_perf_counters.compile_waits.fetch_add(1, std::memory_order_relaxed);
+  metal_perf_counters.compile_wait_us.fetch_add(waited_us,
+                                                std::memory_order_relaxed);
+  return true;
+}
+
 bool MetalCommandProcessor::EnqueueMslShaderCompilation(
     MslShader::MslTranslation* translation, bool is_ios, uint8_t priority) {
   if (!translation || !cvars::async_shader_compilation ||
@@ -863,6 +904,7 @@ bool MetalCommandProcessor::EnqueueMslShaderCompilation(
     request.modification = translation->modification();
     request.is_ios = is_ios;
     request.priority = priority;
+    request.queue_arrival = msl_compile_arrivals_++;
     msl_shader_compile_pending_.insert(translation);
     msl_shader_compile_queue_.push(request);
     metal_compile_stall_tracker.Queued(
@@ -900,6 +942,7 @@ bool MetalCommandProcessor::EnqueueMslPipelineCompilation(
     if (queued_request.fragment_function) {
       queued_request.fragment_function->retain();
     }
+    queued_request.queue_arrival = msl_compile_arrivals_++;
     msl_pipeline_compile_pending_.insert(request.pipeline_key);
     msl_pipeline_compile_queue_.push(queued_request);
     metal_compile_stall_tracker.Queued(
@@ -1073,7 +1116,9 @@ void MetalCommandProcessor::MslShaderCompileThread(size_t thread_index) {
         if (msl_shader_compile_busy_) {
           --msl_shader_compile_busy_;
         }
+        ++msl_compile_completions_;
       }
+      msl_compile_done_cv_.notify_all();
       // After the pending entry is gone, so no draw skips for it afterwards.
       metal_compile_stall_tracker.Finished(
           {3, pipeline_request.vertex_shader_hash,
@@ -1131,7 +1176,9 @@ void MetalCommandProcessor::MslShaderCompileThread(size_t thread_index) {
         if (msl_shader_compile_busy_) {
           --msl_shader_compile_busy_;
         }
+        ++msl_compile_completions_;
       }
+      msl_compile_done_cv_.notify_all();
       if (shader_request.translation) {
         metal_compile_stall_tracker.Finished(
             {shader_request.translation->shader().type() ==
@@ -2645,6 +2692,7 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
         "over 33 ms, {} over 50 ms; GPU busy {:.0f} ms in {} command buffers "
         "({:.0f}% of the time); CPU blocked on GPU {} times, {:.1f} ms; "
         "shaders compiled {} ({:.0f} ms), pipelines created {} ({:.0f} ms); "
+        "draws waited for compiles {} times, {:.1f} ms; "
         "uploaded {:.1f} MB; memory footprint {} MB, available {} MB; "
         "thermal state {}",
         draw_stats_.frames,
@@ -2667,6 +2715,11 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
         metal_perf_counters.pipeline_compile_us.exchange(
             0, std::memory_order_relaxed) /
             1000.0,
+        metal_perf_counters.compile_waits.exchange(0,
+                                                   std::memory_order_relaxed),
+        metal_perf_counters.compile_wait_us.exchange(
+            0, std::memory_order_relaxed) /
+            1000.0,
         metal_perf_counters.upload_bytes.exchange(0,
                                                   std::memory_order_relaxed) /
             1048576.0,
@@ -2678,6 +2731,7 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
     draw_stats_ = {};
   }
   saw_swap_ = true;
+  msl_compile_wait_used_us_ = 0;
   last_swap_ptr_ = frontbuffer_ptr;
   last_swap_width_ = frontbuffer_width;
   last_swap_height_ = frontbuffer_height;
@@ -4365,6 +4419,10 @@ bool MetalCommandProcessor::IssueDrawMsl(
   };
   MslShaderCompileStatus vertex_compile_status =
       ensure_msl_translation_ready(vertex_translation, 1);
+  while (vertex_compile_status == MslShaderCompileStatus::kPending &&
+         WaitForMslCompileProgress()) {
+    vertex_compile_status = GetMslShaderCompileStatus(vertex_translation);
+  }
   if (vertex_compile_status == MslShaderCompileStatus::kPending) {
     log_pending_compile(vertex_translation, "vertex");
     metal_compile_stall_tracker.Skipped(
@@ -4392,6 +4450,10 @@ bool MetalCommandProcessor::IssueDrawMsl(
     }
     MslShaderCompileStatus pixel_compile_status =
         ensure_msl_translation_ready(pixel_translation, 2);
+    while (pixel_compile_status == MslShaderCompileStatus::kPending &&
+           WaitForMslCompileProgress()) {
+      pixel_compile_status = GetMslShaderCompileStatus(pixel_translation);
+    }
     if (pixel_compile_status == MslShaderCompileStatus::kPending) {
       log_pending_compile(pixel_translation, "pixel");
       metal_compile_stall_tracker.Skipped(
@@ -4417,6 +4479,13 @@ bool MetalCommandProcessor::IssueDrawMsl(
   } else {
     pipeline = GetOrCreateMslPipelineState(
         vertex_translation, pixel_translation, regs, &pipeline_compile_status);
+    while (!pipeline &&
+           pipeline_compile_status == MslPipelineCompileStatus::kPending &&
+           WaitForMslCompileProgress()) {
+      pipeline =
+          GetOrCreateMslPipelineState(vertex_translation, pixel_translation,
+                                      regs, &pipeline_compile_status);
+    }
   }
   if (!pipeline) {
     if (!is_tessellated &&

@@ -485,6 +485,8 @@ class MetalCommandProcessor : public CommandProcessor {
     uint64_t modification = 0;
     bool is_ios = false;
     uint8_t priority = 0;
+    // Queue order within a priority (first in, first out).
+    uint64_t queue_arrival = 0;
   };
   struct MslPipelineCompileRequest {
     uint64_t pipeline_key = 0;
@@ -504,17 +506,26 @@ class MetalCommandProcessor : public CommandProcessor {
     uint32_t alpha_to_mask_enable = 0;
     uint32_t blendcontrol[4] = {};
     uint8_t priority = 0;
+    uint64_t queue_arrival = 0;
   };
+  // Highest priority first, then the oldest: a heap ordered by priority
+  // alone left some compiles queued for over 10 s while newer ones ran.
   struct MslShaderCompileRequestCompare {
     bool operator()(const MslShaderCompileRequest& a,
                     const MslShaderCompileRequest& b) const {
-      return a.priority < b.priority;
+      if (a.priority != b.priority) {
+        return a.priority < b.priority;
+      }
+      return a.queue_arrival > b.queue_arrival;
     }
   };
   struct MslPipelineCompileRequestCompare {
     bool operator()(const MslPipelineCompileRequest& a,
                     const MslPipelineCompileRequest& b) const {
-      return a.priority < b.priority;
+      if (a.priority != b.priority) {
+        return a.priority < b.priority;
+      }
+      return a.queue_arrival > b.queue_arrival;
     }
   };
   std::priority_queue<MslShaderCompileRequest,
@@ -534,6 +545,17 @@ class MetalCommandProcessor : public CommandProcessor {
   std::vector<std::thread> msl_shader_compile_threads_;
   size_t msl_shader_compile_busy_ = 0;
   bool msl_shader_compile_shutdown_ = false;
+  // Compiles queued so far (the next queue_arrival) and finished so far, under
+  // msl_shader_compile_mutex_; msl_compile_done_cv_ is notified on each
+  // finish, for draws waiting on a compile (metal_async_compile_wait_ms).
+  uint64_t msl_compile_arrivals_ = 0;
+  uint64_t msl_compile_completions_ = 0;
+  std::condition_variable msl_compile_done_cv_;
+  // Time draws spent waiting for compiles in the current frame.
+  uint64_t msl_compile_wait_used_us_ = 0;
+  // Waits up to the rest of this frame's metal_async_compile_wait_ms budget
+  // for any compile to finish; false when there is no budget (left).
+  bool WaitForMslCompileProgress();
   std::atomic<int64_t> msl_shader_compile_failure_last_log_ns_{0};
   std::atomic<int64_t> msl_pipeline_compile_failure_last_log_ns_{0};
   std::atomic<int64_t> msl_pipeline_pending_last_log_ns_{0};
