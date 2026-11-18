@@ -19,6 +19,9 @@
 #if XE_PLATFORM_APPLE && XE_ARCH_ARM64
 #include <mach/mach.h>
 #endif
+#if !XE_PLATFORM_WIN32
+#include <dlfcn.h>
+#endif
 
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/base/clock.h"
@@ -70,18 +73,42 @@ thread_local KernelCallThreadState* kernel_call_this_thread = nullptr;
 // Guest return addresses up the stack from a frame: the back chain is at
 // 0(r1) and each function saves its return address at -8 from its caller's
 // frame.
+// Whether guest memory [address, address + size) is committed and readable.
+// A thread that has exited may have had its stack released, and reading a
+// released page faults. The caller holds the global critical region.
+bool KernelCallReadable(uint32_t address, uint32_t size) {
+  BaseHeap* kernel_call_heap = kernel_memory()->LookupHeap(address);
+  if (!kernel_call_heap) {
+    return false;
+  }
+  return kernel_call_heap->QueryRangeAccess(address, address + size - 1) !=
+         xe::memory::PageAccess::kNoAccess;
+}
+
 std::string LogKernelCallStack(uint32_t kernel_call_frame) {
   Memory* kernel_call_memory = kernel_memory();
   std::string kernel_call_stack;
+  // The page table is guarded by the global lock; a stuck thread may hold
+  // it, so never wait for it here.
+  auto& kernel_call_global = xe::global_critical_region::mutex();
+  if (!kernel_call_global.try_lock()) {
+    return " (memory busy)";
+  }
   for (uint32_t kernel_call_depth = 0; kernel_call_depth < 12;
        ++kernel_call_depth) {
     if (!kernel_call_frame || kernel_call_frame >= 0xF0000000u) {
       break;
     }
+    if (!KernelCallReadable(kernel_call_frame, 4)) {
+      kernel_call_stack +=
+          fmt::format(" (unreadable {:08X})", kernel_call_frame);
+      break;
+    }
     uint32_t kernel_call_caller_frame = xe::load_and_swap<uint32_t>(
         kernel_call_memory->TranslateVirtual(kernel_call_frame));
     if (kernel_call_caller_frame <= kernel_call_frame ||
-        kernel_call_caller_frame >= 0xF0000000u) {
+        kernel_call_caller_frame >= 0xF0000000u ||
+        !KernelCallReadable(kernel_call_caller_frame - 8, 4)) {
       break;
     }
     kernel_call_stack += fmt::format(
@@ -90,6 +117,7 @@ std::string LogKernelCallStack(uint32_t kernel_call_frame) {
             kernel_call_caller_frame - 8)));
     kernel_call_frame = kernel_call_caller_frame;
   }
+  kernel_call_global.unlock();
   return kernel_call_stack;
 }
 
@@ -203,19 +231,47 @@ void LogKernelCallThreads() {
           kernel_call_function->MapMachineCodeToGuestAddress(
               uintptr_t(kernel_call_host_pc)));
     }
+#if !XE_PLATFORM_WIN32
+    else if (kernel_call_host_pc) {
+      // Outside JIT code: name the host function, e.g. a lock or wait.
+      Dl_info kernel_call_symbol;
+      if (dladdr(reinterpret_cast<void*>(kernel_call_host_pc),
+                 &kernel_call_symbol) &&
+          kernel_call_symbol.dli_sname) {
+        kernel_call_object = fmt::format(
+            "host code {}+{:X}", kernel_call_symbol.dli_sname,
+            kernel_call_host_pc - uint64_t(kernel_call_symbol.dli_saddr));
+      }
+    }
+#endif
+    // The thread's kernel object and processor control region live in
+    // guest memory, which an exiting thread may already have released.
+    std::string kernel_call_names = "kernel object unreadable";
+    if (kernel_call_global.try_lock()) {
+      if (KernelCallReadable(kernel_call_xthread->guest_object(),
+                             sizeof(X_KTHREAD)) &&
+          KernelCallReadable(kernel_call_xthread->pcr_ptr(), sizeof(X_KPCR))) {
+        kernel_call_names =
+            fmt::format("suspend count {}, priority {}, cpu {}, start {:08X}",
+                        kernel_call_xthread->suspend_count(),
+                        kernel_call_xthread->priority(),
+                        uint32_t(kernel_call_xthread->active_cpu()),
+                        kernel_call_xthread->start_address());
+      }
+      kernel_call_global.unlock();
+    } else {
+      kernel_call_names = "kernel object busy";
+    }
     const cpu::ppc::PPCContext* kernel_call_context =
         kernel_call_xthread->thread_state()
             ? kernel_call_xthread->thread_state()->context()
             : nullptr;
     XELOGW(
-        "Guest thread {:08X}: {}, suspend count {}, priority {}, cpu {}, "
-        "start {:08X}; host pc {:016X} in {}; guest lr {:08X}; guest stack{}",
+        "Guest thread {:08X}: {}, {}; host pc {:016X} in {}; guest lr {:08X}; "
+        "guest stack{}",
         kernel_call_xthread->handle(),
         kernel_call_xthread->is_running() ? "running" : "not running",
-        kernel_call_xthread->suspend_count(), kernel_call_xthread->priority(),
-        uint32_t(kernel_call_xthread->active_cpu()),
-        kernel_call_xthread->start_address(), kernel_call_host_pc,
-        kernel_call_object,
+        kernel_call_names, kernel_call_host_pc, kernel_call_object,
         kernel_call_context ? uint32_t(kernel_call_context->lr) : 0,
         kernel_call_context
             ? LogKernelCallStack(uint32_t(kernel_call_context->r[1]))

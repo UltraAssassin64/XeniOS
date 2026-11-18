@@ -386,6 +386,46 @@ mapped through the code cache to the guest function. The repeat detector
 now reports only the shortest cycle (it used to repeat the report for 2x,
 3x and 4x the cycle).
 
+Results on build #9565 (logs 21-01-50, 21-05-37, 21-11-25):
+
+- 21-01-50 (hang after Press Start, exited after a few minutes): every
+  thread waits on events except `F80000E0`, **priority 31**, running game
+  code in guest function `82309E90` (near `8230A6F4`, stack `82333E2C
+  82653420 82653464 822F403C 82479490`), and the audio thread `F80000D0`
+  polling XMAGetOutputBufferWriteOffset (9.5 million calls) in
+  `82D0C490`. So the Press Start hang is a different stall from the
+  cutscene one: a high-priority thread spinning in game code.
+- 21-05-37 and 21-11-25 (2.4 GB and 0.9 GB): **the diagnostic itself
+  crashed**. Right after a repeat report on `F800006C` printed its
+  guest-thread list, that thread took SIGBUS at a fixed host PC with
+  address `0x310C20000`, and the fault handler retried forever (24
+  million and 9 million "Unhandled host exception" lines). The game
+  logic thread froze, so only the music played on. The list had stopped
+  just before the thread being waited on (`F80001D8`); reading the stack
+  or kernel object of an exited thread whose guest memory was released
+  is the likely fault. These two runs say nothing about the original
+  bug.
+- In 21-11-25, before the crash, the movie thread `F80000E4` (priority
+  32) waited on thread handle `F80001D8`; the three movie helper threads
+  listed (start `8313AD18`) are all "not running", that is exited. In
+  build #9564 the "never made a kernel call" conclusion about `F80001C0`
+  was wrong: the kernel-call table hides threads that are inside
+  ExTerminateThread, so an exited thread looks like one that never
+  called. Open question: does a wait on an exited thread ever return?
+  `PosixCondition<Thread>::post_execution` calls pthread_join while the
+  wait still holds the handle's mutex; XThread::Exit on iOS takes the
+  `#else` branch in XThread::Create's lambda (no pthread cleanup push),
+  so OnHostThreadExitCleanup/ReleaseHandle never run for exited threads
+  on iOS (a leak; not shown to cause the hang).
+
+Fix (commit "[Kernel] Never read released guest memory in the thread
+reports"): every guest read in the stack walk, and the kernel-object/PCR
+reads in the guest-thread list, first check the page table
+(`KernelCallReadable`, under a try-locked global critical region). An
+unreadable frame prints `(unreadable <addr>)`; an unreadable thread
+object prints `kernel object unreadable`. A host PC outside JIT code is
+now named with dladdr (`host code <symbol>+<offset>`).
+
 ## JIT automation
 
 Settings > Automation has "Auto-Enable JIT via StikDebug" (stikjit://) and,
