@@ -1019,6 +1019,49 @@ Changes for the next build:
   per draw in the frame detail log.
 Build #9611 (`xenios_ios_arm64_0.2.9-9611`, 1ff32888, run 44391308505)
 built on the first attempt and has all three.
+
+### Build 9611 results (owner, zip "9611-1") and the next build
+
+Three runs: defaults (queries off); queries on; queries on with
+metal_log_shader_hashes set and captures (4 frames, then 1 facing Batman).
+- Uniform waits gone. Gameplay ~44-57 ms per frame at 3,300-3,600 draws
+  (61 ms in 9606), now GPU bound (busy 105-115%). Render area limits every
+  pass: attachment traffic ~1.7 GB per frame (was ~6 GB). FPS rises as
+  shaders compile instead of falling (owner). Real queries: NPCs take about
+  a second to reappear when the camera whips around (owner).
+- GPU per gameplay frame: rt transfers 43 ms in 91 passes (top: 640x384 4x
+  and 1280x736 1x D24 depth, 20 each), draws 25 ms in 130 passes.
+- Predicated tiling: the 2x MSAA 720p scene is drawn twice (scissor rows
+  0-511, then 512-719 with the window offset), each resolved (with EDRAM
+  clear) into one 1280x720 color (15540000) and depth (15C78000) texture.
+  Then a full-screen draw (VS 6D769D8D32187155, PS E9E3FEBA4586548E,
+  depth Always + write, samples both textures) restores scene color and
+  depth into a 1x EDRAM target: oDepth.
+- Shadow loop per shadow: stencil-only clear through a 4x alias of tile 0
+  (DEPTHCONTROL 00008701), depth clears at tile 1440 (1x and 4x alias),
+  casters, resolve to 151A8000, shadow volume (VS 6C5E1DC495A6B168: z-fail,
+  front Incr, back Decr, GreaterEqual against the restored depth), then the
+  projection (stencil NotEqual 0; PS 6C76CC934779C668: scene depth tf0 via
+  c1, Z = 1/(d*c2.z - c2.w) (reversed Z, near 10, infinite far), shadow
+  position = c3*xZ + c4*yZ + c5*Z + c6, 4 or 16 PCF taps on tf2, fade by
+  distance c16-c22; multiplies the color (BLENDCONTROL0 01000008)).
+- Root cause found: our SPIR-V translator wrote oDepth unscaled to
+  gl_FragDepth, while float24 (D24FS8) host depth is kept at half the guest
+  value (full_float24_in_0_to_1). The restored scene depth was twice what
+  everything else stores, so shadow volumes marked each box's whole screen
+  area (the rectangle that orbits the character) and later depth tests
+  (decals, fog, particles) were off. Upstream XeniOS halves oDepth in
+  CompleteFragmentShader_DSV_DepthTo24Bit.
+
+Changes for the next build:
+- ba065060: oDepth goes to a variable copied to gl_FragDepth at the end of
+  the shader, halved when kSysFlag_DepthFloat24 is set (host RT path).
+- c13223b5: "Frame detail resolve probe": during a capture, each depth
+  resolve is sampled on a 16-wide grid (tiled addressing) once its command
+  buffer completes.
+Next candidates: the 4x-alias stencil/depth clears cost two full depth
+transfers each (~40 per frame); every resolve in a draw command buffer
+commits it (~33 command buffers per frame); query reappearance latency.
 Next candidates: recognize UE3's 4x-alias clear draws (full-target depth
 write, always pass) and skip transferring the old contents into the alias
 (~25 ms of transfers per frame in gameplay, ~27 ms on the title screen);
