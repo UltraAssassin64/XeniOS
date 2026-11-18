@@ -1536,7 +1536,10 @@ kernel void edram_dump_color_32bpp_2xmsaa(
   uint2 source_sample = uint2(source_tile_x * tile_size.x + sample_in_tile.x,
                               source_tile_y * tile_size.y + sample_in_tile.y);
 
-  uint sample_id = source_sample.y & 1u;
+  // Guest sample 0 is the top one, host sample 1 with the standard 2x
+  // positions (draw_util::GetD3D10SampleIndexForGuest2xMSAA, as in the
+  // transfers and the host depth store).
+  uint sample_id = (source_sample.y & 1u) ^ 1u;
   uint2 pixel_coord = uint2(source_sample.x, source_sample.y >> 1);
 
   float4 color = source.read(pixel_coord, sample_id);
@@ -2114,7 +2117,10 @@ kernel void edram_dump_depth_32bpp_2xmsaa(
   uint2 source_sample = uint2(source_tile_x * tile_size.x + sample_in_tile.x,
                               source_tile_y * tile_size.y + sample_in_tile.y);
 
-  uint sample_id = source_sample.y & 1u;
+  // Guest sample 0 is the top one, host sample 1 with the standard 2x
+  // positions (draw_util::GetD3D10SampleIndexForGuest2xMSAA, as in the
+  // transfers and the host depth store).
+  uint sample_id = (source_sample.y & 1u) ^ 1u;
   uint2 pixel_coord = uint2(source_sample.x, source_sample.y >> 1);
 
   float depth = source.read(pixel_coord, sample_id).r;
@@ -2661,7 +2667,10 @@ kernel void edram_dump_color_64bpp_2xmsaa(
   uint2 source_sample = uint2(source_tile_x * tile_size.x + sample_in_tile.x,
                               source_tile_y * tile_size.y + sample_in_tile.y);
 
-  uint sample_id = source_sample.y & 1u;
+  // Guest sample 0 is the top one, host sample 1 with the standard 2x
+  // positions (draw_util::GetD3D10SampleIndexForGuest2xMSAA, as in the
+  // transfers and the host depth store).
+  uint sample_id = (source_sample.y & 1u) ^ 1u;
   uint2 pixel_coord = uint2(source_sample.x, source_sample.y >> 1);
 
   float4 color = source.read(pixel_coord, sample_id);
