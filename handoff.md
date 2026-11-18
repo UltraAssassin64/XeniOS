@@ -516,7 +516,11 @@ since this session, "Auto-Enable JIT via TrollStore"
 (`apple-magnifier://enable-jit?bundle-id=<bundle ID>`). TrollStore is tried
 first when both are on. Not yet confirmed on the device.
 
-## Occlusion queries (owner's question, 2026-11-18; not started)
+## Occlusion queries (owner's question, 2026-11-18; ported as an experiment in 27800f3f)
+
+Now: with `occlusion_query_enable` (Settings > Accuracy > Real Occlusion
+Queries, off by default) the Metal SPIRV-Cross path counts guest queries;
+see "Build 9596" below. The analysis that led there follows.
 
 Owner reports flickering of a vignette and of fog decals on the main menu
 (Unreal Engine 3), and asked how upstream implements occlusion queries
@@ -908,6 +912,61 @@ command processor's only error there is the Linux-only SpirvShaderTranslator
 constructor parameter.
 Next candidates: argument encoders from descriptors if argument-encoder=
 is large; what the hot guest thread runs (from the hotspot lines).
+
+### Build 9596 (c0bf3f9e, re-run by the owner) and the next build
+
+Owner's runs (five zips, 2026-11-18): two default, two with Limit Render
+Pass Area, one with Exact 24-bit Float Depth, two with Fast Shader Math
+off. Render area v2 works (draw passes limited). Exact float depth changed
+nothing; Fast Shader Math off is a regression (black environment, much
+slower): both stay at their defaults. Flicker did not stop and is cyclic
+(clearest on the title screen: moon, fog). Shadows depend on the camera: a
+rectangular shadow map that orbits a point as the camera circles. FPS
+rises when the camera faces Batman while NPCs walk beside the Joker. GPU
+busy only about half the frame; about 170 occlusion queries per frame in
+gameplay, all faked as visible.
+
+Shadow hypothesis: UE3's modulated/projected shadows rebuild world
+positions from the resolved scene depth (k_24_8 / k_24_8_FLOAT fetches); a
+wrong or stale depth texture there gives exactly a shadow frustum that
+moves with the camera. The 0.5 host scale of D24FS8 is undone (x2) in
+every dump and transfer shader, so that is not it. Needs the frame detail
+log (below) to see which texture the shadow pass reads and where it was
+resolved from.
+
+Changes for the next build:
+- 80f3fc96: SPIRV-Cross uniform buffers (8 draws each) capped at
+  `metal_uniform_buffers_max` (default 96 on iOS, was 24; 384 KB each,
+  grown on demand); waits for a free one and forced command buffer ends are
+  logged ("Metal uniforms over N frames"). Float constants copied per draw
+  only up to the shader's float_count (was 4 KB per stage per draw).
+- 27800f3f: real occlusion queries, experimental. Upstream XeniOS's
+  `MetalZPDVisibilityPool` ported without the iOS 26 accumulate path
+  (readback copy of each pass's slots at the pass end). Upstream's shared
+  ZPD system was not ported (it needs the newer CommandProcessor); instead
+  `MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD` overrides
+  the packet like D3D12/Vulkan (XE_GPU_OVERRIDES_EVENT_WRITE_ZPD; the
+  earlier counting macro hook was removed). Like upstream's default "fast"
+  mode: begin zeroes the report; end writes a guess at once (the last count
+  at that address, or 1) and the real count replaces it when the command
+  buffer completes, only if the guest has not re-armed the address and no
+  newer query used it. Queries with draws skipped for compiles keep the
+  guess. A draw pass created before a query began is restarted with the
+  visibility buffer. Log: "Metal occlusion queries over N frames".
+- af206569: frame detail log (Settings > Diagnostics > Frame Detail Log,
+  `metal_frame_detail_log`): choosing a number of frames during the game
+  logs those frames: passes (guest RT registers, host attachments), draws
+  (shaders, state registers, viewport, texture fetch constants raw with a
+  "resolved" mark), resolves (copy registers, memory written), transfers
+  (target and sources), occlusion queries, per-frame totals. Raw register
+  values are logged; decode them offline with registers.h.
+- 198fb502 (docs only): rows for the CPU test build script, stale CI rows.
+
+Test plan sent to the owner: default run (title screen, then gameplay) for
+the uniform line; same with Real Occlusion Queries on (FPS near the NPCs,
+flicker, pop-in; the occlusion line); Frame Detail Log of 4 frames on the
+title screen while it flickers, and 1 frame in gameplay with the shadow
+visible.
 
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
