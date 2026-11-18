@@ -352,6 +352,40 @@ for N ms (a pure guest loop shows up this way). The object lookup only
 try-locks the global critical region and prints "object table busy" if a
 thread holds it, so the table cannot hang the exit.
 
+Result on build #9564 (one run, log 20-27-14; the skip prompt appeared,
+then the first cutscene hung; Exit to Library after about two minutes):
+
+- The movie thread `F80000E8` (the same role as `E0`/`E4` before: opens
+  `\BmGame\Movies`, spins KfAcquire/ReleaseSpinLock at lr `823582BC`) is
+  blocked in NtWaitForSingleObjectEx on handle `F80001C0`, **a thread
+  object** (type 12), for 336 s. Its guest stack starts in `8313AB98
+  8313B240 8313B3E8 83139CDC` (probably the movie library's close/stop
+  path) and comes from `8244B8E4 8244AA18 82447E58 82277F38`.
+- `F80001C0` never appears in the kernel-call table: it has **never made a
+  kernel call**. Either it never started, or it runs only game code (a
+  spin in guest memory) and never reaches an exit.
+- At shutdown one guest thread did not respond to termination ("timed out
+  waiting for 1 guest thread(s) to exit"), consistent with a thread stuck
+  in JIT code.
+- Before stopping, `F80000E8` called KeDelayExecutionThread about 28
+  million times (1 million per 300 ms) at lr `82D29D1C`: the sleeps return
+  at once (a yield or zero-length sleep). The earlier "270 million calls"
+  thread `F8000040` was probably the same kind of loop; the repeat
+  detector ignores sleep-only loops, which is why it was never reported.
+- Every other thread is idle waiting on events, including the loader
+  `F8000040` (event `F8000044`).
+
+Next build (commit "[Kernel] List every guest thread with its host PC at a
+report"): after the kernel-call table, one `Guest thread <handle>: running
+| not running, suspend count, priority, cpu, start <addr>; host pc … in
+guest function <addr> near <addr>; guest lr; guest stack` line for every
+guest thread in the object table, including threads that never made a
+kernel call. On Apple ARM64 the host thread is suspended for a moment with
+thread_suspend, its PC read with thread_get_state, and resumed; the PC is
+mapped through the code cache to the guest function. The repeat detector
+now reports only the shortest cycle (it used to repeat the report for 2x,
+3x and 4x the cycle).
+
 ## JIT automation
 
 Settings > Automation has "Auto-Enable JIT via StikDebug" (stikjit://) and,

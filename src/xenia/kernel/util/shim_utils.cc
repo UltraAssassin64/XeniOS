@@ -15,9 +15,19 @@
 #include <string>
 #include <vector>
 
+#include "xenia/base/platform.h"
+#if XE_PLATFORM_APPLE && XE_ARCH_ARM64
+#include <mach/mach.h>
+#endif
+
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/base/clock.h"
 #include "xenia/base/mutex.h"
+#include "xenia/base/threading.h"
+#include "xenia/cpu/backend/backend.h"
+#include "xenia/cpu/backend/code_cache.h"
+#include "xenia/cpu/function.h"
+#include "xenia/cpu/processor.h"
 #include "xenia/kernel/kernel_flags.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/object_table.h"
@@ -135,6 +145,82 @@ void LogKernelCallThreads() {
              LogKernelCallStack(kernel_call_state->guest_stack_pointer));
     }
   }
+
+  // Every guest thread the kernel knows, including ones that have never made
+  // a kernel call (a thread that only runs game code, or never started):
+  // whether it runs, its suspend count and priority, and where its host
+  // thread is right now, mapped back to the guest function.
+  auto& kernel_call_global = xe::global_critical_region::mutex();
+  if (!kernel_call_global.try_lock()) {
+    XELOGW("Guest threads: object table busy");
+    return;
+  }
+  auto kernel_call_xthreads =
+      kernel_state()->object_table()->GetObjectsByType<XThread>();
+  kernel_call_global.unlock();
+  for (auto& kernel_call_xthread : kernel_call_xthreads) {
+    if (!kernel_call_xthread->is_guest_thread()) {
+      continue;
+    }
+    uint64_t kernel_call_host_pc = 0;
+#if XE_PLATFORM_APPLE && XE_ARCH_ARM64
+    // Stop the host thread just long enough to read its registers; nothing
+    // that could take a lock runs while it is stopped.
+    // Only a running thread still has a live host thread to sample.
+    xe::threading::Thread* kernel_call_host_thread =
+        kernel_call_xthread->is_running() ? kernel_call_xthread->thread()
+                                          : nullptr;
+    if (kernel_call_host_thread) {
+      const mach_port_t kernel_call_port =
+          mach_port_t(kernel_call_host_thread->system_id());
+      if (kernel_call_port &&
+          kernel_call_port != xe::threading::current_thread_system_id() &&
+          thread_suspend(kernel_call_port) == KERN_SUCCESS) {
+        arm_thread_state64_t kernel_call_arm_state;
+        mach_msg_type_number_t kernel_call_state_count =
+            ARM_THREAD_STATE64_COUNT;
+        if (thread_get_state(
+                kernel_call_port, ARM_THREAD_STATE64,
+                reinterpret_cast<thread_state_t>(&kernel_call_arm_state),
+                &kernel_call_state_count) == KERN_SUCCESS) {
+          kernel_call_host_pc =
+              uint64_t(arm_thread_state64_get_pc(kernel_call_arm_state));
+        }
+        thread_resume(kernel_call_port);
+      }
+    }
+#endif
+    std::string kernel_call_object = "host code";
+    if (cpu::GuestFunction* kernel_call_function =
+            kernel_call_host_pc ? kernel_state()
+                                      ->processor()
+                                      ->backend()
+                                      ->code_cache()
+                                      ->LookupFunction(kernel_call_host_pc)
+                                : nullptr) {
+      kernel_call_object = fmt::format(
+          "guest function {:08X} near {:08X}", kernel_call_function->address(),
+          kernel_call_function->MapMachineCodeToGuestAddress(
+              uintptr_t(kernel_call_host_pc)));
+    }
+    const cpu::ppc::PPCContext* kernel_call_context =
+        kernel_call_xthread->thread_state()
+            ? kernel_call_xthread->thread_state()->context()
+            : nullptr;
+    XELOGW(
+        "Guest thread {:08X}: {}, suspend count {}, priority {}, cpu {}, "
+        "start {:08X}; host pc {:016X} in {}; guest lr {:08X}; guest stack{}",
+        kernel_call_xthread->handle(),
+        kernel_call_xthread->is_running() ? "running" : "not running",
+        kernel_call_xthread->suspend_count(), kernel_call_xthread->priority(),
+        uint32_t(kernel_call_xthread->active_cpu()),
+        kernel_call_xthread->start_address(), kernel_call_host_pc,
+        kernel_call_object,
+        kernel_call_context ? uint32_t(kernel_call_context->lr) : 0,
+        kernel_call_context
+            ? LogKernelCallStack(uint32_t(kernel_call_context->r[1]))
+            : std::string());
+  }
 }
 void NoteKernelCallDone() {
   if (kernel_call_this_thread) {
@@ -232,10 +318,14 @@ void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context) {
     const uint32_t kernel_call_run = kernel_call_runs[kernel_call_period];
     // A cycle of length p also matches at 2p, 3p, ...: report only the
     // shortest one, once at the threshold and then every 100 thresholds.
-    if (kernel_call_run != kernel_call_threshold &&
-        (kernel_call_run < kernel_call_threshold ||
-         kernel_call_run % (kernel_call_threshold * 100))) {
+    if (kernel_call_run < kernel_call_threshold) {
       continue;
+    }
+    // The shortest repeating cycle wins; its multiples also match but are
+    // not reported again.
+    if (kernel_call_run != kernel_call_threshold &&
+        kernel_call_run % (kernel_call_threshold * 100)) {
+      break;
     }
     // A thread that only sleeps is idle, not stuck: stay quiet about it.
     bool kernel_call_only_sleeps = true;
