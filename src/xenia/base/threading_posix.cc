@@ -1340,14 +1340,21 @@ void* PosixCondition<Thread>::ThreadStartRoutine(void* parameter) {
   current_thread_ = thread;
   {
     std::unique_lock lock(thread->handle_.state_mutex_);
-    thread->handle_.state_ =
-        create_suspended ? State::kSuspended : State::kRunning;
+    // Arm suspend_count_ in the same lock that publishes kSuspended.
+    // Resume() proceeds as soon as the state is published; if the count were
+    // still 0 it would find nothing to resume and return, and the thread
+    // would then wait below forever without ever running.
+    if (create_suspended) {
+      thread->handle_.state_ = State::kSuspended;
+      thread->handle_.suspend_count_ = 1;
+    } else {
+      thread->handle_.state_ = State::kRunning;
+    }
     thread->handle_.state_signal_.notify_all();
   }
 
   if (create_suspended) {
     std::unique_lock lock(thread->handle_.state_mutex_);
-    thread->handle_.suspend_count_ = 1;
     thread->handle_.state_signal_.wait(
         lock, [thread] { return thread->handle_.suspend_count_ == 0; });
   }
