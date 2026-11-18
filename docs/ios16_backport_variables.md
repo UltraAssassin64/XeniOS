@@ -102,22 +102,33 @@ further edits.
 | `outline` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8515, 8522, 8524, 8525 | 4 |
 | `knob_path` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8528, 8535 | 2 |
 | `label_size` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8537, 8538, 8539 | 3 |
-| `ppc-test-binaries` | job id and artifact name, CPU tests workflow | Assembles the PowerPC instruction tests on Linux and hands the binaries to the macOS job. | `.github/workflows/cpu-tests.yml` | 18, 54, 63, 204 | 4 |
-| `cpu-tests-macos-arm64` | job id, CPU tests workflow | Builds and runs the CPU test programs on Apple Silicon. | `.github/workflows/cpu-tests.yml` | 61 | 1 |
-| `cache-binutils` | step id, CPU tests workflow | Cache of the patched PowerPC binutils build. | `.github/workflows/cpu-tests.yml` | 25, 34 | 2 |
-| `cache-build-cpu-tests` | step id, CPU tests workflow | Cache of the Xcode build output of the test programs. | `.github/workflows/cpu-tests.yml` | 78 | 1 |
-| `cache-submodules-cpu-tests` | step id, CPU tests workflow | Cache of the submodules the desktop test build needs. | `.github/workflows/cpu-tests.yml` | 96 | 1 |
-| `build_hir_tests` | step id, CPU tests workflow | Build of xenia-cpu-tests; its outcome decides the final step. | `.github/workflows/cpu-tests.yml` | 176, 226 | 2 |
-| `build_ppc_tests` | step id, CPU tests workflow | Build of xenia-cpu-ppc-tests; its outcome decides the final step. | `.github/workflows/cpu-tests.yml` | 189, 226 | 2 |
-| `bin_count` | shell variable, CPU tests workflow | Number of assembled test binaries, checked against a minimum. | `.github/workflows/cpu-tests.yml` | 44, 45, 46 | 3 |
-| `run` | function, CPU test runner script | Runs one command with a timeout and classifies it as pass, fail, crash or timeout. | `tools/ci/run_cpu_tests.py` | 6, 20, 23, 50, 56, 64 | 6 |
-| `tail` | function, CPU test runner script | Last non-empty lines of a test's output, for the report. | `tools/ci/run_cpu_tests.py` | 39, 58, 77 | 3 |
+| `ppc-test-binaries` | job id and artifact name, CPU tests workflow | Assembles the PowerPC instruction tests on Linux and hands the binaries to the macOS job. | `.github/workflows/cpu-tests.yml` | 19, 55, 64, 128 | 4 |
+| `cpu-tests-macos-arm64` | job id, CPU tests workflow | Builds and runs the CPU test programs on Apple Silicon. | `.github/workflows/cpu-tests.yml` | 62 | 1 |
+| `cache-binutils` | step id, CPU tests workflow | Cache of the patched PowerPC binutils build. | `.github/workflows/cpu-tests.yml` | 26, 35 | 2 |
+| `cache-submodules-cpu-tests` | step id, CPU tests workflow | Cache of the submodules the CPU test build needs. | `.github/workflows/cpu-tests.yml` | 72 | 1 |
+| `bin_count` | shell variable, CPU tests workflow | Number of assembled test binaries, checked against a minimum. | `.github/workflows/cpu-tests.yml` | 45, 46, 47 | 3 |
+| `build_cpu_tests` | step id, CPU tests workflow | Build of both CPU test programs with tools/ci/build_cpu_tests.py; its outcome decides the final step. | `.github/workflows/cpu-tests.yml` | 119, 148 | 2 |
+| `run` | function, CPU test runner script | Runs one command with a timeout and classifies it as pass, fail, crash or timeout. | `tools/ci/run_cpu_tests.py` | 6, 20, 23, 50, 56, 64, 87, 156, 161, 170 | 10 |
+| `tail` | function, CPU test runner script | Last non-empty lines of a test's output, for the report. | `tools/ci/run_cpu_tests.py` | 39, 58, 82 | 3 |
 | `escape_catch_name` | function, CPU test runner script | Escapes a test name so Catch matches it exactly. | `tools/ci/run_cpu_tests.py` | 44, 56 | 2 |
-| `run_hir_tests` | function, CPU test runner script | Lists the HIR test cases and runs each in its own process. | `tools/ci/run_cpu_tests.py` | 49, 157 | 2 |
-| `run_ppc_suite` | function, CPU test runner script | Runs one instruction test file and extracts its pass and fail counts. | `tools/ci/run_cpu_tests.py` | 63, 87 | 2 |
-| `run_ppc_tests` | function, CPU test runner script | Runs every instruction test file, several at a time. | `tools/ci/run_cpu_tests.py` | 81, 159 | 2 |
-| `write_report` | function, CPU test runner script | Writes report.md from the collected results. | `tools/ci/run_cpu_tests.py` | 95, 164 | 2 |
-| `main` | function, CPU test runner script | Parses arguments, runs both test programs, writes the results. | `tools/ci/run_cpu_tests.py` | 142, 178 | 2 |
+| `run_hir_tests` | function, CPU test runner script | Lists the HIR test cases and runs each in its own process. | `tools/ci/run_cpu_tests.py` | 49, 198 | 2 |
+| `run_ppc_suite` | function, CPU test runner script | Runs one instruction test file, and twice more if any case failed, to tell cases that fail every time from those that fail now and then. | `tools/ci/run_cpu_tests.py` | 86, 118 | 2 |
+| `run_ppc_suite_once` | function, CPU test runner script | Runs one instruction test file once and extracts its pass and fail counts and the reason printed for each failed case. | `tools/ci/run_cpu_tests.py` | 63, 89, 98 | 3 |
+| `run_ppc_tests` | function, CPU test runner script | Runs every instruction test file, several at a time. | `tools/ci/run_cpu_tests.py` | 112, 200 | 2 |
+| `write_report` | function, CPU test runner script | Writes report.md from the collected results. | `tools/ci/run_cpu_tests.py` | 126, 205 | 2 |
+| `main` | function, CPU test runner script | Parses arguments, runs both test programs, writes the results. | `tools/ci/run_cpu_tests.py` | 183, 219 | 2 |
+| `ROOT` | module constant, CPU test build script | Repository root, found from the script location. | `tools/ci/build_cpu_tests.py` | 20, 57, 58, 104, 139, 145, 152, 187, 204, 229 | 10 |
+| `host` | function, CPU test build script | Host system (mac or linux) and backend architecture (a64 or x64). | `tools/ci/build_cpu_tests.py` | 6, 24, 32, 193 | 4 |
+| `wanted` | function, CPU test build script | Whether a source file belongs in the build for this host (no tests, demos, mains or other platforms). | `tools/ci/build_cpu_tests.py` | 31, 62, 74 | 3 |
+| `collect_sources` | function, CPU test build script | Lists the shared sources and those of each test program. | `tools/ci/build_cpu_tests.py` | 55, 195 | 2 |
+| `rel` | nested function in collect_sources | Repository-relative paths matching a glob, sorted. | `tools/ci/build_cpu_tests.py` | 56, 61, 64, 65, 88, 90, 91, 93, 105 | 9 |
+| `flags` | function, CPU test build script | Compiler flags: defines, include directories, optimization and host CPU features. | `tools/ci/build_cpu_tests.py` | 111, 196 | 2 |
+| `ensure_version_header` | function, CPU test build script | Writes build/version.h, which the regular build generates. | `tools/ci/build_cpu_tests.py` | 143, 194 | 2 |
+| `git` | nested function in ensure_version_header | Output of a git command in the repository, or "unknown". | `tools/ci/build_cpu_tests.py` | 149, 152, 157, 169 | 4 |
+| `compile_one` | function, CPU test build script | Compiles one source unless its object is newer. | `tools/ci/build_cpu_tests.py` | 173, 226 | 2 |
+| `main` | function, CPU test build script | Parses arguments, compiles everything, archives the shared objects and links both test programs. | `tools/ci/build_cpu_tests.py` | 184, 267 | 2 |
+| `cpu_tests_duplicate_record_mmio_access_exceptions` | macro name given on the command line by the CPU test build script | Renames the copy of the record_mmio_access_exceptions cvar in cpu/backend/backend.cc, which memory.cc also defines on this branch. | `tools/ci/build_cpu_tests.py` | 217 | 1 |
+| `cpu_tests_duplicate_emit_mmio_aware_stores` | macro name given on the command line by the CPU test build script | Renames the copy of the emit_mmio_aware_stores_for_recorded_exception_addresses cvar in cpu/backend/backend.cc. | `tools/ci/build_cpu_tests.py` | 219 | 1 |
 | `mmio_repeat_address` | file-static atomic, MMIOHandler hang diagnostics | Guest address of the last MMIO store handled. | `src/xenia/cpu/mmio_handler.cc` | 37, 595 | 2 |
 | `mmio_repeat_count` | file-static atomic, MMIOHandler hang diagnostics | How many MMIO stores in a row went to mmio_repeat_address. | `src/xenia/cpu/mmio_handler.cc` | 38, 597, 598, 606, 622 | 6 |
 | `mmio_guest_context` | local in MMIOHandler::ExceptionCallback (ARM64) | Guest register context of the faulting thread, read through host register x20 for the repeated-store report. | `src/xenia/cpu/mmio_handler.cc` | 599, 610, 611, 612, 613, 614, 615, 616, 617, 618, 636, 653, 670, 675, 680 | 16 |
@@ -852,19 +863,30 @@ further edits.
 | `ppc-test-binaries` | 4 |
 | `cpu-tests-macos-arm64` | 1 |
 | `cache-binutils` | 2 |
-| `cache-build-cpu-tests` | 1 |
 | `cache-submodules-cpu-tests` | 1 |
-| `build_hir_tests` | 2 |
-| `build_ppc_tests` | 2 |
 | `bin_count` | 3 |
-| `run` (run_cpu_tests.py) | 6 |
+| `build_cpu_tests` | 2 |
+| `run` (run_cpu_tests.py) | 10 |
 | `tail` (run_cpu_tests.py) | 3 |
 | `escape_catch_name` | 2 |
 | `run_hir_tests` | 2 |
 | `run_ppc_suite` | 2 |
+| `run_ppc_suite_once` | 3 |
 | `run_ppc_tests` | 2 |
 | `write_report` | 2 |
 | `main` (run_cpu_tests.py) | 2 |
+| `ROOT` (build_cpu_tests.py) | 10 |
+| `host` (build_cpu_tests.py) | 4 |
+| `wanted` | 3 |
+| `collect_sources` | 2 |
+| `rel` (build_cpu_tests.py) | 9 |
+| `flags` (build_cpu_tests.py) | 2 |
+| `ensure_version_header` | 2 |
+| `git` (build_cpu_tests.py) | 4 |
+| `compile_one` | 2 |
+| `main` (build_cpu_tests.py) | 2 |
+| `cpu_tests_duplicate_record_mmio_access_exceptions` | 1 |
+| `cpu_tests_duplicate_emit_mmio_aware_stores` | 1 |
 | `mmio_repeat_address` | 2 |
 | `mmio_repeat_count` | 6 |
 | `mmio_guest_context` | 16 |
@@ -1327,9 +1349,13 @@ further edits.
   `skip_cf_simplification` parameter of `TestModule`, `CreateBackend` in
   `util.h`, `test_backend_cvars.cc`) are copied from upstream
   `release-v2.0.1-build-9730`, so their identifiers are not listed here.
-- The names in `tools/ci/run_cpu_tests.py` are local to that script; `run`,
-  `tail` and `main` are common names elsewhere in the tree but are not
-  shared with any other file.
+- The names in `tools/ci/run_cpu_tests.py` and `tools/ci/build_cpu_tests.py`
+  are local to each script; `run`, `tail`, `main`, `host`, `flags`, `rel` and
+  `git` are common names elsewhere in the tree but are not shared with any
+  other file. Only module-level names and functions of the scripts are
+  listed. `tools/ci/cpu_tests_support.cc` only defines existing functions
+  (system dialogs and `XexModule` members) for the CPU test programs, so it
+  adds no names.
 - `xe_stikdebug_enable_jit_url_for_bundle_identifier` (existing) gained a
   `scheme` parameter so the same builder serves `stikjit` and
   `apple-magnifier`; `apple-magnifier` was already in
