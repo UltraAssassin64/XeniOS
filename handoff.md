@@ -426,6 +426,59 @@ unreadable frame prints `(unreadable <addr>)`; an unreadable thread
 object prints `kernel object unreadable`. A host PC outside JIT code is
 now named with dladdr (`host code <symbol>+<offset>`).
 
+Results on build #9566 (logs 21-45-39 Press Start hang, 21-49-36 reached
+gameplay, 21-52-49 first-cutscene hang, 21-58-49 with
+`emit_inline_mmio_checks` off):
+
+- **First-cutscene hang, root cause found.** The movie job thread
+  (`F80000E4`, priority 31, stack `8313AB84 8313B240 8313B3E8 83139CDC
+  8244B8E4`) waits on thread `F80001C8` (start `8313AD18`, a movie helper
+  thread). The guest-thread list shows `F80001C8` "not running" with
+  guest lr `00000000` and its stack untouched (`unreadable 70BC0000`, the
+  top of a fresh stack): **the thread was created and never ran.** Exited
+  helper threads instead show lr `82D31274` (ExTerminateThread).
+- Cause: in `PosixCondition<Thread>::ThreadStartRoutine`
+  (`src/xenia/base/threading_posix.cc`) the new thread published
+  `state_ = kSuspended` in one critical section and set `suspend_count_
+  = 1` in a second one. `XThread::Create` calls `thread_->Resume()` right
+  after creation (ignoring its result); `Resume()` returns as soon as the
+  state is published, and if it ran between the two sections it saw
+  `suspend_count_ == 0`, did nothing, and the thread then waited at the
+  gate forever. Upstream fixed the same race (release-v2.3.3-build-11940,
+  comment "Arm suspend_count_ in the same lock that publishes kSuspended,
+  else a Resume() can land between, see count==0, bail, and wedge us at
+  the gate").
+- Fix (commit "[Base] Fix lost resume of newly created threads"): set
+  `suspend_count_ = 1` in the same locked section that publishes
+  `kSuspended`. A local stress test (scratchpad `racetest/`: create
+  suspended, `Resume()` at once, check the thread runs; real
+  `threading_posix.cc` built for Linux x64) lost 6, 9 and 8 of 3000
+  thread starts with the old code pinned to two cores (1 of 3000
+  unpinned), and 0 of 15000 with the fix.
+- Press Start hang (21-45-39): no never-started thread. Every thread is
+  waiting except job thread `F80000E4` (priority 31), running game code in
+  `8230B3D0` near `8230B724` under `8230B380 8230ACD0 82309E90 82333E2C
+  82653420 82653464 822F403C`. Build #9565's Press Start hang had the
+  job thread in the same job (`82309E90` near `8230A6F4`, same stack
+  root). It still makes occasional kernel calls (RtlLeaveCriticalSection
+  at `82310A80`). Cause not known yet: a very long job or a loop that
+  never ends. The next build samples a thread in game code eight times,
+  1 ms apart, and dumps 32 words of guest code around the first sample
+  (`Guest thread <h> code <addr>: ...`) so the loop can be disassembled.
+- 21-58-49 (inline MMIO checks off): the old XMA register store loop is
+  back (4723 `XMA register ... written` lines, `MMIO store repeated` at
+  guest `7FEA1A84`). Same known cause (the iOS fault handler's resume PC
+  is not honoured); keep `emit_inline_mmio_checks` on (the iOS default).
+- Storms: job threads spin on KeDelayExecutionThread at lr `82D29D1C`
+  (1 million calls in 300-400 ms); `XThread::Delay` turns sub-millisecond
+  sleeps into `MaybeYield()`. This burns a core but is not the hang.
+- Not changed, noted for later: `PosixCondition<Thread>::post_execution`
+  calls pthread_join while the waiter still holds the handle's mutex
+  (upstream moved the join outside the lock); on iOS the
+  `XThread::Create` lambda has no pthread cleanup push, so
+  `OnHostThreadExitCleanup`/`ReleaseHandle` never run for threads that
+  exit through ExTerminateThread (a handle leak).
+
 ## JIT automation
 
 Settings > Automation has "Auto-Enable JIT via StikDebug" (stikjit://) and,

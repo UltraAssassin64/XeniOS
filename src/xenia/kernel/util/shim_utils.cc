@@ -121,6 +121,33 @@ std::string LogKernelCallStack(uint32_t kernel_call_frame) {
   return kernel_call_stack;
 }
 
+// The host program counter of another thread, read while it is stopped for
+// a moment; nothing that could take a lock runs while it is stopped. Apple
+// ARM64 only; 0 elsewhere or on failure.
+uint64_t SampleKernelCallHostPc(
+    xe::threading::Thread* kernel_call_host_thread) {
+  uint64_t kernel_call_host_pc = 0;
+#if XE_PLATFORM_APPLE && XE_ARCH_ARM64
+  const mach_port_t kernel_call_port =
+      mach_port_t(kernel_call_host_thread->system_id());
+  if (kernel_call_port &&
+      kernel_call_port != xe::threading::current_thread_system_id() &&
+      thread_suspend(kernel_call_port) == KERN_SUCCESS) {
+    arm_thread_state64_t kernel_call_arm_state;
+    mach_msg_type_number_t kernel_call_state_count = ARM_THREAD_STATE64_COUNT;
+    if (thread_get_state(
+            kernel_call_port, ARM_THREAD_STATE64,
+            reinterpret_cast<thread_state_t>(&kernel_call_arm_state),
+            &kernel_call_state_count) == KERN_SUCCESS) {
+      kernel_call_host_pc =
+          uint64_t(arm_thread_state64_get_pc(kernel_call_arm_state));
+    }
+    thread_resume(kernel_call_port);
+  }
+#endif
+  return kernel_call_host_pc;
+}
+
 }  // namespace
 
 void LogKernelCallThreads() {
@@ -190,46 +217,48 @@ void LogKernelCallThreads() {
     if (!kernel_call_xthread->is_guest_thread()) {
       continue;
     }
-    uint64_t kernel_call_host_pc = 0;
-#if XE_PLATFORM_APPLE && XE_ARCH_ARM64
-    // Stop the host thread just long enough to read its registers; nothing
-    // that could take a lock runs while it is stopped.
     // Only a running thread still has a live host thread to sample.
     xe::threading::Thread* kernel_call_host_thread =
         kernel_call_xthread->is_running() ? kernel_call_xthread->thread()
                                           : nullptr;
-    if (kernel_call_host_thread) {
-      const mach_port_t kernel_call_port =
-          mach_port_t(kernel_call_host_thread->system_id());
-      if (kernel_call_port &&
-          kernel_call_port != xe::threading::current_thread_system_id() &&
-          thread_suspend(kernel_call_port) == KERN_SUCCESS) {
-        arm_thread_state64_t kernel_call_arm_state;
-        mach_msg_type_number_t kernel_call_state_count =
-            ARM_THREAD_STATE64_COUNT;
-        if (thread_get_state(
-                kernel_call_port, ARM_THREAD_STATE64,
-                reinterpret_cast<thread_state_t>(&kernel_call_arm_state),
-                &kernel_call_state_count) == KERN_SUCCESS) {
-          kernel_call_host_pc =
-              uint64_t(arm_thread_state64_get_pc(kernel_call_arm_state));
-        }
-        thread_resume(kernel_call_port);
-      }
-    }
-#endif
+    const uint64_t kernel_call_host_pc =
+        kernel_call_host_thread
+            ? SampleKernelCallHostPc(kernel_call_host_thread)
+            : 0;
     std::string kernel_call_object = "host code";
-    if (cpu::GuestFunction* kernel_call_function =
-            kernel_call_host_pc ? kernel_state()
-                                      ->processor()
-                                      ->backend()
-                                      ->code_cache()
-                                      ->LookupFunction(kernel_call_host_pc)
-                                : nullptr) {
-      kernel_call_object = fmt::format(
-          "guest function {:08X} near {:08X}", kernel_call_function->address(),
-          kernel_call_function->MapMachineCodeToGuestAddress(
-              uintptr_t(kernel_call_host_pc)));
+    auto* kernel_call_code_cache =
+        kernel_state()->processor()->backend()->code_cache();
+    cpu::GuestFunction* kernel_call_function =
+        kernel_call_host_pc
+            ? kernel_call_code_cache->LookupFunction(kernel_call_host_pc)
+            : nullptr;
+    uint32_t kernel_call_guest_pc = 0;
+    if (kernel_call_function) {
+      kernel_call_guest_pc = kernel_call_function->MapMachineCodeToGuestAddress(
+          uintptr_t(kernel_call_host_pc));
+      kernel_call_object =
+          fmt::format("guest function {:08X} near {:08X}",
+                      kernel_call_function->address(), kernel_call_guest_pc);
+      // A thread running game code: sample it seven more times, 1 ms apart,
+      // to show the range of the loop it is in.
+      kernel_call_object += "; then";
+      for (uint32_t kernel_call_sample = 0; kernel_call_sample < 7;
+           ++kernel_call_sample) {
+        xe::threading::Sleep(std::chrono::milliseconds(1));
+        const uint64_t kernel_call_sample_pc =
+            SampleKernelCallHostPc(kernel_call_host_thread);
+        kernel_call_function =
+            kernel_call_sample_pc
+                ? kernel_call_code_cache->LookupFunction(kernel_call_sample_pc)
+                : nullptr;
+        kernel_call_object +=
+            kernel_call_function
+                ? fmt::format(
+                      " {:08X}",
+                      kernel_call_function->MapMachineCodeToGuestAddress(
+                          uintptr_t(kernel_call_sample_pc)))
+                : std::string(" host");
+      }
     }
 #if !XE_PLATFORM_WIN32
     else if (kernel_call_host_pc) {
@@ -276,6 +305,28 @@ void LogKernelCallThreads() {
         kernel_call_context
             ? LogKernelCallStack(uint32_t(kernel_call_context->r[1]))
             : std::string());
+    // The game code around the first sample, to disassemble the loop.
+    if (kernel_call_guest_pc && kernel_call_global.try_lock()) {
+      Memory* kernel_call_memory = kernel_memory();
+      const uint32_t kernel_call_code = (kernel_call_guest_pc - 0x40) & ~3u;
+      if (KernelCallReadable(kernel_call_code, 0x80)) {
+        for (uint32_t kernel_call_line = 0; kernel_call_line < 32;
+             kernel_call_line += 8) {
+          std::string kernel_call_words;
+          for (uint32_t kernel_call_word = kernel_call_line;
+               kernel_call_word < kernel_call_line + 8; ++kernel_call_word) {
+            kernel_call_words += fmt::format(
+                " {:08X}", xe::load_and_swap<uint32_t>(
+                               kernel_call_memory->TranslateVirtual(
+                                   kernel_call_code + kernel_call_word * 4)));
+          }
+          XELOGW("Guest thread {:08X} code {:08X}:{}",
+                 kernel_call_xthread->handle(),
+                 kernel_call_code + kernel_call_line * 4, kernel_call_words);
+        }
+      }
+      kernel_call_global.unlock();
+    }
   }
 }
 void NoteKernelCallDone() {
