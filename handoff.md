@@ -763,6 +763,11 @@ stalls"):
   bucket's skipped draws, at the cost of stalling. Each compile draws
   waited 100 ms or more for is noted on its own line ("Metal compile
   stall: ...").
+- Build #9583 (`xenios_ios_arm64_0.2.9-9583`, commit 756f0db6, includes
+  72d2ccc0 and f06c5c2e): iOS CI passes (the CPU tests workflow didn't run
+  for it; no CPU code changed, and it passed on f06c5c2e). Not yet run on
+  device; asked for 2 gameplay runs with timing on, 1 with it off, a force
+  quit, and watching for stale UI or brightness.
 - The previous commit's doc refresh had recounted block-only names in
   windowed_app_main_ios.mm across the whole file; fixed (see the doc's
   Checks). The refresh script must not be run on that file again as is.
