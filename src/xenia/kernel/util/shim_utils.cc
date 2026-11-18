@@ -17,6 +17,7 @@
 
 #include "third_party/fmt/include/fmt/format.h"
 #include "xenia/base/clock.h"
+#include "xenia/base/mutex.h"
 #include "xenia/kernel/kernel_flags.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/object_table.h"
@@ -82,6 +83,8 @@ std::string LogKernelCallStack(uint32_t kernel_call_frame) {
   return kernel_call_stack;
 }
 
+}  // namespace
+
 void LogKernelCallThreads() {
   const uint64_t kernel_call_now = Clock::QueryHostUptimeMillis();
   std::lock_guard<std::mutex> kernel_call_lock(kernel_call_threads_mutex);
@@ -110,12 +113,21 @@ void LogKernelCallThreads() {
     if (kernel_call_inside && kernel_call_ms >= 1000) {
       const uint32_t kernel_call_handle = kernel_call_state->guest_arg0;
       std::string kernel_call_object = "no object";
-      if (auto kernel_call_xobject =
-              kernel_state()->object_table()->LookupObject<XObject>(
-                  kernel_call_handle)) {
-        kernel_call_object = fmt::format("object type {} name \"{}\"",
-                                         uint32_t(kernel_call_xobject->type()),
-                                         kernel_call_xobject->name());
+      // The object table shares the global lock with the kernel; a stuck
+      // thread may hold it, so never wait for it here.
+      auto& kernel_call_global = xe::global_critical_region::mutex();
+      if (kernel_call_global.try_lock()) {
+        if (auto kernel_call_xobject =
+                kernel_state()->object_table()->LookupObject<XObject>(
+                    kernel_call_handle, true)) {
+          kernel_call_object =
+              fmt::format("object type {} name \"{}\"",
+                          uint32_t(kernel_call_xobject->type()),
+                          kernel_call_xobject->name());
+        }
+        kernel_call_global.unlock();
+      } else {
+        kernel_call_object = "object table busy";
       }
       XELOGW("Kernel thread {:08X}: r3 {:08X} ({}) r4 {:08X}; guest stack{}",
              kernel_call_state->handle.load(), kernel_call_handle,
@@ -124,8 +136,6 @@ void LogKernelCallThreads() {
     }
   }
 }
-}  // namespace
-
 void NoteKernelCallDone() {
   if (kernel_call_this_thread) {
     kernel_call_this_thread->enter_ms = Clock::QueryHostUptimeMillis();

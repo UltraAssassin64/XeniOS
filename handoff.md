@@ -343,6 +343,15 @@ threads wait on"):
   handle; XObject::Type numbers: 2 Event, 3 File, 4 IOCompletion,
   6 Mutant, 8 Semaphore, 12 Thread, 13 Timer), r4 and its guest stack.
 
+Stopping a game (Exit to Library in the quick menu, or the app closing
+normally) logs `iOS: guest threads at TerminateCurrentGame:` (or `OnDestroy`
+/ `Queued launch`) followed by the same thread table, before the title is
+terminated. A force-killed app logs nothing. "last called X, returned for
+N ms" means the thread has been running game code without any kernel call
+for N ms (a pure guest loop shows up this way). The object lookup only
+try-locks the global critical region and prints "object table busy" if a
+thread holds it, so the table cannot hang the exit.
+
 ## JIT automation
 
 Settings > Automation has "Auto-Enable JIT via StikDebug" (stikjit://) and,

@@ -548,6 +548,10 @@ XE_NOALIAS void PrintKernelCall(cpu::Export* export_entry,
 void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context);
 // Marks the end of the kernel call NoteKernelCall reported on this thread.
 void NoteKernelCallDone();
+// Logs every guest thread that has made a kernel call: the call it is in or
+// last returned from, for how long, its guest lr and call count, and for a
+// thread blocked a second or more, its wait object and guest stack.
+void LogKernelCallThreads();
 
 template <typename F, typename Tuple, std::size_t... I>
 XE_FORCEINLINE static auto KernelTrampoline(F&& f, Tuple&& t,

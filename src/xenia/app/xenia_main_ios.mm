@@ -44,6 +44,7 @@
 #include "xenia/hid/nop/nop_hid.h"
 #include "xenia/hid/sdl/sdl_hid.h"
 #include "xenia/hid/touch_input_driver_ios.h"
+#include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/xam.h"
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xam_state.h"
@@ -579,6 +580,10 @@ bool EmulatorAppIOS::RequestGameStop(const char* reason) {
   }
 
   XELOGI("iOS: {} requested", reason ? reason : "Game stop");
+  // What every guest thread was doing when the game was stopped, to find
+  // the thread a hang or loop was waiting on.
+  XELOGW("iOS: guest threads at {}:", reason ? reason : "game stop");
+  xe::kernel::shim::LogKernelCallThreads();
   const X_STATUS terminate_status = emulator_->TerminateTitle();
   if (XFAILED(terminate_status)) {
     game_stop_requested_.store(false, std::memory_order_release);
