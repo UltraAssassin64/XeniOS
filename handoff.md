@@ -966,6 +966,8 @@ Changes for the next build:
   `src/xenia/gpu/metal/premake5.lua` (it does not collect the folder);
   `metal_zpd_visibility_pool.cc/.h` added there. Merged the owner's
   comment-only commit 1274515a (pushed to start CI) as d27a059a.
+- Build #9606 (`xenios_ios_arm64_0.2.9-9606.6`, d27a059a, run 44361266692
+  attempt 6) built and uploaded; it has all of the above.
 
 Test plan sent to the owner: default run (title screen, then gameplay) for
 the uniform line; same with Real Occlusion Queries on (FPS near the NPCs,
