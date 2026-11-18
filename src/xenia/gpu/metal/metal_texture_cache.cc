@@ -10,6 +10,7 @@
 #include "xenia/gpu/metal/metal_texture_cache.h"
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/metal/metal_heap_pool.h"
+#include "xenia/gpu/metal/metal_gpu_pass_timing.h"
 #include "xenia/gpu/metal/metal_perf_counters.h"
 
 #include <algorithm>
@@ -1107,7 +1108,8 @@ bool MetalTextureCache::TryGpuLoadTexture(Texture& texture, bool load_base,
     }
   };
 
-  MTL::ComputeCommandEncoder* encoder = cmd->computeCommandEncoder();
+  MTL::ComputeCommandEncoder* encoder =
+      metal_gpu_pass_timer.ComputeEncoder(cmd, "texture load");
   if (!encoder) {
     handle_upload_failure(true);
     return false;
@@ -1235,7 +1237,8 @@ bool MetalTextureCache::TryGpuLoadTexture(Texture& texture, bool load_base,
 
   MTL::Texture* mtl_texture = metal_texture->metal_texture();
   if (use_blit_upload) {
-    MTL::BlitCommandEncoder* blit = cmd->blitCommandEncoder();
+    MTL::BlitCommandEncoder* blit =
+        metal_gpu_pass_timer.BlitEncoder(cmd, "texture upload blit");
     if (!blit) {
       handle_upload_failure(true);
       return false;

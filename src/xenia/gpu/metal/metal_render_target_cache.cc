@@ -28,6 +28,7 @@
 #include "xenia/gpu/draw_util.h"
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/metal/metal_heap_pool.h"
+#include "xenia/gpu/metal/metal_gpu_pass_timing.h"
 #include "xenia/gpu/metal/metal_perf_counters.h"
 #include "xenia/gpu/metal/metal_texture_cache.h"
 #include "xenia/gpu/shaders/bytecode/metal/host_depth_store_1xmsaa_cs.h"
@@ -3995,7 +3996,8 @@ void MetalRenderTargetCache::StoreTiledData(MTL::CommandBuffer* command_buffer,
       color_attachment->setStoreAction(MTL::StoreActionMultisampleResolve);
 
       MTL::RenderCommandEncoder* render_encoder =
-          command_buffer->renderCommandEncoder(resolve_desc);
+          metal_gpu_pass_timer.RenderEncoder(command_buffer, resolve_desc,
+                                             "edram store msaa resolve");
       if (render_encoder) {
         render_encoder->endEncoding();
         // render_encoder is autoreleased - do not release
@@ -4006,7 +4008,8 @@ void MetalRenderTargetCache::StoreTiledData(MTL::CommandBuffer* command_buffer,
   }
 
   // Create compute encoder
-  MTL::ComputeCommandEncoder* encoder = command_buffer->computeCommandEncoder();
+  MTL::ComputeCommandEncoder* encoder =
+      metal_gpu_pass_timer.ComputeEncoder(command_buffer, "edram store");
   if (!encoder) {
     if (temp_texture) {
       temp_texture->release();
@@ -4113,7 +4116,8 @@ void MetalRenderTargetCache::DumpRenderTargets(
     owns_command_buffer = true;
   }
 
-  MTL::ComputeCommandEncoder* encoder = cmd->computeCommandEncoder();
+  MTL::ComputeCommandEncoder* encoder =
+      metal_gpu_pass_timer.ComputeEncoder(cmd, "edram dump");
   if (!encoder) {
     XELOGE("MetalRenderTargetCache::DumpRenderTargets: no compute encoder");
     // cmd is autoreleased from commandBuffer() - do not release
@@ -4835,7 +4839,8 @@ bool MetalRenderTargetCache::Resolve(Memory& memory, uint32_t& written_address,
           owns_command_buffer = true;
         }
         if (cmd) {
-          MTL::ComputeCommandEncoder* encoder = cmd->computeCommandEncoder();
+          MTL::ComputeCommandEncoder* encoder =
+              metal_gpu_pass_timer.ComputeEncoder(cmd, "resolve");
           if (!encoder) {
             XELOGE(
                 "MetalRenderTargetCache::Resolve: failed to get compute "
@@ -5030,7 +5035,8 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
         HostDepthStoreRenderTargetConstant render_target_constant =
             GetHostDepthStoreRenderTargetConstant(dest_key.pitch_tiles_at_32bpp,
                                                   msaa_2x_supported_);
-        MTL::ComputeCommandEncoder* encoder = cmd->computeCommandEncoder();
+        MTL::ComputeCommandEncoder* encoder =
+            metal_gpu_pass_timer.ComputeEncoder(cmd, "host depth store");
         if (!encoder) {
           XELOGE(
               "MetalRenderTargetCache::PerformTransfersAndResolveClears: "
@@ -5560,7 +5566,8 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
     MTL::BlitCommandEncoder* blit_encoder = nullptr;
     auto ensure_blit_encoder = [&]() -> MTL::BlitCommandEncoder* {
       if (!blit_encoder) {
-        blit_encoder = cmd->blitCommandEncoder();
+        blit_encoder =
+            metal_gpu_pass_timer.BlitEncoder(cmd, "rt transfer blit");
       }
       return blit_encoder;
     };
@@ -5984,7 +5991,8 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
           ca->setClearColor(resolve_clear_color);
         }
       }
-      transfer_encoder = cmd->renderCommandEncoder(rp);
+      transfer_encoder =
+          metal_gpu_pass_timer.RenderEncoder(cmd, rp, "rt transfer");
       return transfer_encoder;
     };
 

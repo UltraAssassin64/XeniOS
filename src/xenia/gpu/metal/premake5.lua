@@ -45,6 +45,8 @@ project("xenia-gpu-metal")
       "metal_command_processor.h",
       "metal_graphics_system.cc",
       "metal_graphics_system.h",
+      "metal_gpu_pass_timing.cc",
+      "metal_gpu_pass_timing.h",
       "metal_heap_pool.cc",
       "metal_heap_pool.h",
       "metal_perf_counters.h",

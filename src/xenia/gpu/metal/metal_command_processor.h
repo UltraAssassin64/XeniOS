@@ -60,6 +60,7 @@ namespace gpu {
 namespace metal {
 
 class MetalGraphicsSystem;
+struct MetalGpuPassRecord;
 
 class MetalCommandProcessor : public CommandProcessor {
  protected:
@@ -433,6 +434,8 @@ class MetalCommandProcessor : public CommandProcessor {
   MTL::CommandBuffer* current_command_buffer_ = nullptr;
   MTL::RenderCommandEncoder* current_render_encoder_ = nullptr;
   MTL::RenderPassDescriptor* current_render_pass_descriptor_ = nullptr;
+  // GPU pass timing record of the current render encoder, for its draw count.
+  MetalGpuPassRecord* metal_gpu_pass_record_ = nullptr;
   NS::AutoreleasePool* command_buffer_autorelease_pool_ = nullptr;
 
   // Tracks resources marked via useResource for the current render encoder

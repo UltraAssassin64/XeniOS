@@ -44,6 +44,7 @@
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/graphics_system.h"
 #include "xenia/gpu/metal/metal_graphics_system.h"
+#include "xenia/gpu/metal/metal_gpu_pass_timing.h"
 #include "xenia/gpu/metal/metal_perf_counters.h"
 #include "xenia/gpu/metal/metal_shader_cache.h"
 #include "xenia/gpu/packet_disassembler.h"
@@ -609,6 +610,7 @@ MetalCommandProcessor::~MetalCommandProcessor() {
     // In that case, just release it
     current_render_encoder_->release();
     current_render_encoder_ = nullptr;
+    metal_gpu_pass_record_ = nullptr;
   }
   if (current_command_buffer_) {
     current_command_buffer_->release();
@@ -1383,6 +1385,8 @@ bool MetalCommandProcessor::SetupContext() {
     return false;
   }
 
+  metal_gpu_pass_timer.Initialize(device_);
+
   wait_shared_event_ = device_->newSharedEvent();
   if (wait_shared_event_) {
     wait_shared_event_->setLabel(
@@ -1828,6 +1832,7 @@ void MetalCommandProcessor::ShutdownContext() {
   // End any active render encoder before shutdown
   if (current_render_encoder_) {
     current_render_encoder_->endEncoding();
+    metal_gpu_pass_record_ = nullptr;
     // Don't release yet - wait until command buffer completes
   }
 
@@ -1900,6 +1905,7 @@ void MetalCommandProcessor::ShutdownContext() {
   if (current_render_encoder_) {
     current_render_encoder_->release();
     current_render_encoder_ = nullptr;
+    metal_gpu_pass_record_ = nullptr;
   }
   if (current_command_buffer_) {
     current_command_buffer_->release();
@@ -2637,6 +2643,7 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
         metal_perf_footprint_mb, metal_perf_available_mb,
         uint32_t(NS::ProcessInfo::processInfo()->thermalState()));
     XELOGI("Metal perf threads:{}", MetalPerfThreadCpu(metal_perf_window_us));
+    metal_gpu_pass_timer.Log(draw_stats_.frames);
     draw_stats_ = {};
   }
   saw_swap_ = true;
@@ -5697,6 +5704,11 @@ bool MetalCommandProcessor::IssueDrawMsl(
   ++draw_stats_.encoded;
   draw_stats_.encoded_vertices +=
       primitive_processing_result.host_draw_vertex_count;
+  if (metal_gpu_pass_record_) {
+    ++metal_gpu_pass_record_->draws;
+    metal_gpu_pass_record_->vertices +=
+        primitive_processing_result.host_draw_vertex_count;
+  }
 
   // Handle memexport.
   if (memexport_used && shared_memory_) {
@@ -6048,6 +6060,7 @@ void MetalCommandProcessor::EndRenderEncoder() {
   current_render_encoder_->endEncoding();
   current_render_encoder_->release();
   current_render_encoder_ = nullptr;
+  metal_gpu_pass_record_ = nullptr;
   current_render_pass_descriptor_ = nullptr;
   ResetMslRenderEncoderStateCache();
 }
@@ -6171,8 +6184,9 @@ void MetalCommandProcessor::BeginCommandBuffer() {
     ResetMslRenderEncoderStateCache();
     // Note: renderCommandEncoder() returns an autoreleased object, we must
     // retain it.
-    current_render_encoder_ =
-        current_command_buffer_->renderCommandEncoder(pass_descriptor);
+    current_render_encoder_ = metal_gpu_pass_timer.RenderEncoder(
+        current_command_buffer_, pass_descriptor, "draws",
+        &metal_gpu_pass_record_);
     if (!current_render_encoder_) {
       XELOGE("Failed to create render command encoder");
       return;

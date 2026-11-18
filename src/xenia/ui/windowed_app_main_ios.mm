@@ -3655,6 +3655,11 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                    "Controls how much goes into xenia.log. Higher levels help debug issues "
                    "but increase log size and background overhead.",
                    2, {{"Errors Only", 0}, {"Warnings", 1}, {"Info", 2}, {"Debug", 3}});
+  AddBoolSetting(diagnostics.items, "metal_gpu_pass_timing", "GPU Pass Timing",
+                 "Measures the GPU time of every render, compute and copy pass and logs "
+                 "where it goes every 120 frames (\"Metal GPU passes\" lines). Turn off "
+                 "to check whether it costs any speed.",
+                 true);
   AddActionSetting(diagnostics.items, IOSConfigAction::kViewRecentLog, "View Live Log",
                    "Open a live-updating xenia.log viewer so you can capture boot failures "
                    "without Xcode.");

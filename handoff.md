@@ -717,6 +717,25 @@ here too since iOS refuses the dummy command buffer in the background as
 well). Risk: no CPU-GPU sync point is left in the frame loop, as in
 xenia-edge; watch for stale resolve or readback results (UI, exposure).
 
+GPU pass timing (owner asked for diagnostics of where the GPU time goes;
+no existing option breaks it down, and neither upstream has per-pass
+timing). Commit "[GPU] Log the GPU time of every pass": new
+`metal_gpu_pass_timing.{h,cc}`, cvar `metal_gpu_pass_timing` (default on;
+also a toggle in Settings > Diagnostics). Uses Metal stage boundary
+timestamps (MTLCounterSampleBuffer, iOS 14+): render passes get vertex and
+fragment start/end, compute and blit passes start/end. 16 sample buffers of
+4096 timestamps, reused once their passes complete. Timed passes: guest
+draws (with draw and vertex counts), rt transfer (render and blit), edram
+store (+ msaa resolve), edram dump, resolve, host depth store, texture load,
+texture upload blit. Every 120 frames, after "Metal perf threads":
+"Metal GPU passes per frame ..." (per kind: ms per frame, passes, draws,
+vertices, vertex/fragment ms) and "Metal GPU top passes per frame" (top 12
+render pass configurations: size, sample count, MTL::PixelFormat numbers,
+load/store actions 2 bits per attachment, colors 0-3 then depth). Passes
+overlap, so the sum can exceed GPU busy. GPU ticks are calibrated against
+the steady clock (logged as "1 GPU tick = X ns"). Not timed: init/snapshot
+blits, scaled resolve buffer growth, texture dumps, the presenter.
+
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 
