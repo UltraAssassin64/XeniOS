@@ -850,6 +850,16 @@ class MetalCommandProcessor : public CommandProcessor {
   bool msl_float_constants_dirty_pixel_ = true;
   bool msl_bool_loop_constants_dirty_ = true;
   bool msl_fetch_constants_dirty_ = true;
+  // metal_inline_shader_constants: versions of the cached float, bool/loop and
+  // fetch constants (bumped when rebuilt), and per constant block slot (system
+  // vertex, pixel; float vertex, pixel; bool/loop vertex, pixel; fetch vertex,
+  // pixel; clip plane; tessellation vertex, pixel) the version passed with
+  // set*Bytes in the current render encoder (0 for none).
+  uint64_t msl_float_constants_version_vertex_ = 1;
+  uint64_t msl_float_constants_version_pixel_ = 1;
+  uint64_t msl_bool_loop_constants_version_ = 1;
+  uint64_t msl_fetch_constants_version_ = 1;
+  std::array<uint64_t, 11> msl_inline_constants_bound_versions_{};
   std::array<uint8_t, kCbvSizeBytes> msl_cached_float_constants_vertex_{};
   std::array<uint8_t, kCbvSizeBytes> msl_cached_float_constants_pixel_{};
   std::array<uint8_t, kCbvSizeBytes> msl_cached_bool_loop_constants_{};

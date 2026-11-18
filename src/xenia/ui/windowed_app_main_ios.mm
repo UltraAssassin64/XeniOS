@@ -3555,7 +3555,7 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                    "With async compilation, how long draws may wait each frame for a shader "
                    "still compiling before they are skipped. Skipped draws show as missing "
                    "or black scenery; waiting shows as a stutter instead.",
-                   0,
+                   16,
                    {{"Off (skip draws)", 0},
                     {"8 ms per frame", 8},
                     {"16 ms per frame", 16},
@@ -3568,11 +3568,17 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "shadows, decals or masked effects look wrong.",
                  true);
   AddBoolSetting(performance.items, "metal_render_pass_area_from_scissor", "Limit Render Pass Area",
-                 "Experimental. Each draw and render target copy pass only loads and "
-                 "stores the part of the render target it touches, instead of the whole "
-                 "1280x2048 surface, cutting GPU memory traffic. Turn off if parts of the "
-                 "screen stop updating, flicker or turn black.",
-                 false);
+                 "Each draw and render target copy pass only loads and stores the part of "
+                 "the render target it touches, instead of the whole 1280x2048 surface, "
+                 "cutting GPU memory traffic. Turn off if parts of the screen stop "
+                 "updating, flicker or turn black.",
+                 true);
+  AddBoolSetting(performance.items, "metal_inline_shader_constants", "Inline Shader Constants",
+                 "Passes each draw's shader constants straight to Metal when they change, "
+                 "instead of through a pool of buffers that ran out every few hundred draws "
+                 "and made the emulator wait for the GPU. Turn off if colors, positions or "
+                 "lighting look wrong.",
+                 true);
   if (!performance.items.empty()) {
     sections.push_back(std::move(performance));
   }

@@ -90,6 +90,13 @@ using BYTE = uint8_t;
 
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
+DEFINE_bool(
+    metal_inline_shader_constants, true,
+    "SPIRV-Cross path: pass each draw's shader constants with "
+    "setVertexBytes/setFragmentBytes when they change, instead of through "
+    "pooled uniform buffers holding 8 draws each (which ran out every few "
+    "hundred draws, ending the command buffer and waiting for the GPU).",
+    "Metal");
 DEFINE_int32(
     metal_uniform_buffers_max, 0,
     "Most uniform buffers (each holding the constants of 8 draws) the "
@@ -104,7 +111,7 @@ DEFINE_int32(
     "capture.",
     "Metal");
 DEFINE_bool(
-    metal_render_pass_area_from_scissor, false,
+    metal_render_pass_area_from_scissor, true,
     "Limit each guest draw render pass to the area its draws' scissors cover, "
     "and each render target transfer pass to the rectangles it draws, instead "
     "of the whole render target (which spans all of EDRAM, 2048 rows at 1280 "
@@ -112,13 +119,20 @@ DEFINE_bool(
     "this cuts memory traffic; a draw pass is restarted if a later draw "
     "needs more.",
     "Metal");
+// On by default since build 9606: gameplay draw passes loaded and stored
+// about 2 GB of 1280x2048 render targets per frame without it.
+UPDATE_from_bool(metal_render_pass_area_from_scissor, 2026, 11, 18, 20, false);
 DEFINE_int32(
-    metal_async_compile_wait_ms, 0,
+    metal_async_compile_wait_ms, 16,
     "With async shader compilation, how long draws may wait per frame for a "
     "shader or pipeline still compiling before they are skipped (the "
     "blackouts while compiling). 0 never waits; larger values trade skipped "
     "draws for stalls.",
     "Metal");
+// 16 since build 9606: most compiles finish within 16 ms (Metal's own cache),
+// yet with 0 the draws using them were skipped, leaving half of the frames
+// at a cutscene's end empty.
+UPDATE_from_int32(metal_async_compile_wait_ms, 2026, 11, 18, 21, 0);
 DEFINE_int32(
     metal_pipeline_creation_threads, -1,
     "Number of threads used for SPIRV-Cross shader and render pipeline "
@@ -3302,7 +3316,8 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
     return true;
   }
 #else
-  if (UseSpirvCrossPath() && !EnsureSpirvUniformBufferCapacity()) {
+  if (UseSpirvCrossPath() && !cvars::metal_inline_shader_constants &&
+      !EnsureSpirvUniformBufferCapacity()) {
     XELOGE(
         "IssueDraw: failed to prepare SPIRV-Cross uniforms ring; skipping "
         "draw");
@@ -4915,12 +4930,21 @@ bool MetalCommandProcessor::IssueDrawMsl(
   size_t table_index_vertex = size_t(ring_index) * kStageCount + kStageVertex;
   size_t table_index_pixel = size_t(ring_index) * kStageCount + kStagePixel;
 
-  uint8_t* uniforms_base = static_cast<uint8_t*>(uniforms_buffer_->contents());
-  uint8_t* uniforms_vertex =
-      uniforms_base + table_index_vertex * kUniformsBytesPerTable;
-  uint8_t* uniforms_pixel =
-      uniforms_base + table_index_pixel * kUniformsBytesPerTable;
-  if (msl_constants_versioned_uniform_buffer_ != uniforms_buffer_) {
+  // metal_inline_shader_constants: each constant block is passed with
+  // set*Bytes when it changed since it was last passed in this render encoder,
+  // instead of written to this draw's tables in a pooled uniform buffer.
+  const bool inline_constants = cvars::metal_inline_shader_constants;
+  uint8_t* uniforms_vertex = nullptr;
+  uint8_t* uniforms_pixel = nullptr;
+  if (!inline_constants) {
+    uint8_t* uniforms_base =
+        static_cast<uint8_t*>(uniforms_buffer_->contents());
+    uniforms_vertex =
+        uniforms_base + table_index_vertex * kUniformsBytesPerTable;
+    uniforms_pixel = uniforms_base + table_index_pixel * kUniformsBytesPerTable;
+  }
+  if (!inline_constants &&
+      msl_constants_versioned_uniform_buffer_ != uniforms_buffer_) {
     msl_constants_versioned_uniform_buffer_ = uniforms_buffer_;
     std::fill(msl_system_constants_written_vertex_versions_.begin(),
               msl_system_constants_written_vertex_versions_.end(), uint64_t(0));
@@ -4961,16 +4985,49 @@ bool MetalCommandProcessor::IssueDrawMsl(
           written_versions[ring_index_size] = source_version;
         }
       };
+  // One constant block of a stage: slot in msl_inline_constants_bound_
+  // versions_, Metal buffer index, offset in the stage's table, its data and
+  // version, and for the table path the per-ring-page versions if the block
+  // is only copied when stale.
+  auto write_constant_block =
+      [&](bool pixel_stage, size_t slot, NS::UInteger buffer_index,
+          size_t offset, const void* data, size_t size, uint64_t version,
+          std::vector<uint64_t>* written_versions) {
+        if (!size) {
+          return;
+        }
+        if (inline_constants) {
+          if (msl_inline_constants_bound_versions_[slot] == version) {
+            return;
+          }
+          if (pixel_stage) {
+            current_render_encoder_->setFragmentBytes(data, size, buffer_index);
+          } else {
+            current_render_encoder_->setVertexBytes(data, size, buffer_index);
+          }
+          msl_inline_constants_bound_versions_[slot] = version;
+          return;
+        }
+        uint8_t* table = pixel_stage ? uniforms_pixel : uniforms_vertex;
+        if (written_versions) {
+          copy_uniform_block_if_stale(table + offset, data, size,
+                                      *written_versions, version);
+        } else {
+          std::memcpy(table + offset, data, size);
+        }
+      };
 
   // b0 (msl_buffer 1): System constants.
-  copy_uniform_block_if_stale(uniforms_vertex, &spirv_system_constants_,
-                              sizeof(SpirvShaderTranslator::SystemConstants),
-                              msl_system_constants_written_vertex_versions_,
-                              msl_system_constants_version_);
-  copy_uniform_block_if_stale(uniforms_pixel, &spirv_system_constants_,
-                              sizeof(SpirvShaderTranslator::SystemConstants),
-                              msl_system_constants_written_pixel_versions_,
-                              msl_system_constants_version_);
+  write_constant_block(false, 0, MslBufferIndex::kSystemConstants, 0,
+                       &spirv_system_constants_,
+                       sizeof(SpirvShaderTranslator::SystemConstants),
+                       msl_system_constants_version_,
+                       &msl_system_constants_written_vertex_versions_);
+  write_constant_block(true, 1, MslBufferIndex::kSystemConstants, 0,
+                       &spirv_system_constants_,
+                       sizeof(SpirvShaderTranslator::SystemConstants),
+                       msl_system_constants_version_,
+                       &msl_system_constants_written_pixel_versions_);
 
   // b1 (msl_buffer 2/3): Float constants.
   // SpirvShaderTranslator uses packed float constants like Vulkan.
@@ -5038,22 +5095,23 @@ bool MetalCommandProcessor::IssueDrawMsl(
                                    msl_vertex_shader,
                                    XE_GPU_REG_SHADER_CONSTANT_000_X);
     msl_float_constants_dirty_vertex_ = false;
+    ++msl_float_constants_version_vertex_;
   }
   if (msl_float_constants_dirty_pixel_) {
     rebuild_packed_float_constants(msl_cached_float_constants_pixel_,
                                    msl_pixel_shader,
                                    XE_GPU_REG_SHADER_CONSTANT_256_X);
     msl_float_constants_dirty_pixel_ = false;
+    ++msl_float_constants_version_pixel_;
   }
   // Only the packed constants the shaders read (4 KB each was copied for every
   // draw, ~29 MB per frame at 3600 draws).
   const size_t float_constants_vertex_size = std::min<size_t>(
       kCBVSize, size_t(float_constant_map_vertex.float_count) * 16);
-  if (float_constants_vertex_size) {
-    std::memcpy(uniforms_vertex + kFloatConstantOffset,
-                msl_cached_float_constants_vertex_.data(),
-                float_constants_vertex_size);
-  }
+  write_constant_block(
+      false, 2, MslBufferIndex::kFloatConstantsVertex, kFloatConstantOffset,
+      msl_cached_float_constants_vertex_.data(), float_constants_vertex_size,
+      msl_float_constants_version_vertex_, nullptr);
   const size_t float_constants_pixel_size =
       msl_pixel_shader
           ? std::min<size_t>(
@@ -5061,11 +5119,10 @@ bool MetalCommandProcessor::IssueDrawMsl(
                 size_t(msl_pixel_shader->constant_register_map().float_count) *
                     16)
           : 0;
-  if (float_constants_pixel_size) {
-    std::memcpy(uniforms_pixel + kFloatConstantOffset,
-                msl_cached_float_constants_pixel_.data(),
-                float_constants_pixel_size);
-  }
+  write_constant_block(
+      true, 3, MslBufferIndex::kFloatConstantsPixel, kFloatConstantOffset,
+      msl_cached_float_constants_pixel_.data(), float_constants_pixel_size,
+      msl_float_constants_version_pixel_, nullptr);
 
   // b2 (msl_buffer 4): Bool/loop constants.
   const size_t kBoolLoopConstantOffset = 2 * kCBVSize;
@@ -5075,11 +5132,16 @@ bool MetalCommandProcessor::IssueDrawMsl(
                 &regs.values[XE_GPU_REG_SHADER_CONSTANT_BOOL_000_031],
                 kBoolLoopConstantsSize);
     msl_bool_loop_constants_dirty_ = false;
+    ++msl_bool_loop_constants_version_;
   }
-  std::memcpy(uniforms_vertex + kBoolLoopConstantOffset,
-              msl_cached_bool_loop_constants_.data(), kBoolLoopConstantsSize);
-  std::memcpy(uniforms_pixel + kBoolLoopConstantOffset,
-              msl_cached_bool_loop_constants_.data(), kBoolLoopConstantsSize);
+  write_constant_block(
+      false, 4, MslBufferIndex::kBoolLoopConstants, kBoolLoopConstantOffset,
+      msl_cached_bool_loop_constants_.data(), kBoolLoopConstantsSize,
+      msl_bool_loop_constants_version_, nullptr);
+  write_constant_block(
+      true, 5, MslBufferIndex::kBoolLoopConstants, kBoolLoopConstantOffset,
+      msl_cached_bool_loop_constants_.data(), kBoolLoopConstantsSize,
+      msl_bool_loop_constants_version_, nullptr);
 
   // b3 (msl_buffer 5): Fetch constants.
   const size_t kFetchConstantOffset = 3 * kCBVSize;
@@ -5090,34 +5152,39 @@ bool MetalCommandProcessor::IssueDrawMsl(
                 &regs.values[XE_GPU_REG_SHADER_CONSTANT_FETCH_00_0],
                 kFetchConstantsSize);
     msl_fetch_constants_dirty_ = false;
+    ++msl_fetch_constants_version_;
   }
-  std::memcpy(uniforms_vertex + kFetchConstantOffset,
-              msl_cached_fetch_constants_.data(), kFetchConstantsSize);
-  std::memcpy(uniforms_pixel + kFetchConstantOffset,
-              msl_cached_fetch_constants_.data(), kFetchConstantsSize);
+  write_constant_block(false, 6, MslBufferIndex::kFetchConstants,
+                       kFetchConstantOffset, msl_cached_fetch_constants_.data(),
+                       kFetchConstantsSize, msl_fetch_constants_version_,
+                       nullptr);
+  write_constant_block(true, 7, MslBufferIndex::kFetchConstants,
+                       kFetchConstantOffset, msl_cached_fetch_constants_.data(),
+                       kFetchConstantsSize, msl_fetch_constants_version_,
+                       nullptr);
 
   // b5 (msl_buffer 6): Clip plane constants (separate buffer for SPIR-V path).
   const size_t kClipPlaneConstantOffset = 4 * kCBVSize;
-  copy_uniform_block_if_stale(uniforms_vertex + kClipPlaneConstantOffset,
-                              &spirv_clip_plane_constants_,
-                              sizeof(SpirvShaderTranslator::ClipPlaneConstants),
-                              msl_clip_plane_constants_written_vertex_versions_,
-                              msl_clip_plane_constants_version_);
+  write_constant_block(false, 8, MslBufferIndex::kClipPlaneConstants,
+                       kClipPlaneConstantOffset, &spirv_clip_plane_constants_,
+                       sizeof(SpirvShaderTranslator::ClipPlaneConstants),
+                       msl_clip_plane_constants_version_,
+                       &msl_clip_plane_constants_written_vertex_versions_);
 
   // b6 (msl_buffer 7): Tessellation constants.
   const size_t kTessellationConstantOffset = 5 * kCBVSize;
-  copy_uniform_block_if_stale(
-      uniforms_vertex + kTessellationConstantOffset,
-      &spirv_tessellation_constants_,
-      sizeof(SpirvShaderTranslator::TessellationConstants),
-      msl_tessellation_constants_written_vertex_versions_,
-      msl_tessellation_constants_version_);
-  copy_uniform_block_if_stale(
-      uniforms_pixel + kTessellationConstantOffset,
-      &spirv_tessellation_constants_,
-      sizeof(SpirvShaderTranslator::TessellationConstants),
-      msl_tessellation_constants_written_pixel_versions_,
-      msl_tessellation_constants_version_);
+  write_constant_block(false, 9, MslBufferIndex::kTessellationConstants,
+                       kTessellationConstantOffset,
+                       &spirv_tessellation_constants_,
+                       sizeof(SpirvShaderTranslator::TessellationConstants),
+                       msl_tessellation_constants_version_,
+                       &msl_tessellation_constants_written_vertex_versions_);
+  write_constant_block(true, 10, MslBufferIndex::kTessellationConstants,
+                       kTessellationConstantOffset,
+                       &spirv_tessellation_constants_,
+                       sizeof(SpirvShaderTranslator::TessellationConstants),
+                       msl_tessellation_constants_version_,
+                       &msl_tessellation_constants_written_pixel_versions_);
 
   // Keep binding behavior conservative while using per-encoder dedupe caches.
   const bool msl_bind_dedupe = true;
@@ -5153,10 +5220,13 @@ bool MetalCommandProcessor::IssueDrawMsl(
   // Bind uniforms buffer at the appropriate indices.
   NS::UInteger vs_base_offset = table_index_vertex * kUniformsBytesPerTable;
   NS::UInteger ps_base_offset = table_index_pixel * kUniformsBytesPerTable;
-  if (!msl_bind_dedupe || !msl_bound_uniforms_offsets_valid_ ||
-      msl_bound_uniforms_buffer_ != uniforms_buffer_ ||
-      msl_bound_uniforms_vs_base_offset_ != vs_base_offset ||
-      msl_bound_uniforms_ps_base_offset_ != ps_base_offset) {
+  if (inline_constants) {
+    // The set*Bytes bindings replaced the table bindings.
+    msl_bound_uniforms_offsets_valid_ = false;
+  } else if (!msl_bind_dedupe || !msl_bound_uniforms_offsets_valid_ ||
+             msl_bound_uniforms_buffer_ != uniforms_buffer_ ||
+             msl_bound_uniforms_vs_base_offset_ != vs_base_offset ||
+             msl_bound_uniforms_ps_base_offset_ != ps_base_offset) {
     // System constants (msl_buffer 1).
     current_render_encoder_->setVertexBuffer(uniforms_buffer_,
                                              vs_base_offset + 0 * kCBVSize,
@@ -5208,9 +5278,12 @@ bool MetalCommandProcessor::IssueDrawMsl(
     msl_bound_uniforms_vs_base_offset_ = vs_base_offset;
     msl_bound_uniforms_ps_base_offset_ = ps_base_offset;
     msl_bound_uniforms_offsets_valid_ = true;
+    msl_inline_constants_bound_versions_.fill(0);
   }
 
-  UseRenderEncoderResource(uniforms_buffer_, MTL::ResourceUsageRead);
+  if (!inline_constants) {
+    UseRenderEncoderResource(uniforms_buffer_, MTL::ResourceUsageRead);
+  }
 
   const bool vertex_uses_argbuf =
       vertex_translation && vertex_translation->uses_argument_buffers();
@@ -6296,7 +6369,8 @@ MTL::CommandBuffer* MetalCommandProcessor::EnsureCommandBuffer() {
       NS::String::string("XeniaCommandBuffer", NS::UTF8StringEncoding));
 
 #if !METAL_SHADER_CONVERTER_AVAILABLE
-  if (UseSpirvCrossPath() && !EnsureSpirvUniformBuffer()) {
+  if (UseSpirvCrossPath() && !cvars::metal_inline_shader_constants &&
+      !EnsureSpirvUniformBuffer()) {
     static auto last_ensure_uniforms_fail_log =
         std::chrono::steady_clock::time_point{};
     const auto now = std::chrono::steady_clock::now();
@@ -6599,6 +6673,7 @@ void MetalCommandProcessor::ResetMslRenderEncoderStateCache() {
   msl_bound_uniforms_vs_base_offset_ = 0;
   msl_bound_uniforms_ps_base_offset_ = 0;
   msl_bound_uniforms_offsets_valid_ = false;
+  msl_inline_constants_bound_versions_.fill(0);
   msl_bound_pipeline_state_ = nullptr;
   msl_viewport_valid_ = false;
   msl_scissor_valid_ = false;
