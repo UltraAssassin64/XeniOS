@@ -1565,6 +1565,9 @@ Changes for the next build:
   native stencil output, the skip).
 - Asked of the owner: one run with the skip off and one on, same route,
   starting with the phone cool (thermal state is in every perf line).
+- Built as 9640 (`xenios_ios_arm64_0.2.9-9640`, commit cd16c089f, CI run 324;
+  runs 322 and 323 were cancelled while queued so one build carries all
+  three changes).
 
 ### Async shader compilation backport: first scoping (2026-11-19)
 
@@ -1688,7 +1691,7 @@ main menu still works.
   thread then sent UTF8String to a freed string (objc_msgSend on a bad
   isa). A race: it can work when the dispatch thread reads first.
 - Fix (next build): the completion stores a copy (+1), the dispatch thread
-  reads it and releases it.
+  reads it and releases it. In build 9640.
 
 Spider-Man: Web of Shadows (41560815), logs 21-59-42, 22-00-32, 22-04-43:
 - Same in all three runs, before the first frame (no swap, no draw stats):
@@ -1733,6 +1736,7 @@ Spider-Man debug run on build 9637 (log 12-58-05): cause found.
   alertable wait, as on the console.
 - Not ported: XeniOS HEAD runs an I/O APC without bit 0 as a kernel APC
   before the service returns; here every I/O APC is a user APC.
+- In build 9640.
 
 ## Owed from the original request
 
