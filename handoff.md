@@ -631,10 +631,23 @@ shader). `g_metal_shader_cache` is initialized but `MslShader` never uses
 it; the pipeline disk cache, MTLBinaryArchive and prewarm all sit in the
 `METAL_SHADER_CONVERTER_AVAILABLE` (macOS) branch. So `newLibrary` from
 source (50-90 ms) and `newRenderPipelineState` run again every run, as the
-logs show. XeniOS HEAD's SPIR-V path is the same (MSL source cache only),
-so there is no upstream code to port; a real cache would be new work
-(e.g. MTLBinaryArchive for SPIR-V-path pipelines, iOS 14+, which saves the
-GPU back-end compile but not the MSL front end).
+logs show. XeniOS HEAD's SPIRV-Cross path is the same (MSL source cache
+only). Correction (2026-11-19): that path is not XeniOS HEAD's default.
+`metal_use_dxil` defaults to true there, with `metal_shader_compiler =
+spirv2air` (SPIR-V straight to AIR, submodule `xenios-jp/spirv2air`,
+falling back to Metal Shader Converter, `cmake/ios/ShaderConverter.cmake`).
+Everything that hides compiles is tied to that path (`UseDxilPath()`):
+`MetalShaderLibraryCache` (per-title metallibs and bindings on disk, so a
+later launch skips translation and the MSL front end),
+`metal_bake_fetch_state`, the vertex shader ucode interpreter that draws new
+geometry while its real shader compiles (`async_shader_vs_interpreter`,
+`ucode_interpreter.vs.slang`), `async_shader_skip_draws` only for draws
+without a stand-in, and `metal_stand_in_exact_depth_stencil`. Porting it
+means porting the DXIL/spirv2air path. Only one iOS 26 guard was found in
+its command processor. Unknown: whether spirv2air's AIR/metallib output
+loads on iOS 16. A smaller alternative is MTLBinaryArchive for SPIR-V-path
+pipelines (iOS 14+), which saves the GPU back-end compile but not the MSL
+front end.
 
 Build #9574, one run with `emit_inline_mmio_checks` off (owner, log
 23-22-21): no hang, no `Unhandled host exception`, no `MMIO store
