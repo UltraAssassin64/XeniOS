@@ -1345,38 +1345,75 @@ Owner: two other games are unstable, one with an access violation, one stuck
 in an endless load (unrelated to Batman). Wanted: a profiler to run with the
 emulator that points at what needs work.
 
-Already in this branch: perf lines every 120 frames (frame times, GPU busy,
-CPU waits on the GPU, compiles, memory, thermal state, CPU share per
-thread), GPU time per pass and compile stalls, Frame Detail Log, kernel call
-repeat detector (`kernel_call_repeat_threshold`, with a report of every guest
-thread), guest crash dump (`Emulator::ExceptionCallback`: guest PC, fault
-address, registers). Gaps: the crash dump has no guest call stack
-(`stack_walker_posix.cc` is unimplemented, also upstream), no module or
-function context, no recent kernel calls; loops that make no kernel calls
-are invisible; nothing shows which guest code burns CPU.
+Already in this branch (corrected after reading the 2026-11-19 game logs):
+perf lines every 120 frames (frame times, GPU busy, CPU waits on the GPU,
+compiles, memory, thermal state, CPU share per thread), GPU time per pass
+and compile stalls, Frame Detail Log; `log_guest_thread_hotspots` (default
+on: 16 samples 1 ms apart per busy guest thread each perf window, guest
+function or host symbol); the kernel call repeat detector
+(`kernel_call_repeat_threshold`), which with the reports at
+TerminateCurrentGame/OnDestroy logs every guest thread: what it is inside or
+last called and for how long, wait object type and name, guest lr, a guest
+stack walk (12 frames), host pc and symbol, and guest code words for threads
+in guest code; the guest crash dump (`Emulator::ExceptionCallback`: guest
+PC, host fault address, registers). Gaps: the crash dump prints the host
+fault address only (no guest address, page state or code at the PC) and
+relies on the thread report that happens to follow; multi-object waits show
+only the count, not the handles; kernel call results are never logged
+(shim_utils.h "TODO: log result"); hotspots are 16 samples per window.
 
 Upstream: MicroProfile zones (`XENIA_ENABLE_PROFILER`, off by default,
 covers host code only); a crash reporter extension (iOS 27, unusable here)
 and `ios_diagnostics*`, which upload to an endpoint (not wanted).
 
 Proposed, in this order:
-1. Crash report: guest back chain walk from r1/LR in guest memory
-   (function start, module and offset per frame), the thread's last kernel
-   calls (the repeat detector already keeps 8), the fault address's region
-   (heap, committed, protection), guest code words around the PC; host
-   backtrace for host-side faults.
-2. Hang report (watchdog): no guest swap for N seconds, or the owner taps a
-   button, then dump every guest thread: what it waits on (object, critical
-   section owner), last kernel call, sampled guest PCs.
-3. Sampling profiler: a host thread suspends each guest thread at ~1 kHz
-   (`thread_suspend`/`thread_get_state`), maps the host PC through the code
-   cache (`LookupFunction`, `MapMachineCodeToGuestAddress`, as the crash
-   dump does) to a guest function, and also counts host-side time
-   (kernel exports, GPU command processor, audio). Report every N seconds:
-   top guest functions and host areas per thread. The same sampler finds
-   the hot loop in item 2.
-4. Settings: a "Diagnostics" toggle for each, writing to the log, and
-   later per game (per-game config).
+1. Crash dump: guest fault address (host address minus the membase), the
+   page's heap, state and protection, guest code words around the PC, the
+   thread's guest stack and last kernel calls (from the existing reports),
+   host backtrace for host-side faults.
+2. Waits: list every handle of a NtWaitForMultipleObjectsEx /
+   KeWaitForMultipleObjects with type, name and signal state; log the result
+   of logged kernel calls (file calls especially).
+3. Longer sampling on demand (e.g. 1 kHz for a few seconds from a button or
+   a no-swap watchdog), aggregated per guest function and host area.
+4. Settings toggles, later per game.
+
+## Other games (owner's runs 2026-11-19, zip "Miscellaneous_runs-1", build 9618 era)
+
+Assassin's Creed Revelations (55530879), logs 22-06-39 and 22-27-38:
+- Gameplay ran (43 ms frames, GPU busy 120%) for minutes, then a guest write
+  fault in the same function in both runs: PC 833378E4 / 833378E0 (likely a
+  copy routine; r5 sizes 0x15C30 and 0x1220), called from 8232121C in both
+  (r12 and the first stack entry), whose callers differ. Host fault
+  addresses 0x2A0000008 and 0x2A000100B. Host heap pointers in these logs
+  sit at 0x28xxxxxxx, so if the guest mapping base is 0x2A0000000 the guest
+  addresses are 0x8 and 0x100B: a null pointer plus an offset (unconfirmed,
+  the dump does not print the base).
+- Afterwards another thread waits forever in RtlEnterCriticalSection
+  (839C43E8, lr 823890BC) on a lock the crashed thread presumably held, so
+  the game freezes. The second "Unhandled host exception" is the same thread
+  faulting again when shutdown resumed it.
+- "BaseHeap::AllocFixed attempting commit on unreserved page" (x4) happens
+  at setup in every run, not related.
+- Next: crash dump item 1 above (guest address, page state, code at PC).
+
+Spider-Man: Web of Shadows (41560815), logs 21-59-42, 22-00-32, 22-04-43:
+- Same in all three runs, before the first frame (no swap, no draw stats):
+  loader thread F8000038 logs `StfsContainerDevice::ResolvePath(\packs)`
+  and then waits in NtWaitForMultipleObjectsEx on 2 objects forever. The
+  main thread pulses event F800000C in a loop (NtPulseEvent, ~2.7 M calls)
+  and five workers (start 82963840) wake on it (NtWaitForSingleObjectEx,
+  ~11-12 M calls each, loop at 82B22AB8 retries on 0x101): busy-waiting for
+  the loader, not the cause.
+- Our file I/O is the older Xenia code: NtReadFile has a TODO for async, and
+  NtQueryDirectoryFile ignores its event and APC (so does XeniOS HEAD), but
+  XeniOS HEAD reworked xboxkrnl_io.cc (1141 vs 739 lines): SubmitRequest
+  with an I/O worker for async handles, completion APCs (QueueIoApc),
+  completion ports, request validation. Suspect: an async file request in
+  \packs whose completion (event or APC) never arrives here.
+- Next: one run with Log Verbosity = Debug (kernel calls with arguments;
+  the spinning calls are high-frequency and stay out), then compare the
+  calls with XeniOS HEAD's I/O.
 
 ## Owed from the original request
 
