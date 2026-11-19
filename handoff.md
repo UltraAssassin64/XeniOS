@@ -1207,6 +1207,12 @@ Pause menu corruption, cause found by reading (not yet confirmed on device):
 Settings: "Frame Capture" is now the first section (Frame Detail Log); saving
 when only it changed closes Settings without the "Settings Saved" alert.
 
+All of the above is build 9620 (`xenios_ios_arm64_0.2.9-9620`, commit
+c4fcde3, CI run 316 passed). Test plan given to the owner: leave the pause
+menu open a few minutes with "Wait for the GPU at Game Fences" on, then off;
+compare gameplay FPS with 9618; one 1-frame Frame Detail Log capture with a
+shadow box on screen.
+
 Owner's decisions (2026-11-19):
 - Real Occlusion Queries stay off by default (`occlusion_query_enable =
   false`), like XeniOS's fake default, even though they fix Batman's
