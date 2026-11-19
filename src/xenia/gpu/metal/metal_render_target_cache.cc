@@ -731,6 +731,16 @@ bool MetalRenderTargetCache::Initialize() {
   // 2x msaa and unorm16 support virtually guarunteed as minimum OS target /
   // Metal version currently is MacOS 15 / Metal 3
   msaa_2x_supported_ = device_->supportsTextureSampleCount(2);
+  programmable_sample_positions_supported_ =
+      device_->areProgrammableSamplePositionsSupported();
+  XELOGI(
+      "MetalRenderTargetCache: programmable sample positions {}; Xenos MSAA "
+      "sample positions {}",
+      programmable_sample_positions_supported_ ? "supported" : "not supported",
+      (::cvars::xenos_sample_positions &&
+       programmable_sample_positions_supported_ && msaa_2x_supported_)
+          ? "used"
+          : "not used");
 
   native_stencil_output_probed_ = ProbeNativeStencilOutputSupport();
   XELOGI(
@@ -3853,6 +3863,66 @@ MTL::RenderPassDescriptor* MetalRenderTargetCache::GetRenderPassDescriptor(
   return cached_render_pass_descriptor_;
 }
 
+void MetalRenderTargetCache::ApplyXenosSamplePositions(
+    MTL::RenderPassDescriptor* descriptor) const {
+  if (!descriptor) {
+    return;
+  }
+  MTL::RenderPassDepthAttachmentDescriptor* depth_attachment =
+      descriptor->depthAttachment();
+  MTL::RenderPassAttachmentDescriptor* attachments[] = {
+      descriptor->colorAttachments()->object(0),
+      descriptor->colorAttachments()->object(1),
+      descriptor->colorAttachments()->object(2),
+      descriptor->colorAttachments()->object(3),
+      depth_attachment,
+      descriptor->stencilAttachment()};
+  uint32_t sample_count = 1;
+  for (MTL::RenderPassAttachmentDescriptor* attachment : attachments) {
+    MTL::Texture* texture = attachment ? attachment->texture() : nullptr;
+    if (texture) {
+      sample_count =
+          std::max(sample_count, static_cast<uint32_t>(texture->sampleCount()));
+    }
+  }
+  // Without native 2x, a 4-sample target may be guest 2x or 4x, which the
+  // descriptor doesn't tell apart.
+  bool use_xenos_positions = ::cvars::xenos_sample_positions &&
+                             programmable_sample_positions_supported_ &&
+                             msaa_2x_supported_ &&
+                             (sample_count == 2 || sample_count == 4);
+  int8_t xenos_positions[4][2];
+  uint32_t position_count = 0;
+  if (use_xenos_positions) {
+    position_count = draw_util::GetHostSampleXenosPositions(
+        sample_count == 4 ? xenos::MsaaSamples::k4X : xenos::MsaaSamples::k2X,
+        true, false, xenos_positions);
+    use_xenos_positions = position_count == sample_count;
+  }
+  if (!use_xenos_positions) {
+    descriptor->setSamplePositions(nullptr, 0);
+    if (depth_attachment) {
+      depth_attachment->setStoreActionOptions(MTL::StoreActionOptionNone);
+    }
+    return;
+  }
+  // Metal positions are from the top-left corner of the pixel, Xenos ones in
+  // 1/16 of a pixel from its center (as VK_EXT_sample_locations in XeniOS).
+  MTL::SamplePosition positions[4];
+  for (uint32_t i = 0; i < position_count; ++i) {
+    positions[i] =
+        MTL::SamplePosition::Make(0.5f + float(xenos_positions[i][0]) / 16.0f,
+                                  0.5f + float(xenos_positions[i][1]) / 16.0f);
+  }
+  descriptor->setSamplePositions(positions, position_count);
+  // Depth may be stored compressed relative to the sample positions; later
+  // passes, transfers and EDRAM dumps read it as plain per-sample values.
+  if (depth_attachment && depth_attachment->texture()) {
+    depth_attachment->setStoreActionOptions(
+        MTL::StoreActionOptionCustomSamplePositions);
+  }
+}
+
 MTL::Texture* MetalRenderTargetCache::GetColorTarget(uint32_t index) const {
   if (index >= 4 || !current_color_targets_[index]) {
     return nullptr;
@@ -6093,6 +6163,7 @@ void MetalRenderTargetCache::PerformTransfersAndResolveClears(
           ca->setClearColor(resolve_clear_color);
         }
       }
+      ApplyXenosSamplePositions(rp);
       transfer_encoder =
           metal_gpu_pass_timer.RenderEncoder(cmd, rp, "rt transfer");
       return transfer_encoder;

@@ -1081,6 +1081,65 @@ flicker, pop-in; the occlusion line); Frame Detail Log of 4 frames on the
 title screen while it flickers, and 1 frame in gameplay with the shadow
 visible.
 
+### Build 9615 results (owner, zip "9615", 4 logs + 6 photos) and the next build
+
+Runs: 19-03-24 (defaults, two 1-frame gameplay captures), 19-14-19 (shader
+hashes listed; 1 frame, then 4 frames of the save select screen), 19-16-23
+(two 1-frame gameplay captures), 19-20-16 (Real Occlusion Queries on).
+Owner: shadows now have the caster's shape, but a faint box remains around
+each (box edges show as a thin shadow-coloured line, the inside is slightly
+darker); a doorway is no longer solid black; queries on recover from the
+camera-transition blackout almost at once. New: close-up, Batman shows
+differently shaded triangles; on the save select screen his knees are
+almost black.
+- Probe: the shadow map (151A8000, k_24_8) holds 1.0 where cleared and the
+  casters' depths; the scene depth (15C78000) holds 0.02-0.08 (reversed Z).
+  Both plausible, so the box is not bad depth data.
+- Save select frame (41 passes): base pass at 2x MSAA (VS 709923, viewport
+  offset 639.75/360.25), colour and depth resolved per tile, depth restored
+  into a 1x target with oDepth (draw 32), then the per-light passes redraw
+  Batman at 1x (VS D32E36, viewport offset 640/360) with GreaterEqual and no
+  depth write, additive. Also a half-res UE3 ambient occlusion chain: depth
+  downsample via oDepth (pass 18, PS 9E0981), occlusion into k_16_16_FLOAT
+  (pass 19, PS 6209D0), blurs, multiplied into the scene (pass 26).
+- Cause of the faceted/black triangles (and likely of the box edges): UE3
+  shifts its 2x MSAA passes by (-0.25, +0.25) pixel so that Xenos sample 0
+  lands on the 1x pixel centre; the restored depth then equals what the 1x
+  light passes rasterize. Our host 2x samples sat at the Direct3D 10.1
+  positions (+-0.25, +-0.25 diagonally the other way), so the resolved
+  sample is half a pixel off: per triangle, depending on its slope, the
+  light passes pass or fail the GreaterEqual test. Before 9615 the restored
+  depth was doubled, so every light pass failed alike and nothing looked
+  faceted. Upstream documents exactly this in `draw_util.h`
+  (`kXenosSamplePositions2x`, "restored depth can fail subsequent depth
+  tests and leave parts of the scene unshaded") and programs the Xenos
+  positions on Direct3D 12 and Vulkan (`xenos_sample_positions`, default
+  off there); neither upstream has it for Metal. The shadow volume's z-fail
+  test and the projection's world-position rebuild read the same restored
+  or resolved depth, so the box edge lines should shrink too (not proven).
+- Fix (next build): `xenos_sample_positions` (Settings > Accuracy > Xbox 360
+  MSAA Sample Positions, default on here, applies at once).
+  `MetalRenderTargetCache::ApplyXenosSamplePositions` is called before every
+  draw and render-target-transfer encoder: for 2x/4x passes it sets
+  `setSamplePositions` from `draw_util::GetHostSampleXenosPositions` (native
+  2x: host sample 0 at Xenos sample 1 (4,-4), host 1 at Xenos 0 (-4,4), the
+  same pairing as the EDRAM dumps; 4x in guest order) and stores depth with
+  `StoreActionOptionCustomSamplePositions` so later passes, transfers and
+  dumps read plain per-sample values. Otherwise it resets to the default
+  positions. All APIs are iOS 11+. Startup line: "MetalRenderTargetCache:
+  programmable sample positions supported; Xenos MSAA sample positions
+  used".
+- Queries on (19-20-16): 10,000-12,000 queries per 120 frames, about 60%
+  with no samples; gameplay frames 51-58 ms against 44-50 ms in the other
+  runs (one run each, not conclusive).
+- The projection pixel shader 6C76CC934779C668 was not logged in 9615 (the
+  "Shader log" lines only appear when the shader is translated; it was
+  compiled from the source cache). Its disassembly is in the owner's 9611-1
+  zip, which is in the previous session's container only.
+- Seen upstream, not ported: `GetHostDepthPolygonOffsetIfNeeded` (draw_util)
+  moves UE3 decal depth bias into the pixel shader to stop coplanar
+  z-fighting; a candidate if decals still flicker.
+
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 

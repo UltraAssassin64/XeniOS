@@ -3603,6 +3603,12 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "shader, for games using float depth: fixes striped or flickering surfaces "
                  "drawn in several passes, at some GPU cost.",
                  false);
+  AddBoolSetting(accuracy.items, "xenos_sample_positions", "Xbox 360 MSAA Sample Positions",
+                 "Places the multisampling samples where the Xbox 360 does. Unreal Engine 3 "
+                 "games rely on it when they copy the scene depth back after drawing it with "
+                 "anti-aliasing: without it, characters show dark or unlit triangles and "
+                 "shadows show the edges of their box. Applies at once.",
+                 true);
   AddBoolSetting(accuracy.items, "occlusion_query_enable", "Real Occlusion Queries",
                  "Experimental. Counts what the game's visibility tests really draw "
                  "instead of reporting everything as visible, so hidden characters and "

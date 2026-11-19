@@ -90,6 +90,40 @@ constexpr int8_t kD3D10StandardSamplePositions2x[2][2] = {{4, 4}, {-4, -4}};
 constexpr int8_t kD3D10StandardSamplePositions4x[4][2] = {
     {-2, -6}, {6, -2}, {-6, 2}, {2, 6}};
 
+uint32_t GetHostSampleXenosPositions(xenos::MsaaSamples msaa_samples,
+                                     bool native_2x, bool interlock,
+                                     int8_t (*positions_out)[2]) {
+  assert_true(msaa_samples == xenos::MsaaSamples::k2X ||
+              msaa_samples == xenos::MsaaSamples::k4X);
+
+  static constexpr uint32_t kSampleRemap2x[2] = {1, 0};
+  static constexpr uint32_t kSampleRemap2xAs4x[4] = {0, 1, 0, 1};
+  static constexpr uint32_t kSampleRemap4x[4] = {0, 1, 2, 3};
+  static constexpr uint32_t kSampleRemap4xInterlock[4] = {0, 3, 2, 1};
+
+  const int8_t (*xenos_positions)[2];
+  const uint32_t* sample_remap;
+  uint32_t host_sample_count;
+
+  if (msaa_samples == xenos::MsaaSamples::k4X) {
+    xenos_positions = kXenosSamplePositions4x;
+    sample_remap = interlock ? kSampleRemap4xInterlock : kSampleRemap4x;
+    host_sample_count = 4;
+  } else {
+    xenos_positions = kXenosSamplePositions2x;
+    sample_remap = native_2x ? kSampleRemap2x : kSampleRemap2xAs4x;
+    host_sample_count = native_2x ? 2 : 4;
+  }
+
+  for (uint32_t i = 0; i < host_sample_count; ++i) {
+    const int8_t* position = xenos_positions[sample_remap[i]];
+    positions_out[i][0] = position[0];
+    positions_out[i][1] = position[1];
+  }
+
+  return host_sample_count;
+}
+
 void GetPreferredFacePolygonOffset(const RegisterFile& regs,
                                    bool primitive_polygonal, float& scale_out,
                                    float& offset_out) {

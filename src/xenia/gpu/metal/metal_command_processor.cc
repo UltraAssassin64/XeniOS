@@ -7022,6 +7022,9 @@ void MetalCommandProcessor::BeginCommandBuffer() {
       pass_descriptor->setVisibilityResultBuffer(
           zpd_visibility_pool_.visibility_buffer());
     }
+    if (render_target_cache_) {
+      render_target_cache_->ApplyXenosSamplePositions(pass_descriptor);
+    }
     // Note: renderCommandEncoder() returns an autoreleased object, we must
     // retain it.
     current_render_encoder_ = metal_gpu_pass_timer.RenderEncoder(

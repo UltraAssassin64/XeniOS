@@ -157,6 +157,12 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
     return render_pass_descriptor_dirty_;
   }
 
+  // With xenos_sample_positions, a pass with 2x or 4x MSAA attachments
+  // rasterizes at the Xenos sample positions (draw_util::
+  // GetHostSampleXenosPositions), and its depth is stored independently of
+  // them; otherwise the descriptor is reset to the default positions.
+  void ApplyXenosSamplePositions(MTL::RenderPassDescriptor* descriptor) const;
+
   // Get current render targets for capture
   MTL::Texture* GetColorTarget(uint32_t index) const;
   MTL::Texture* GetDepthTarget() const;
@@ -423,6 +429,8 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
   MTL::Texture* transfer_dummy_depth_[3] = {};
   MTL::Texture* transfer_dummy_stencil_[3] = {};
   bool msaa_2x_supported_ = true;
+  // MTLDevice areProgrammableSamplePositionsSupported.
+  bool programmable_sample_positions_supported_ = false;
 
   // Current render targets - updated by base class Update() call
 

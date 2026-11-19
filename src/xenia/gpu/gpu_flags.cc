@@ -160,6 +160,17 @@ void SetOcclusionQueryEnable(bool value) {
   OVERRIDE_bool(occlusion_query_enable, value);
 }
 
+// As in XeniOS and xenia-edge, which default it to false for Direct3D 12 and
+// Vulkan. On by default here: Metal on every iOS GPU can program the
+// positions, and Unreal Engine 3 games depend on them.
+DEFINE_bool(xenos_sample_positions, true,
+            "Rasterize 2x and 4x MSAA render targets at the Xenos sample "
+            "positions, like real hardware, if the GPU and driver support it.\n"
+            "Only applies to RTV/FBO - ROV/FSI render targets always use Xenos "
+            "positions since they safely map coverage and calculate depth "
+            "in-shader.",
+            "GPU");
+
 uint32_t GetGuestVblankRateHz() { return cvars::use_50Hz_mode ? 50 : 60; }
 
 DEFINE_bool(
