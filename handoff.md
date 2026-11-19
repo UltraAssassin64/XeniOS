@@ -1664,6 +1664,53 @@ from recent use, with hysteresis.
 - Offline: a parser for the .xtr (header, commands, snappy) and PM4 packets
   into a per-draw register timeline, then the ownership simulation.
 
+### Build 9643 results (owner, zip "9643_runs": 2 Batman with GPU traces, Spider-Man, 2 AC)
+
+Build 9643 is c3b49c6f6 re-run (GPU trace capture works: two Batman traces,
+4 frames each, ~17 MB, in Documents/scratch/gpu/<date_time>/).
+
+Assassin's Creed Revelations (15-56-59 crash, 15-58-45 crash at the prologue
+to chapter 1 transition; owner: the flicker is gone with the place-in-frame
+occlusion guess):
+- Both crashes are on guest thread F80001B0 and hit corrupt heap memory:
+  (1) PC 833378E0 (the game allocator's free-list unlink, called from
+  8232121C, the same site as the 9618-era crashes), node 0x44A877A8 whose
+  fields are all 0xFFFFFFFF, so `stw r11,0xC(r10)` writes to -1+0xC;
+  (2) PC 824C437C, object 0x43D458B8 with a null vtable (lwz r10,0(r31) ->
+  lwz r9,0(r10)).
+- The game reserves 0x40000000 (1 MB) and commits it at fixed bases, and
+  allocates/releases 64 KB X_MEM_NOZERO blocks (type 0x20803000) at
+  0x40400000-0x43AFFFFF all the time; both corrupt objects are among them.
+  The GPU can't have written there (0x40000000 virtual has no physical
+  alias), so the writer is guest code or a kernel export.
+- Found and fixed (not proven to be this crash): NtAllocateVirtualMemory
+  judged a commit at a base by its first page: committed -> nothing zeroed
+  (new pages after it kept stale data), uncommitted -> the whole range
+  zeroed (live pages after it wiped), and it zeroed after the commit
+  without the lock. Now, as in XeniOS HEAD, only the pages the call newly
+  commits are zeroed, under the global lock. In these logs no commit at a
+  base overlapped committed pages, so this may not be the cause.
+- Diagnostics for the next crash: the dump now lists every register that
+  points into a guest heap (allocation, state, 32 bytes there) with the
+  last NtAllocateVirtualMemory/NtFreeVirtualMemory calls that covered it
+  (1024 kept), to see a block freed or handed out twice while in use.
+
+Spider-Man (15-54-56): notifications at start were XN_SYS_UI 0 and
+XN_SYS_SIGNINCHANGED 1 while XamUserGetSigninState(0) returned 0; after the
+sign-in prompt UI 1, SIGNINCHANGED 1, UI 0 and state(0) 1. Then the same
+wait. Worker F8000064 (start 82A25CE8) waits on auto-reset event F8000060,
+which was signaled ~96,000 times before sign-in and never after.
+- The startup SIGNINCHANGED now carries the users actually signed in
+  (XeniOS HEAD does), not a fixed 1.
+- The first kernel call storm report of a thread now dumps the guest code
+  around its caller and every return address up the stack (64 words before,
+  8 after, once per address), to disassemble what Game Master's job wait
+  is waiting for. Disassembler: capstone (PPC 32-bit big endian) in the
+  session scratchpad's pylib.
+
+Batman: two traces (15-50-11, 15-53-37); offline parser in the session
+scratchpad (tools/xtr_parse.py; not in the repository).
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

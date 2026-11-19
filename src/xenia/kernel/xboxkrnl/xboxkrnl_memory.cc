@@ -8,10 +8,18 @@
  */
 
 #include "xenia/kernel/xboxkrnl/xboxkrnl_memory.h"
+
+#include <algorithm>
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "xenia/base/logging.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_private.h"
+#include "xenia/kernel/xthread.h"
 #include "xenia/xbox.h"
 
 DEFINE_bool(
@@ -58,6 +66,56 @@ uint32_t FromXdkProtectFlags(uint32_t protect) {
     result |= kMemoryProtectWriteCombine;
   }
   return result;
+}
+
+namespace {
+
+// The last calls of NtAllocateVirtualMemory and NtFreeVirtualMemory, for the
+// crash dump (a block freed or handed out again while still in use).
+struct VirtualMemoryEvent {
+  uint32_t thread;
+  uint32_t address;
+  uint32_t size;
+  uint32_t type;
+  bool free;
+};
+std::mutex virtual_memory_history_mutex;
+VirtualMemoryEvent virtual_memory_history[1024];
+uint32_t virtual_memory_history_next = 0;
+
+void RecordVirtualMemoryEvent(uint32_t address, uint32_t size, uint32_t type,
+                              bool free) {
+  XThread* thread =
+      XThread::IsInThread() ? XThread::GetCurrentThread() : nullptr;
+  std::lock_guard<std::mutex> lock(virtual_memory_history_mutex);
+  virtual_memory_history[virtual_memory_history_next++ %
+                         xe::countof(virtual_memory_history)] = {
+      thread ? thread->handle() : 0, address, size, type, free};
+}
+
+}  // namespace
+
+std::string DescribeVirtualMemoryHistory(uint32_t address) {
+  std::unique_lock<std::mutex> lock(virtual_memory_history_mutex,
+                                    std::try_to_lock);
+  if (!lock.owns_lock()) {
+    return " (busy)";
+  }
+  std::string history;
+  const uint32_t count = std::min<uint32_t>(
+      virtual_memory_history_next, xe::countof(virtual_memory_history));
+  for (uint32_t i = virtual_memory_history_next - count;
+       i != virtual_memory_history_next; ++i) {
+    const VirtualMemoryEvent& event =
+        virtual_memory_history[i % xe::countof(virtual_memory_history)];
+    if (address - event.address < std::max<uint32_t>(event.size, 1)) {
+      history += fmt::format(" [#{} {:08X} {} {:08X}+{:X} type {:08X}]",
+                             virtual_memory_history_next - i, event.thread,
+                             event.free ? "free" : "alloc", event.address,
+                             event.size, event.type);
+    }
+  }
+  return history.empty() ? " none" : history;
 }
 
 dword_result_t NtAllocateVirtualMemory_entry(lpdword_t base_addr_ptr,
@@ -169,8 +227,17 @@ dword_result_t NtAllocateVirtualMemory_entry(lpdword_t base_addr_ptr,
   uint32_t protect = FromXdkProtectFlags(protect_bits);
   uint32_t address = 0;
   BaseHeap* heap;
-  HeapAllocationInfo prev_alloc_info = {};
-  bool was_commited = false;
+  const bool zero_commit =
+      (alloc_type & X_MEM_COMMIT) && !(alloc_type & X_MEM_NOZERO);
+  // A commit zeroes the pages it commits, and only those: pages of the range
+  // already committed keep their contents (as in XeniOS HEAD). Judging the
+  // whole range by its first page skipped zeroing new pages after a
+  // committed one and wiped live ones after an uncommitted one (Assassin's
+  // Creed Revelations commits its heap at 0x40000000 piece by piece and
+  // crashed on corrupt heap blocks and objects). Held from the query through
+  // the zeroing, so another call cannot commit and fill these pages between.
+  std::vector<std::pair<uint32_t, uint32_t>> zero_runs;
+  auto global_lock = xe::global_critical_region::AcquireDirect();
 
   if (adjusted_base != 0) {
     heap = kernel_memory()->LookupHeap(adjusted_base);
@@ -178,8 +245,28 @@ dword_result_t NtAllocateVirtualMemory_entry(lpdword_t base_addr_ptr,
       // Specified the wrong page size for the wrong heap.
       return X_STATUS_ACCESS_DENIED;
     }
-    was_commited = heap->QueryRegionInfo(adjusted_base, &prev_alloc_info) &&
-                   (prev_alloc_info.state & kMemoryAllocationCommit) != 0;
+    if (zero_commit) {
+      const uint32_t range_end = adjusted_base + adjusted_size;
+      for (uint32_t run_address = adjusted_base; run_address < range_end;) {
+        HeapAllocationInfo run_info = {};
+        uint32_t run_end = range_end;
+        bool run_committed = false;
+        if (heap->QueryRegionInfo(run_address, &run_info) &&
+            run_info.region_size) {
+          run_end = std::min(range_end, run_address + run_info.region_size);
+          run_committed = (run_info.state & kMemoryAllocationCommit) != 0;
+        }
+        if (!run_committed) {
+          if (!zero_runs.empty() &&
+              zero_runs.back().first + zero_runs.back().second == run_address) {
+            zero_runs.back().second += run_end - run_address;
+          } else {
+            zero_runs.emplace_back(run_address, run_end - run_address);
+          }
+        }
+        run_address = run_end;
+      }
+    }
 
     if (heap->AllocFixed(adjusted_base, adjusted_size, page_size,
                          allocation_type, protect)) {
@@ -190,17 +277,8 @@ dword_result_t NtAllocateVirtualMemory_entry(lpdword_t base_addr_ptr,
     heap = kernel_memory()->LookupHeapByType(false, page_size);
     heap->Alloc(adjusted_size, page_size, allocation_type, protect, top_down,
                 &address);
-  }
-  if (!address) {
-    // Failed - assume no memory available.
-    return X_STATUS_NO_MEMORY;
-  }
-
-  // Zero memory, if needed.
-  if (address && !(alloc_type & X_MEM_NOZERO)) {
-    if (alloc_type & X_MEM_COMMIT) {
-      // Query the actual allocated size from the heap to ensure we don't
-      // attempt to zero more memory than was actually allocated
+    if (address && zero_commit) {
+      // A new region: all of it, as far as the heap allocated it.
       HeapAllocationInfo alloc_info = {};
       if (!heap->QueryRegionInfo(address, &alloc_info)) {
         XELOGE(
@@ -211,28 +289,35 @@ dword_result_t NtAllocateVirtualMemory_entry(lpdword_t base_addr_ptr,
         heap->Release(address);
         return X_STATUS_UNSUCCESSFUL;
       }
+      zero_runs.emplace_back(address,
+                             std::min(adjusted_size, alloc_info.region_size));
+    }
+  }
+  if (!address) {
+    // Failed - assume no memory available.
+    return X_STATUS_NO_MEMORY;
+  }
 
-      // Use the smaller of adjusted_size and the actual allocated region size
-      uint32_t size_to_zero = std::min(adjusted_size, alloc_info.region_size);
-
-      bool made_writable = true;
-      if (!IsWritableProtect(protect)) {
-        made_writable = heap->Protect(address, size_to_zero,
-                                      kMemoryProtectRead | kMemoryProtectWrite);
-        if (!made_writable) {
-          XELOGE("NtAllocateVirtualMemory: temp RW protect failed");
-        }
+  for (const auto& [zero_address, zero_size] : zero_runs) {
+    bool made_writable = true;
+    if (!IsWritableProtect(protect)) {
+      made_writable = heap->Protect(zero_address, zero_size,
+                                    kMemoryProtectRead | kMemoryProtectWrite);
+      if (!made_writable) {
+        XELOGE("NtAllocateVirtualMemory: temp RW protect failed");
       }
-      if (made_writable && !was_commited) {
-        kernel_memory()->Zero(address, size_to_zero);
-      }
-      if (!IsWritableProtect(protect) && made_writable) {
-        if (!heap->Protect(address, size_to_zero, protect)) {
-          XELOGE("NtAllocateVirtualMemory: restore protect failed");
-        }
+    }
+    if (made_writable) {
+      kernel_memory()->Zero(zero_address, zero_size);
+    }
+    if (!IsWritableProtect(protect) && made_writable) {
+      if (!heap->Protect(zero_address, zero_size, protect)) {
+        XELOGE("NtAllocateVirtualMemory: restore protect failed");
       }
     }
   }
+  global_lock.unlock();
+  RecordVirtualMemoryEvent(address, adjusted_size, alloc_type, false);
 
   XELOGD("NtAllocateVirtualMemory = {:08X}", address);
 
@@ -333,6 +418,7 @@ dword_result_t NtFreeVirtualMemory_entry(lpdword_t base_addr_ptr,
   if (!result) {
     return X_STATUS_UNSUCCESSFUL;
   }
+  RecordVirtualMemoryEvent(base_addr_value, region_size_value, free_type, true);
 
   *base_addr_ptr = base_addr_value;
   *region_size_ptr = region_size_value;

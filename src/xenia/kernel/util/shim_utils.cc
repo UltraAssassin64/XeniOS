@@ -15,6 +15,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "xenia/base/platform.h"
@@ -123,6 +124,61 @@ std::string LogKernelCallStack(uint32_t kernel_call_frame) {
   }
   kernel_call_global.unlock();
   return kernel_call_stack;
+}
+
+void LogKernelCallStackCode(uint32_t kernel_call_lr,
+                            uint32_t kernel_call_frame) {
+  Memory* kernel_call_memory = kernel_memory();
+  auto& kernel_call_global = xe::global_critical_region::mutex();
+  if (!kernel_call_global.try_lock()) {
+    return;
+  }
+  // The caller, then each return address up the stack (as
+  // LogKernelCallStack walks it).
+  std::vector<uint32_t> kernel_call_returns = {kernel_call_lr};
+  for (uint32_t kernel_call_depth = 0; kernel_call_depth < 12;
+       ++kernel_call_depth) {
+    if (!kernel_call_frame || kernel_call_frame >= 0xF0000000u ||
+        !KernelCallReadable(kernel_call_frame, 4)) {
+      break;
+    }
+    uint32_t kernel_call_caller_frame = xe::load_and_swap<uint32_t>(
+        kernel_call_memory->TranslateVirtual(kernel_call_frame));
+    if (kernel_call_caller_frame <= kernel_call_frame ||
+        kernel_call_caller_frame >= 0xF0000000u ||
+        !KernelCallReadable(kernel_call_caller_frame - 8, 4)) {
+      break;
+    }
+    kernel_call_returns.push_back(xe::load_and_swap<uint32_t>(
+        kernel_call_memory->TranslateVirtual(kernel_call_caller_frame - 8)));
+    kernel_call_frame = kernel_call_caller_frame;
+  }
+  // 64 words before each return address and 8 after, each address once per
+  // run, so a stuck loop's condition can be disassembled from the log.
+  static std::unordered_set<uint32_t> kernel_call_code_logged;
+  for (uint32_t kernel_call_return : kernel_call_returns) {
+    const uint32_t kernel_call_code = (kernel_call_return - 0x100) & ~3u;
+    if (kernel_call_return < 0x80000000u || kernel_call_return >= 0xF0000000u ||
+        !kernel_call_code_logged.insert(kernel_call_return).second ||
+        !KernelCallReadable(kernel_call_code, 0x120)) {
+      continue;
+    }
+    for (uint32_t kernel_call_line = 0; kernel_call_line < 72;
+         kernel_call_line += 8) {
+      std::string kernel_call_words;
+      for (uint32_t kernel_call_word = kernel_call_line;
+           kernel_call_word < kernel_call_line + 8; ++kernel_call_word) {
+        kernel_call_words += fmt::format(
+            " {:08X}",
+            xe::load_and_swap<uint32_t>(kernel_call_memory->TranslateVirtual(
+                kernel_call_code + kernel_call_word * 4)));
+      }
+      XELOGW("Kernel call storm: code for {:08X} at {:08X}:{}",
+             kernel_call_return, kernel_call_code + kernel_call_line * 4,
+             kernel_call_words);
+    }
+  }
+  kernel_call_global.unlock();
 }
 
 namespace {
@@ -553,6 +609,8 @@ void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context) {
       XELOGW("Kernel call storm: guest stack{}",
              LogKernelCallStack(uint32_t(ppc_context->r[1])));
       if (kernel_call_storm_reports == 1) {
+        LogKernelCallStackCode(uint32_t(ppc_context->lr),
+                               uint32_t(ppc_context->r[1]));
         LogKernelCallThreads();
       }
     }

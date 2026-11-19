@@ -48,6 +48,7 @@
 #include "xenia/kernel/xam/xam_module.h"
 #include "xenia/kernel/xam/xdbf/spa_info.h"
 #include "xenia/kernel/xbdm/xbdm_module.h"
+#include "xenia/kernel/xboxkrnl/xboxkrnl_memory.h"
 #include "xenia/kernel/xboxkrnl/xboxkrnl_module.h"
 #include "xenia/kernel/xthread.h"
 #include "xenia/memory.h"
@@ -1797,6 +1798,41 @@ bool Emulator::ExceptionCallback(Exception* ex) {
                              crash_pc - 32 + i * 4))));
         }
         crash_msg.append("\n");
+      }
+      // Each register that points into a guest heap: its allocation, 32
+      // bytes there, and the recent virtual memory calls that covered it (a
+      // block freed, or handed out twice, while still in use).
+      for (uint32_t crash_reg = 0; crash_reg < 32; ++crash_reg) {
+        const uint32_t crash_pointer = uint32_t(context->r[crash_reg]);
+        if (crash_pointer < 0x10000 || crash_pointer >= 0xF0000000u) {
+          continue;
+        }
+        BaseHeap* crash_pointer_heap = memory_->LookupHeap(crash_pointer);
+        HeapAllocationInfo crash_pointer_info = {};
+        if (!crash_pointer_heap ||
+            !crash_pointer_heap->QueryRegionInfo(crash_pointer,
+                                                 &crash_pointer_info) ||
+            !crash_pointer_info.state) {
+          continue;
+        }
+        crash_msg.append(fmt::format(
+            "r{} {:08X}: allocation 0x{:08X} size 0x{:X} state 0x{:X} protect "
+            "0x{:X};",
+            crash_reg, crash_pointer, crash_pointer_info.allocation_base,
+            crash_pointer_info.allocation_size, crash_pointer_info.state,
+            crash_pointer_info.protect));
+        const uint32_t crash_bytes = (crash_pointer & ~3u) - 16;
+        if (kernel::shim::KernelCallReadable(crash_bytes, 32)) {
+          for (uint32_t i = 0; i < 8; ++i) {
+            crash_msg.append(fmt::format(
+                " {:08X}",
+                xe::load_and_swap<uint32_t>(
+                    memory_->TranslateVirtual(crash_bytes + i * 4))));
+          }
+        }
+        crash_msg.append(fmt::format(
+            "; history:{}\n",
+            kernel::xboxkrnl::DescribeVirtualMemoryHistory(crash_pointer)));
       }
       crash_global.unlock();
     }

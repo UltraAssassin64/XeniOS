@@ -562,6 +562,10 @@ bool KernelCallReadable(uint32_t address, uint32_t size);
 // Guest return addresses up the stack from the frame at |kernel_call_frame|
 // (a guest r1), 12 at most, each with a leading space.
 std::string LogKernelCallStack(uint32_t kernel_call_frame);
+// Logs the guest code around the caller and each return address up the stack
+// (each address once per run), for disassembling what a stuck loop waits on.
+void LogKernelCallStackCode(uint32_t kernel_call_lr,
+                            uint32_t kernel_call_frame);
 
 template <typename F, typename Tuple, std::size_t... I>
 XE_FORCEINLINE static auto KernelTrampoline(F&& f, Tuple&& t,

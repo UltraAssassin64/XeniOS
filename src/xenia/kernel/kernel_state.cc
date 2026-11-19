@@ -1213,7 +1213,18 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     has_notified_startup_ = true;
     listener->EnqueueNotification(kXNotificationSystemUI,
                                   xam_state()->IsUIActive());
-    listener->EnqueueNotification(kXNotificationSystemSignInChanged, 1);
+    // The users actually signed in (as XeniOS HEAD sends): a fixed 1 told
+    // titles that user 0 was signed in while XamUserGetSigninState(0)
+    // returned 0 (Spider-Man: Web of Shadows, before its sign-in prompt).
+    uint32_t signed_in_mask = 0;
+    for (uint32_t user_index = 0; user_index < XUserMaxUserCount;
+         ++user_index) {
+      if (xam_state()->IsUserSignedIn(user_index)) {
+        signed_in_mask |= uint32_t(1) << user_index;
+      }
+    }
+    listener->EnqueueNotification(kXNotificationSystemSignInChanged,
+                                  signed_in_mask);
   }
   if (!has_notified_live_startup_ && listener->mask() & kXNotifyLive) {
     has_notified_live_startup_ = true;

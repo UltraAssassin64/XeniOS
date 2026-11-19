@@ -10,6 +10,8 @@
 #ifndef XENIA_KERNEL_XBOXKRNL_XBOXKRNL_MEMORY_H_
 #define XENIA_KERNEL_XBOXKRNL_XBOXKRNL_MEMORY_H_
 
+#include <string>
+
 #include "xenia/kernel/util/shim_utils.h"
 #include "xenia/xbox.h"
 
@@ -55,6 +57,10 @@ uint32_t xeAllocatePoolTypeWithTag(PPCContext* context, uint32_t size,
 void xeFreePool(PPCContext* context, uint32_t base_address);
 
 uint32_t xeMmCreateKernelStack(uint32_t size, uint32_t r4);
+
+// For the crash dump: the recent NtAllocateVirtualMemory and
+// NtFreeVirtualMemory calls whose range holds the address, oldest first.
+std::string DescribeVirtualMemoryHistory(uint32_t address);
 }  // namespace xboxkrnl
 }  // namespace kernel
 }  // namespace xe
