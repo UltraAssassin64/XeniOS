@@ -11903,7 +11903,11 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
           return false;
         }
         __block BOOL cancelled = YES;
-        __block NSString* typed_text = @"";
+        // Owned (+1) once set: this file is not built with ARC, and the
+        // alert's text is autoreleased on the main thread, so without the
+        // copy it can be freed before this thread reads it (Assassin's Creed
+        // Revelations: a crash here hung its save name prompt, build 9637).
+        __block NSString* typed_text = nil;
         dispatch_semaphore_t sem = dispatch_semaphore_create(0);
         dispatch_async(dispatch_get_main_queue(), ^{
           [vc presentSystemKeyboardPromptWithTitle:ToNSString(title)
@@ -11912,14 +11916,16 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
                                         completion:^(BOOL prompt_cancelled,
                                                      NSString* prompt_text) {
                                           cancelled = prompt_cancelled;
-                                          typed_text = prompt_text ?: @"";
+                                          typed_text = [(prompt_text ?: @"") copy];
                                           dispatch_semaphore_signal(sem);
                                         }];
         });
         dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
         if (text_out) {
-          *text_out = std::string([typed_text UTF8String]);
+          const char* typed_utf8 = [typed_text UTF8String];
+          *text_out = typed_utf8 ? std::string(typed_utf8) : std::string();
         }
+        [typed_text release];
         if (cancelled_out) {
           *cancelled_out = cancelled ? true : false;
         }

@@ -1672,6 +1672,24 @@ Assassin's Creed Revelations (55530879), logs 22-06-39 and 22-27-38:
   at setup in every run, not related.
 - Next: crash dump item 1 above (guest address, page state, code at PC).
 
+Assassin's Creed Revelations on build 9637 (logs 13-05-24 debug, 13-06-55):
+new save hangs. The owner picks a new save, enters a name, and the game
+stays on the save select menu; A on a save shows no prompt again; the
+main menu still works.
+- XamShowKeyboardUI (description "ENTER NAME", default text the gamertag)
+  goes to the iOS prompt on the Kernel Dispatch thread (01000020). Right
+  after it, that thread faults in host code (pc 0x1B8E76820, an iOS system
+  library; address 0x509DE9833910, garbage) and the signal handler retries
+  it forever ("Unhandled host exception", millions of times). The prompt's
+  overlapped never completes, so the game waits on it for good.
+- Cause: windowed_app_main_ios.mm is built without ARC (it calls
+  autorelease), so the keyboard callback's `__block NSString* typed_text`
+  kept the alert's autoreleased text without retaining it; the dispatch
+  thread then sent UTF8String to a freed string (objc_msgSend on a bad
+  isa). A race: it can work when the dispatch thread reads first.
+- Fix (next build): the completion stores a copy (+1), the dispatch thread
+  reads it and releases it.
+
 Spider-Man: Web of Shadows (41560815), logs 21-59-42, 22-00-32, 22-04-43:
 - Same in all three runs, before the first frame (no swap, no draw stats):
   loader thread F8000038 logs `StfsContainerDevice::ResolvePath(\packs)`

@@ -957,6 +957,7 @@ further edits.
 | `UserApcPendingForHostWait` | function (xobject.cc) | Whether an alertable host wait should end at once for a pending guest user APC (POSIX host waits are not woken by one). | `src/xenia/kernel/xobject.cc` | 42, 442, 450, 680, 688, 722, 730 | 7 |
 | `kAlertableWaitPollIntervalIOS` | constant (iOS only) | Slice of an alertable host wait on iOS, so an APC queued by another thread is seen within 10 ms. | `src/xenia/kernel/xobject.cc` | 59, 138 | 2 |
 | `slice` | local in WaitWithTitleStopPollIOS (iOS only) | The next wait slice, capped at kAlertableWaitPollIntervalIOS for alertable waits. | `src/xenia/kernel/xobject.cc` | 136, 138, 140 | 4 |
+| `typed_utf8` | local in the keyboard prompt callback | UTF-8 of the typed text (nil-safe) before the copy is released. | `src/xenia/ui/windowed_app_main_ios.mm` | 11925, 11926 | 3 |
 ## Total references per name
 
 | Name | Total uses in project |
@@ -1641,6 +1642,7 @@ further edits.
 | `UserApcPendingForHostWait` | 7 |
 | `kAlertableWaitPollIntervalIOS` | 2 |
 | `slice` | 4 |
+| `typed_utf8` | 3 |
 
 ## Checks
 
