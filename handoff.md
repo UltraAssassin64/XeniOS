@@ -1401,6 +1401,12 @@ request and has not been confirmed to work on iOS 16.
   PA_SC_SCREEN_SCISSOR and PA_SC_WINDOW_OFFSET ("Frame detail draw N host").
   Quick check on 9628 without a new build: Settings > Performance > Limit
   Render Pass Area off should remove the box.
+- Confirmed (owner, 9628 with Limit Render Pass Area off, log 06-05-14):
+  the boxes are gone. Every pass has area 0x0, and every shadow map
+  resolve has 1.0 (FFFFFF00 in EDRAM) in its left, right and top border and
+  in the bottom border rows of the map (e.g. map 1, cleared rows 0-315: rows
+  312-315 all 1.0). The only non-1.0 rows left are those the resolve rounds
+  up past the map (316-319), which the projection never samples.
 
 Owner's decisions (2026-11-19, after 9623):
 - Include the profiling/stability tools now (crash dump, wait objects);
