@@ -3741,8 +3741,15 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
     scissor.extent[0] *= draw_resolution_scale_x;
     scissor.extent[1] *= draw_resolution_scale_y;
 
-    // Clamp scissor to actual render target bounds (Metal requires this).
-    ClampScissorToBounds(scissor, vp_width, vp_height);
+    // Clamp scissor to actual render target bounds (Metal requires this),
+    // and to a limited render area, which is the pass's size.
+    ClampScissorToBounds(scissor,
+                         current_render_area_width_
+                             ? std::min(vp_width, current_render_area_width_)
+                             : vp_width,
+                         current_render_area_height_
+                             ? std::min(vp_height, current_render_area_height_)
+                             : vp_height);
 
     MTL::Viewport mtl_viewport;
     mtl_viewport.originX = static_cast<double>(viewport_info.xy_offset[0]);
@@ -4925,6 +4932,14 @@ bool MetalCommandProcessor::IssueDrawMsl(
     uint32_t rt_height = 1;
     GetBoundRenderTargetSize(render_target_cache_.get(), render_target_width_,
                              render_target_height_, rt_width, rt_height);
+    // With a limited render area (metal_render_pass_area_from_scissor) the
+    // pass is that size, and a scissor reaching past it is invalid: on device
+    // such draws (Batman: Arkham Asylum's full-size shadow map depth clears)
+    // ended up cut to an earlier, smaller scissor.
+    if (current_render_area_width_) {
+      rt_width = std::min(rt_width, current_render_area_width_);
+      rt_height = std::min(rt_height, current_render_area_height_);
+    }
     ClampScissorToBounds(scissor, rt_width, rt_height);
 
     MTL::Viewport mtl_viewport;
@@ -4948,6 +4963,23 @@ bool MetalCommandProcessor::IssueDrawMsl(
       current_render_encoder_->setScissorRect(mtl_scissor);
       msl_scissor_ = mtl_scissor;
       msl_scissor_valid_ = true;
+    }
+    if (metal_perf_counters.frame_detail_frames.load(
+            std::memory_order_relaxed)) {
+      XELOGI(
+          "Frame detail draw {} host: viewport {} {} {}x{} z {} {}, scissor "
+          "{} {} {}x{}, render area {}x{}; PA_CL_CLIP_CNTL {:08X} "
+          "PA_CL_VTE_CNTL {:08X} PA_SC_SCREEN_SCISSOR {:08X} {:08X} "
+          "PA_SC_WINDOW_OFFSET {:08X}",
+          frame_detail_draws_ + 1, mtl_viewport.originX, mtl_viewport.originY,
+          mtl_viewport.width, mtl_viewport.height, mtl_viewport.znear,
+          mtl_viewport.zfar, mtl_scissor.x, mtl_scissor.y, mtl_scissor.width,
+          mtl_scissor.height, current_render_area_width_,
+          current_render_area_height_, regs[XE_GPU_REG_PA_CL_CLIP_CNTL],
+          regs[XE_GPU_REG_PA_CL_VTE_CNTL],
+          regs[XE_GPU_REG_PA_SC_SCREEN_SCISSOR_TL],
+          regs[XE_GPU_REG_PA_SC_SCREEN_SCISSOR_BR],
+          regs[XE_GPU_REG_PA_SC_WINDOW_OFFSET]);
     }
   }
 

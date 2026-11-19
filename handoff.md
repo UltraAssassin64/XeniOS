@@ -1375,6 +1375,33 @@ request and has not been confirmed to work on iOS 16.
 - Built as 9628 (`xenios_ios_arm64_0.2.9-9628`, commit 9c1e6c5, CI run 318
   passed), with the crash dump and wait-handle additions.
 
+### Build 9628 result (owner, log 05-54-49): shadow box cause, fix in the next build
+
+- Pass-start EDRAM probes, first shadow map (512x266, caster scissor and
+  viewport (5,5)-(507,261)): pass 10 start (after the colour-to-depth
+  transfer) has no 1.0 anywhere. Pass 11 start (after the 1x clear,
+  through the 1x->4x transfer) has 1.0 only in the clear rectangles
+  intersected with the caster rectangle: x 480-506, rows 5-260. Rows 256-265
+  of the second 1x rectangle, which are never transferred, also have 1.0
+  only for x >= 5 and rows <= 260. Pass 12 start (after the 4x clear) adds
+  1.0 from row/column 8. So the clear draws themselves are cut, before any
+  caster is drawn, although their guest scissor is the full 8192x8192 and
+  their guest viewport the full map.
+- Cause found by reading: IssueDrawMsl clamped the draw scissor only to the
+  bound render target texture (560x4688 here), while the render pass is
+  limited (metal_render_pass_area_from_scissor, on by default since 9611) to
+  560x736 (1x) and 280x512 (4x). Metal requires the scissor within the
+  render pass; the clears' scissor (560x4688, 280x2344) was invalid, and on
+  device it ended up as an earlier, smaller one. BeginCommandBuffer already
+  clamped its own scissor to the area. Matches the timeline: the box was
+  first seen in 9615, after area limiting became the default in 9611.
+- Fix (next build): the draw scissor is clamped to the render area too (MSL
+  path and the macOS MSC path). Frame detail draws also log the host
+  viewport, scissor and render area, PA_CL_CLIP_CNTL, PA_CL_VTE_CNTL,
+  PA_SC_SCREEN_SCISSOR and PA_SC_WINDOW_OFFSET ("Frame detail draw N host").
+  Quick check on 9628 without a new build: Settings > Performance > Limit
+  Render Pass Area off should remove the box.
+
 Owner's decisions (2026-11-19, after 9623):
 - Include the profiling/stability tools now (crash dump, wait objects);
   the owner sends logs of the other games when possible.
