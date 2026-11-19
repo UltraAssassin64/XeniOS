@@ -662,6 +662,14 @@ class MetalCommandProcessor : public CommandProcessor {
     bool is_float = false;
     uint32_t draw = 0;
     uint64_t submission = 0;
+    // Copies made right after the resolve, as later resolves to the same
+    // address overwrite it before its command buffer completes: the range it
+    // wrote (from written_begin), and the EDRAM tiles of the 1x depth surface
+    // it read (from edram_base_tiles).
+    MTL::Buffer* snapshot = nullptr;
+    MTL::Buffer* edram_snapshot = nullptr;
+    uint32_t edram_base_tiles = 0;
+    uint32_t edram_pitch_tiles = 0;
   };
   std::vector<MetalResolveProbe> resolve_probes_;
   std::chrono::steady_clock::time_point metal_perf_last_swap_{};

@@ -1230,6 +1230,42 @@ Owner's decisions (2026-11-19):
   and xenia-edge (`game_config_dialog_qt.cc` exists here, desktop only) for
   an existing design first (standing rule 10).
 
+### Build 9620 results (owner, zip "9620": logs 23-22-24 and 23-26-13) and the next build
+
+- Pause menu: fixed. "Wait for the GPU at Game Fences" works as intended with
+  no major FPS cost (owner). Cause confirmed.
+- First run: while shaders compile, the scene (mostly the floor) pops in and
+  out when moving, consistently in the same section (owner). Log 23-22-24:
+  draws skipped for pending compiles reach 187,571 of 285,029 in one
+  120-frame window (`compile_pending`). This is the async compile skip
+  (`metal_async_compile_wait_ms`), not the shadow or fence bugs; it belongs
+  with the performance work (persistent pipeline cache, ideas 1-3 below).
+- Shadow box, log 23-26-13 (1-frame capture): every shadow map's border reads
+  0.0 (fully shadowed) instead of the clear value 1.0, which is what the PCF
+  taps at the frustum edge sample. Shadow map 1 (draws 512-519): clear
+  viewport 512x475, depth cleared with Z=1 by a 1x rectangle list (x 480-511
+  rows 0-474, and x 0-479 rows 464-474; DEPTHCONTROL 00000076, Always +
+  write) and a 4x alias rectangle (240x232 = x 0-479 rows 0-463); casters at
+  viewport/scissor (5,5)-(507,470), DEPTHCONTROL 00700736 (LessEqual); the
+  resolve is clamped to that scissor and aligned to (0,0)-(512,472).
+  Observed: 1.0 survives only inside the caster scissor. Columns 0-4 and
+  507-511 and rows 0-4 and 470-471 are never 1.0, even where only the 1x
+  clear rectangle covered them. Where the 4x rectangle cleared, columns and
+  rows 5-7 are also lost. Not explained yet; the render pass area (32-aligned,
+  512x480 here) is not it. Caveat: the 9620 probes read memory when the
+  frame's command buffer completed, after later shadow maps (and a 352x192
+  colour resolve at draws 721-723) had overwritten 151A8000, so the maps are
+  a mix of several shadow maps. The border pattern is the same for all of
+  them.
+- Next build (frame detail log only): each depth resolve's written range is
+  copied by a blit right after the resolve (the probe reads that copy), and
+  for 1x depth surfaces so are the EDRAM tiles it read (the dumped host
+  render target). New lines: "Frame detail resolve texels" (raw depth at six
+  border/inner positions, resolved and EDRAM), and "Frame detail edram
+  edge/map" next to "resolve edge/map". If EDRAM has 1.0 in the border and the
+  resolve doesn't, the resolve is wrong; if EDRAM lacks it too, the clears or
+  the 1x/4x transfers are.
+
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 

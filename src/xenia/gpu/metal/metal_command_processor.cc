@@ -6345,6 +6345,58 @@ bool MetalCommandProcessor::IssueCopy() {
                        xenos::DepthRenderTargetFormat::kD24FS8;
       probe.draw = frame_detail_draws_;
       probe.submission = GetCurrentSubmission();
+      // The buffers are tracked, so the blit runs after the dump and resolve.
+      MTL::BlitCommandEncoder* snapshot_blit =
+          copy_command_buffer->blitCommandEncoder();
+      if (snapshot_blit && shared_memory_ && shared_memory_->GetBuffer()) {
+        probe.snapshot =
+            device_->newBuffer(written_length, MTL::ResourceStorageModeShared);
+        if (probe.snapshot) {
+          snapshot_blit->copyFromBuffer(shared_memory_->GetBuffer(),
+                                        written_address, probe.snapshot, 0,
+                                        written_length);
+        }
+        MTL::Buffer* edram = render_target_cache_->GetEdramBuffer();
+        const auto surface_info = register_file_->Get<reg::RB_SURFACE_INFO>();
+        if (edram && !probe.is_float &&
+            surface_info.msaa_samples == xenos::MsaaSamples::k1X &&
+            texture_cache_ && texture_cache_->draw_resolution_scale_x() == 1 &&
+            texture_cache_->draw_resolution_scale_y() == 1) {
+          const uint32_t tile_bytes = xenos::kEdramTileWidthSamples *
+                                      xenos::kEdramTileHeightSamples *
+                                      sizeof(uint32_t);
+          probe.edram_base_tiles =
+              register_file_->Get<reg::RB_DEPTH_INFO>().depth_base;
+          probe.edram_pitch_tiles =
+              (surface_info.surface_pitch + xenos::kEdramTileWidthSamples - 1) /
+              xenos::kEdramTileWidthSamples;
+          const uint32_t tiles = std::min(
+              probe.edram_pitch_tiles *
+                  ((probe.height + xenos::kEdramTileHeightSamples - 1) /
+                   xenos::kEdramTileHeightSamples),
+              xenos::kEdramTileCount);
+          if (tiles) {
+            probe.edram_snapshot = device_->newBuffer(
+                tiles * tile_bytes, MTL::ResourceStorageModeShared);
+          }
+          if (probe.edram_snapshot) {
+            // EDRAM addressing wraps around.
+            const uint32_t first_tiles = std::min(
+                tiles, xenos::kEdramTileCount - probe.edram_base_tiles);
+            snapshot_blit->copyFromBuffer(
+                edram, probe.edram_base_tiles * tile_bytes,
+                probe.edram_snapshot, 0, first_tiles * tile_bytes);
+            if (tiles > first_tiles) {
+              snapshot_blit->copyFromBuffer(edram, 0, probe.edram_snapshot,
+                                            first_tiles * tile_bytes,
+                                            (tiles - first_tiles) * tile_bytes);
+            }
+          }
+        }
+      }
+      if (snapshot_blit) {
+        snapshot_blit->endEncoding();
+      }
       resolve_probes_.push_back(probe);
     }
   }
@@ -6603,9 +6655,22 @@ void MetalCommandProcessor::LogResolveProbes() {
       if (probe->submission > completed) {
         ++probe;
       } else {
+        if (probe->snapshot) {
+          probe->snapshot->release();
+        }
+        if (probe->edram_snapshot) {
+          probe->edram_snapshot->release();
+        }
         probe = resolve_probes_.erase(probe);
       }
       continue;
+    }
+    // The snapshot taken right after the resolve if there is one.
+    const uint8_t* probe_memory = memory;
+    uint32_t probe_memory_base = 0;
+    if (probe->snapshot) {
+      probe_memory = static_cast<const uint8_t*>(probe->snapshot->contents());
+      probe_memory_base = probe->written_begin;
     }
     // A 16-wide grid, as many rows as keep it about square.
     const uint32_t probe_cols = 16;
@@ -6633,7 +6698,8 @@ void MetalCommandProcessor::LogResolveProbes() {
           continue;
         }
         uint32_t texel;
-        std::memcpy(&texel, memory + texel_address, sizeof(texel));
+        std::memcpy(&texel, probe_memory + (texel_address - probe_memory_base),
+                    sizeof(texel));
         const uint32_t depth24 = xenos::GpuSwap(texel, probe->endian) >> 8;
         fmt::format_to(std::back_inserter(probe_line), " {:.4f}",
                        probe->is_float ? xenos::Float20e4To32(depth24)
@@ -6655,7 +6721,8 @@ void MetalCommandProcessor::LogResolveProbes() {
           return false;
         }
         uint32_t texel;
-        std::memcpy(&texel, memory + texel_address, sizeof(texel));
+        std::memcpy(&texel, probe_memory + (texel_address - probe_memory_base),
+                    sizeof(texel));
         depth24 = xenos::GpuSwap(texel, probe->endian) >> 8;
         return true;
       };
@@ -6666,63 +6733,140 @@ void MetalCommandProcessor::LogResolveProbes() {
           written_rows = y + 1;
         }
       }
-      static const char* const kEdgeNames[] = {"left", "right", "top",
-                                               "bottom"};
-      for (uint32_t edge = 0; edge < 4 && written_rows; ++edge) {
-        std::string edge_line;
-        for (uint32_t depth_in = 0; depth_in < 8; ++depth_in) {
-          const bool vertical = edge < 2;
-          const uint32_t length = vertical ? written_rows : probe->width;
-          uint32_t not_clear = 0;
-          uint32_t min_depth24 = 0xFFFFFF;
-          for (uint32_t i = 0; i < length; ++i) {
-            uint32_t x =
-                vertical ? (edge ? probe->width - 1 - depth_in : depth_in) : i;
-            uint32_t y =
-                vertical ? i
-                         : (edge == 3 ? written_rows - 1 - depth_in : depth_in);
-            uint32_t depth24;
-            if (!read_depth24(x, y, depth24)) {
-              continue;
-            }
-            if (depth24 != 0xFFFFFF) {
-              ++not_clear;
-              min_depth24 = std::min(min_depth24, depth24);
-            }
-          }
-          fmt::format_to(std::back_inserter(edge_line), " {}/{} min {:.4f};",
-                         not_clear, length, float(min_depth24) / 16777215.0f);
+      // The EDRAM the resolve read: the dumped host render target, 1x.
+      const uint32_t edram_tile_bytes = xenos::kEdramTileWidthSamples *
+                                        xenos::kEdramTileHeightSamples *
+                                        sizeof(uint32_t);
+      auto read_edram = [&](uint32_t x, uint32_t y, uint32_t& texel) {
+        if (!probe->edram_snapshot) {
+          return false;
+        }
+        const uint32_t tile =
+            (y / xenos::kEdramTileHeightSamples) * probe->edram_pitch_tiles +
+            x / xenos::kEdramTileWidthSamples;
+        if (x >= probe->edram_pitch_tiles * xenos::kEdramTileWidthSamples ||
+            (tile + 1) * edram_tile_bytes > probe->edram_snapshot->length()) {
+          return false;
+        }
+        // Depth tiles have their 40-sample halves swapped (edram.xesli).
+        uint32_t tile_x = x % xenos::kEdramTileWidthSamples;
+        tile_x = (tile_x + xenos::kEdramTileWidthSamples / 2) %
+                 xenos::kEdramTileWidthSamples;
+        std::memcpy(
+            &texel,
+            static_cast<const uint8_t*>(probe->edram_snapshot->contents()) +
+                tile * edram_tile_bytes +
+                ((y % xenos::kEdramTileHeightSamples) *
+                     xenos::kEdramTileWidthSamples +
+                 tile_x) *
+                    sizeof(uint32_t),
+            sizeof(texel));
+        return true;
+      };
+      auto read_edram_depth24 = [&](uint32_t x, uint32_t y, uint32_t& depth24) {
+        uint32_t texel;
+        if (!read_edram(x, y, texel)) {
+          return false;
+        }
+        depth24 = texel >> 8;
+        return true;
+      };
+      if (written_rows) {
+        std::string texels_line;
+        const uint32_t positions[][2] = {{2, written_rows / 2},
+                                         {6, written_rows / 2},
+                                         {probe->width - 3, written_rows / 2},
+                                         {probe->width / 2, 2},
+                                         {probe->width / 2, 6},
+                                         {probe->width / 2, written_rows - 3}};
+        for (const auto& position : positions) {
+          uint32_t depth24 = 0, edram_texel = 0;
+          const bool in_resolve =
+              read_depth24(position[0], position[1], depth24);
+          const bool in_edram =
+              read_edram(position[0], position[1], edram_texel);
+          fmt::format_to(std::back_inserter(texels_line), " ({},{}) {} / {};",
+                         position[0], position[1],
+                         in_resolve ? fmt::format("{:06X}", depth24) : "-",
+                         in_edram ? fmt::format("{:08X}", edram_texel) : "-");
         }
         XELOGI(
-            "Frame detail resolve edge {:08X} {} (8 rows or columns in, "
-            "texels not 1.0 / all):{}",
-            probe->address, kEdgeNames[edge], edge_line);
+            "Frame detail resolve texels {:08X} (x,y depth written / EDRAM "
+            "dword read, {}):{}",
+            probe->address,
+            probe->snapshot ? "copied at the resolve" : "read at completion",
+            texels_line);
       }
-      // 8x8 blocks: '#' all 1.0, '.' none, '+' some, '-' not written.
-      for (uint32_t block_y = 0; block_y * 8 < written_rows; ++block_y) {
-        std::string map_line;
-        for (uint32_t block_x = 0; block_x * 8 < probe->width; ++block_x) {
-          uint32_t clear = 0;
-          uint32_t written = 0;
-          for (uint32_t y = block_y * 8;
-               y < std::min(block_y * 8 + 8, written_rows); ++y) {
-            for (uint32_t x = block_x * 8;
-                 x < std::min(block_x * 8 + 8, probe->width); ++x) {
+      static const char* const kEdgeNames[] = {"left", "right", "top",
+                                               "bottom"};
+      auto log_coverage = [&](const char* source, const auto& read) {
+        for (uint32_t edge = 0; edge < 4 && written_rows; ++edge) {
+          std::string edge_line;
+          for (uint32_t depth_in = 0; depth_in < 8; ++depth_in) {
+            const bool vertical = edge < 2;
+            const uint32_t length = vertical ? written_rows : probe->width;
+            uint32_t not_clear = 0;
+            uint32_t min_depth24 = 0xFFFFFF;
+            for (uint32_t i = 0; i < length; ++i) {
+              uint32_t x = vertical
+                               ? (edge ? probe->width - 1 - depth_in : depth_in)
+                               : i;
+              uint32_t y = vertical ? i
+                                    : (edge == 3 ? written_rows - 1 - depth_in
+                                                 : depth_in);
               uint32_t depth24;
-              if (read_depth24(x, y, depth24)) {
-                ++written;
-                clear += depth24 == 0xFFFFFF;
+              if (!read(x, y, depth24)) {
+                continue;
+              }
+              if (depth24 != 0xFFFFFF) {
+                ++not_clear;
+                min_depth24 = std::min(min_depth24, depth24);
               }
             }
+            fmt::format_to(std::back_inserter(edge_line), " {}/{} min {:.4f};",
+                           not_clear, length, float(min_depth24) / 16777215.0f);
           }
-          map_line += !written           ? '-'
-                      : clear == written ? '#'
-                      : !clear           ? '.'
-                                         : '+';
+          XELOGI(
+              "Frame detail {} edge {:08X} {} (8 rows or columns in, texels "
+              "not 1.0 / all):{}",
+              source, probe->address, kEdgeNames[edge], edge_line);
         }
-        XELOGI("Frame detail resolve map {:08X} y {}: {}", probe->address,
-               block_y * 8, map_line);
+        // 8x8 blocks: '#' all 1.0, '.' none, '+' some, '-' not written.
+        for (uint32_t block_y = 0; block_y * 8 < written_rows; ++block_y) {
+          std::string map_line;
+          for (uint32_t block_x = 0; block_x * 8 < probe->width; ++block_x) {
+            uint32_t clear = 0;
+            uint32_t written = 0;
+            for (uint32_t y = block_y * 8;
+                 y < std::min(block_y * 8 + 8, written_rows); ++y) {
+              for (uint32_t x = block_x * 8;
+                   x < std::min(block_x * 8 + 8, probe->width); ++x) {
+                uint32_t depth24;
+                if (read(x, y, depth24)) {
+                  ++written;
+                  clear += depth24 == 0xFFFFFF;
+                }
+              }
+            }
+            map_line += !written           ? '-'
+                        : clear == written ? '#'
+                        : !clear           ? '.'
+                                           : '+';
+          }
+          XELOGI("Frame detail {} map {:08X} y {}: {}", source, probe->address,
+                 block_y * 8, map_line);
+        }
+      };
+      log_coverage("resolve", read_depth24);
+      if (probe->edram_snapshot) {
+        log_coverage("edram", read_edram_depth24);
       }
+    }
+    if (probe->snapshot) {
+      probe->snapshot->release();
+    }
+    if (probe->edram_snapshot) {
+      probe->edram_snapshot->release();
     }
     probe = resolve_probes_.erase(probe);
   }
