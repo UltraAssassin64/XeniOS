@@ -1207,6 +1207,23 @@ Pause menu corruption, cause found by reading (not yet confirmed on device):
 Settings: "Frame Capture" is now the first section (Frame Detail Log); saving
 when only it changed closes Settings without the "Settings Saved" alert.
 
+Owner's decisions (2026-11-19):
+- Real Occlusion Queries stay off by default (`occlusion_query_enable =
+  false`), like XeniOS's fake default, even though they fix Batman's
+  cutscene-to-gameplay transition; the owner turns them on per game.
+- Order of work: finish Batman: Arkham Asylum's accuracy issues (shadow box,
+  pause-menu corruption), then its performance (without giving up accuracy),
+  then other games with different issues.
+- Before other games: per-game config.toml files. The loading side exists:
+  `config::LoadGameConfigForFile` (`src/xenia/config.cc`, called from
+  `xenia_main_ios.mm` at launch) overlays
+  `<config folder>/config/<TITLE ID>.config.toml` on the main config. Missing
+  on iOS: a way to create and edit it (likely an entry in the game's
+  long-press menu, opening the settings screen against that file, and a
+  marker in the settings for values the game overrides). Check XeniOS HEAD
+  and xenia-edge (`game_config_dialog_qt.cc` exists here, desktop only) for
+  an existing design first (standing rule 10).
+
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 
