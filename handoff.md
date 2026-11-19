@@ -1339,6 +1339,45 @@ request and has not been confirmed to work on iOS 16.
 - `SPIRV-Cross: uniforms pool busy; waiting for an in-flight command buffer to
   retire` appears repeatedly: the CPU is blocking on the GPU.
 
+## Profiler and stability tools (owner's request 2026-11-19, outline only)
+
+Owner: two other games are unstable, one with an access violation, one stuck
+in an endless load (unrelated to Batman). Wanted: a profiler to run with the
+emulator that points at what needs work.
+
+Already in this branch: perf lines every 120 frames (frame times, GPU busy,
+CPU waits on the GPU, compiles, memory, thermal state, CPU share per
+thread), GPU time per pass and compile stalls, Frame Detail Log, kernel call
+repeat detector (`kernel_call_repeat_threshold`, with a report of every guest
+thread), guest crash dump (`Emulator::ExceptionCallback`: guest PC, fault
+address, registers). Gaps: the crash dump has no guest call stack
+(`stack_walker_posix.cc` is unimplemented, also upstream), no module or
+function context, no recent kernel calls; loops that make no kernel calls
+are invisible; nothing shows which guest code burns CPU.
+
+Upstream: MicroProfile zones (`XENIA_ENABLE_PROFILER`, off by default,
+covers host code only); a crash reporter extension (iOS 27, unusable here)
+and `ios_diagnostics*`, which upload to an endpoint (not wanted).
+
+Proposed, in this order:
+1. Crash report: guest back chain walk from r1/LR in guest memory
+   (function start, module and offset per frame), the thread's last kernel
+   calls (the repeat detector already keeps 8), the fault address's region
+   (heap, committed, protection), guest code words around the PC; host
+   backtrace for host-side faults.
+2. Hang report (watchdog): no guest swap for N seconds, or the owner taps a
+   button, then dump every guest thread: what it waits on (object, critical
+   section owner), last kernel call, sampled guest PCs.
+3. Sampling profiler: a host thread suspends each guest thread at ~1 kHz
+   (`thread_suspend`/`thread_get_state`), maps the host PC through the code
+   cache (`LookupFunction`, `MapMachineCodeToGuestAddress`, as the crash
+   dump does) to a guest function, and also counts host-side time
+   (kernel exports, GPU command processor, audio). Report every N seconds:
+   top guest functions and host areas per thread. The same sampler finds
+   the hot loop in item 2.
+4. Settings: a "Diagnostics" toggle for each, writing to the log, and
+   later per game (per-game config).
+
 ## Owed from the original request
 
 - **Reduce CPU calls scheduling the GPU.** Nothing has been changed yet.
