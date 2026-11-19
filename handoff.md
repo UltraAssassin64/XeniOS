@@ -1383,6 +1383,28 @@ Owner's decisions (2026-11-19, after 9623):
   performance and to avoid issues with effects such as the rain and
   detective mode. Goal: the intro from ~20 FPS to 28-30 FPS.
 
+### Async shader compilation backport: first scoping (2026-11-19)
+
+- spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own
+  bitcode and metallib) targets Metal 3.1 with AIR 2.6+ and floors iOS at 18
+  (AIR 2.7, `air64_v27-apple-ios18.0.0`); requests for older iOS are raised to
+  18 (docs/air.md "Platforms"). iOS 16 has Metal 3.0 (AIR 2.5), so its
+  libraries most likely will not load as they are. Needed: an AIR 2.5 /
+  Metal 3.0 output mode (header fields, triple, `air.version`, language
+  version) and a device test that `newLibraryWithData` accepts it, plus a
+  check that no 3.1-only intrinsic is emitted.
+- The Metal Shader Converter fallback needs Apple's iPhoneOS
+  libmetalirconverter (`cmake/ios/ShaderConverter.cmake`); this repo has only
+  the headers and CI has the copy step commented out.
+- The library cache and the VS interpreter stand-ins are tied to that path
+  (`UseDxilPath()`), with its binding layout.
+- Steady state is not compile-bound: in 9623's gameplay windows the frame is
+  ~40 ms with the GPU busy 110%, no compiles, and per frame ~31 ms of GPU in
+  render target transfers (67 passes, ~213 MB loaded and stored) against
+  ~17 ms of draws. The async path mainly removes the first-run popping and
+  hitches; the path to 28-30 FPS is cutting transfers (shadow loop 1x/4x
+  aliasing and colour-to-depth, predicated tiling) and attachment traffic.
+
 ## Profiler and stability tools (owner's request 2026-11-19, outline only)
 
 Owner: two other games are unstable, one with an access violation, one stuck
