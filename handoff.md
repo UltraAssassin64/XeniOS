@@ -1410,6 +1410,48 @@ request and has not been confirmed to work on iOS 16.
 - The fix is build 9632 (`xenios_ios_arm64_0.2.9-9632`, commit d280cd6, CI
   run 319); to check with Limit Render Pass Area back on.
 
+### Build 9632 results: shadow box fixed; performance, first round
+
+Owner: the box is gone with Limit Render Pass Area on; everything works.
+Shadow box closed. On to performance. Owner: 15-19 FPS looking at NPCs,
+24-25 FPS turning about 180 degrees away.
+
+Logs 06-24-31 and 06-29-19 (gameplay windows of 120 guest frames):
+- Two regimes. Facing NPCs: ~3,300 draws and ~2.75M vertices per frame,
+  frame 46-48 ms (some windows 54-62 ms). Facing away: ~750 draws and
+  ~0.7M vertices, 42-45 ms. Render target transfers are the same in both
+  (~67-69 passes, ~34 ms of pass time per frame, ~190-220 MB loaded and
+  stored); draw passes 21-22 ms vs 18-19 ms (vertex 5.8 vs 2.3 ms). Pass
+  times overlap on the GPU (they add up to 60-70 ms in a 45 ms frame).
+- Guest thread F8000078 (XThreadC20B, the game's render thread) uses
+  99-100% of a core in every window. Facing away most of its samples sit at
+  82A23160 (a wait loop): the frame is GPU-bound there. Facing NPCs its
+  samples are spread over real work (8230B3D0, 82309CC0, 822FD...): the
+  frame is CPU-bound on that thread's JIT code. GPU Commands goes from
+  ~31% to ~55-59% of a core.
+- Menus and idle scenes run at exactly 35.2 ms per frame, not 33.3: off
+  Windows the frame limiter slept a full 16.67 ms after each vblank, so
+  every vblank came ~0.9 ms late (60 Hz became ~57 Hz, Batman's 30 FPS cap
+  28.4 FPS).
+
+Changes for the next build:
+- Vblank pacing ported from XeniOS: vblanks at fixed guest-time deadlines,
+  `threading::DeadlineSleep` (mach_wait_until on Apple) to the next one.
+  D1MODE_V_COUNTER still advances once per vblank. Expect menus at 33.3 ms.
+- Context promotion ported from XeniOS (`ContextPromotionPass`, range-keyed
+  tracking, `context_promote_vec128`, default on as upstream): vector
+  registers stay in host registers within a block; dead context stores are
+  removed by byte range, loads that survive keep earlier stores, and GPR
+  stores before guest memory accesses are kept. This branch had disabled
+  VEC128 promotion after the "no 3D models" NaN bug (see the section near
+  the top); the old pass tracked values by base offset only, an aliasing
+  hazard the new one fixes, but whether that was the cause is not proven.
+  Settings > Performance > Keep Vector Registers in CPU turns it off
+  (applies to code compiled afterwards; restart the game). Check the title
+  screen's 3D models and gameplay first.
+- Next after this: the render thread's hot functions (longer sampling), and
+  the GPU's render target transfers.
+
 Owner's decisions (2026-11-19, after 9623):
 - Include the profiling/stability tools now (crash dump, wait objects);
   the owner sends logs of the other games when possible.

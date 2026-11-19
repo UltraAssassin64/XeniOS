@@ -3585,6 +3585,14 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "memory between render targets (one draw instead of ten). Turn off if "
                  "shadows, decals or masked effects look wrong.",
                  true);
+  AddBoolSetting(performance.items, "context_promote_vec128", "Keep Vector Registers in CPU",
+                 "Lets the recompiler keep the Xbox 360's vector registers in host "
+                 "registers between instructions instead of storing and reloading them "
+                 "every time, which speeds up games' math-heavy code (rendering threads "
+                 "with many characters on screen). Turn off if models disappear or "
+                 "geometry goes wrong; applies to code compiled after the change, so "
+                 "restart the game.",
+                 true);
   AddBoolSetting(performance.items, "metal_render_pass_area_from_scissor", "Limit Render Pass Area",
                  "Each draw and render target copy pass only loads and stores the part of "
                  "the render target it touches, instead of the whole 1280x2048 surface, "

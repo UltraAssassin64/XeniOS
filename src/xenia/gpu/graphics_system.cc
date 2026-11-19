@@ -173,13 +173,6 @@ X_STATUS GraphicsSystem::Setup(cpu::Processor* processor,
           kernel_state_, 128 * 1024, 0,
           [this]() {
             uint64_t last_frame_time = Clock::QueryGuestTickCount();
-    // Sleep for 90% of the vblank duration on Windows, spin for 10%
-    // Linux uses full sleep duration due to scheduler quantum issues
-#if XE_PLATFORM_WIN32
-            constexpr double duration_scalar = 0.90;
-#else
-            constexpr double duration_scalar = 1.0;
-#endif
 
             while (frame_limiter_worker_running_) {
               // Read guest_display_refresh_cap cvar each frame to allow
@@ -190,18 +183,12 @@ X_STATUS GraphicsSystem::Setup(cpu::Processor* processor,
               // host presentation throttling
               bool refresh_cap_enabled = cvars::guest_display_refresh_cap;
 
-              register_file()->values[XE_GPU_REG_D1MODE_V_COUNTER] +=
-                  GetInternalDisplayResolution().second;
-
               if (refresh_cap_enabled) {
-                // Fixed vblank rate mode
+                // Vblanks at fixed guest-time deadlines, as in XeniOS: a late
+                // wake-up shortens the next sleep instead of stretching the
+                // period (a plain sleep per vblank made 60 Hz about 57 Hz on
+                // iOS, and a 30 FPS game 28.4 FPS).
                 const uint32_t vblank_hz = GetGuestVblankRateHz();
-                const uint64_t sleep_ns = static_cast<uint64_t>(
-                    (1000000000.0 / static_cast<double>(vblank_hz)) *
-                    duration_scalar);
-
-#if XE_PLATFORM_WIN32
-                // Windows: time-gating + 90% sleep + 10% spin
                 const uint64_t tick_freq = Clock::guest_tick_frequency();
                 const uint64_t target_duration_ticks = tick_freq / vblank_hz;
                 const uint64_t current_time = Clock::QueryGuestTickCount();
@@ -214,18 +201,32 @@ X_STATUS GraphicsSystem::Setup(cpu::Processor* processor,
                   } else {
                     last_frame_time += target_duration_ticks;
                   }
+                  register_file()->values[XE_GPU_REG_D1MODE_V_COUNTER] +=
+                      GetInternalDisplayResolution().second;
                   MarkVblank();
+#if XE_PLATFORM_WIN32
+                  // Sleep for 90% of the period, spin for the rest.
+                  const uint64_t sleep_ns = static_cast<uint64_t>(
+                      900000000.0 / (vblank_hz * Clock::guest_time_scalar()));
                   threading::NanoSleep(sleep_ns);
+#endif
                 }
-#else
-                // Linux: simplified timing to avoid oversleeping
-                MarkVblank();
-                threading::NanoSleep(sleep_ns);
+#if !XE_PLATFORM_WIN32
+                else {
+                  // Sleep to the deadline.
+                  double sleep_ns = (target_duration_ticks - time_delta) *
+                                    1000000000.0 /
+                                    (tick_freq * Clock::guest_time_scalar());
+                  threading::DeadlineSleep(std::chrono::microseconds(
+                      static_cast<int64_t>(sleep_ns / 1000.0)));
+                }
 #endif
               } else {
                 // Unlimited mode (vsync=false) - fire vblanks as fast as
                 // possible Host presentation is separately throttled by
                 // framerate_limit
+                register_file()->values[XE_GPU_REG_D1MODE_V_COUNTER] +=
+                    GetInternalDisplayResolution().second;
                 MarkVblank();
                 threading::Sleep(std::chrono::milliseconds(1));
               }

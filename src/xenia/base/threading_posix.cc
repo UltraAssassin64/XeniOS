@@ -30,6 +30,7 @@
 
 #if XE_PLATFORM_APPLE
 #include <mach/mach.h>
+#include <mach/mach_time.h>
 #include <mach/thread_switch.h>
 #include <pthread/qos.h>
 #endif
@@ -221,6 +222,30 @@ void Sleep(std::chrono::microseconds duration) {
 }
 
 void NanoSleep(int64_t duration) { Sleep(std::chrono::nanoseconds(duration)); }
+
+void DeadlineSleep(std::chrono::microseconds duration) {
+#if XE_PLATFORM_APPLE
+  if (duration.count() <= 0) {
+    return;
+  }
+  static const mach_timebase_info_data_t tb = [] {
+    mach_timebase_info_data_t i;
+    mach_timebase_info(&i);
+    return i;
+  }();
+  const uint64_t deadline =
+      mach_absolute_time() +
+      static_cast<uint64_t>(
+          (static_cast<__uint128_t>(duration.count()) * 1000 * tb.denom) /
+          tb.numer);
+  // An aborted wait is resumed until the deadline, as SleepFor resumes an
+  // interrupted nanosleep.
+  while (mach_wait_until(deadline) == KERN_ABORTED) {
+  }
+#else
+  Sleep(duration);
+#endif
+}
 
 // TODO(bwrsandman) Implement by allowing alert interrupts from IO operations
 thread_local bool alertable_state_ = false;
