@@ -1708,6 +1708,10 @@ which was signaled ~96,000 times before sign-in and never after.
   is waiting for. Disassembler: capstone (PPC 32-bit big endian) in the
   session scratchpad's pylib.
 
+Built as 9644 (`xenios_ios_arm64_0.2.9-9644`, commit 6f71b9bd8, CI run 327):
+the commit zeroing fix, the crash dump pointer details, the storm code dump
+and the startup sign-in mask.
+
 Batman: two traces (15-50-11, 15-53-37), 4 frames each (~3,550 draws and
 27-32 resolves per frame). Offline tools in the session scratchpad (not in
 the repository): tools/xtr_parse.py (trace -> per-draw register JSONL, with
