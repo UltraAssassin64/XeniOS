@@ -100,6 +100,14 @@ dword_result_t XamUserGetSigninState_entry(dword_t user_index) {
         kernel_state()->xam_state()->GetUserProfile(user_index);
     signin_state = user_profile->signin_state();
   }
+  // The call is too frequent to log; log what it returns when that changes.
+  static uint32_t signin_state_logged[XUserMaxUserCount] = {
+      UINT32_MAX, UINT32_MAX, UINT32_MAX, UINT32_MAX};
+  if (signin_state_logged[user_index] != signin_state) {
+    signin_state_logged[user_index] = signin_state;
+    XELOGI("XamUserGetSigninState({}) now returns {}", uint32_t(user_index),
+           signin_state);
+  }
   return signin_state;
 }
 DECLARE_XAM_EXPORT2(XamUserGetSigninState, kUserProfiles, kImplemented,

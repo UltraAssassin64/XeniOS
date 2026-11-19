@@ -480,6 +480,12 @@ class MetalCommandProcessor : public CommandProcessor {
     uint64_t ticket = 0;
     // The count written at its end.
     uint32_t guess = 0;
+    // Its place among the frame's query ends, and what the last count at its
+    // address and at its place predicted (UINT32_MAX: no count at that place
+    // yet), to keep whichever has been closer (zpd_ordinal_score_).
+    uint32_t ordinal = 0;
+    uint32_t address_guess = 0;
+    uint32_t ordinal_guess = UINT32_MAX;
     // A draw was skipped for a pending compile or found no slot: keep guess.
     bool inexact = false;
     // {index, generation} of each slot.
@@ -498,6 +504,15 @@ class MetalCommandProcessor : public CommandProcessor {
   // Per guest report address: {last count, ticket of its latest query}.
   std::unordered_map<uint32_t, std::pair<uint32_t, uint64_t>>
       zpd_results_by_address_;
+  // Games that take their queries' reports from a rotating pool (Assassin's
+  // Creed Revelations) put a different object's query at an address each
+  // frame, so the address's last count is the wrong guess; the query's place
+  // in the frame is then the steady key. Query ends since the last swap, the
+  // last count per place (UINT32_MAX: none), and which guess has been closer
+  // lately (above 0: by place).
+  uint32_t zpd_frame_query_ends_ = 0;
+  std::vector<uint32_t> zpd_results_by_ordinal_;
+  int32_t zpd_ordinal_score_ = 0;
   NS::AutoreleasePool* command_buffer_autorelease_pool_ = nullptr;
 
   // Tracks resources marked via useResource for the current render encoder

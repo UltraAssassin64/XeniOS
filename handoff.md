@@ -1569,6 +1569,67 @@ Changes for the next build:
   runs 322 and 323 were cancelled while queued so one build carries all
   three changes).
 
+### Build 9640 results (owner, zip "All_logs": 3 Batman, 3 Spider-Man, 1 AC)
+
+Batman (logs 13-50-39 and 13-53-37 skip off, 13-56-00 skip on; all with
+vector promotion and real occlusion queries; thermal state 1):
+- Owner: nothing broken, feels the same. Facing NPCs ~46-49 ms (20-22 FPS),
+  away ~43-44 ms; the skip-on run's last windows were worse (55-60 ms, rtx
+  40-45 ms, 1.7 GB per frame) in what looks like another part of the room.
+- skip_unchanged_render_target_transfers: about 1 range per frame went back
+  unchanged (120 per 120 frames), not 12. It does not help Batman; leave it
+  off.
+- Why, from the 9632 frame detail log (06-29-19): per light, UE3 draws (1)
+  1x depth-only: the light volume with stencil (zfail incr/decr wrap, no
+  depth write), (2) 1x color: the light with a stencil test, (3) after a
+  1x->4x transfer of the main depth, one full-screen triangle on the
+  640x384 4x alias with z off, stencil ALWAYS/REPLACE ref 0: a stencil
+  clear at a quarter of the pixels, then (4) a 4x->1x transfer back. The
+  4x pass writes stencil, so the range is not unchanged; depth is. The
+  same goes for the shadow depth at 1440t. Main-depth round trips cost
+  ~8-11.5 ms (to 4x) + ~5-9 ms (back) of pass time per frame.
+- What could still help: a stencil-only transfer back when the depth is
+  unchanged (like XeniOS HEAD's KeepDepthOfStencilRoundTrips, which covers
+  a depth -> 8_8_8_8 -> depth round trip): maybe 2-4 ms of pass time.
+  Turning the whole round trip into a stencil clear of the 1x target would
+  save more but needs knowing the 4x pass is only that draw. XeniOS HEAD's
+  render target cache also has ElideRedundantTransfers (same idea as the
+  skip), deferred clears, DontCare loads for pending passes, memoryless
+  transient targets and direct resolve refreshes; ours has none of them.
+
+Spider-Man (13-59-31, 14-00-51, 14-13-11 debug):
+- The APC fix works: the loader reads game.XEPACK and many more packs
+  (Q07, P19, P18, P20, P05...), past Press Start and the sign-in prompt.
+- Then the game sits on a loading screen at 30 FPS (~105 draws per frame,
+  music streaming from SOUNDSRC_RVB.PCK on F800005C) and later shows
+  "Please Wait". After XamShowSigninUI it only reads profile settings and
+  sets two contexts; no XamContent*, no XamShowDeviceSelectorUI, no
+  XamTaskSchedule. Game Master (F8000008) sleeps in a job wait
+  (KeDelayExecutionThread at 82B1A684, stack 829635F0 82963664 82962E30
+  8292FF54 829168A8 822ED134 8290B4D4); JQ worker 1 (F8000018) renders
+  (spins in D3D at 82AC0C10 between frames); the loader waits for work.
+- The upstream compatibility report (xenia-project/game-compatibility
+  #916, state-playable) has "endless loadings" fixed on Canary by enabling
+  VSync; guest_display_refresh_cap is already true here.
+- Next build logs, at info level, every notification the game takes
+  (XNotifyGetNext) and each change in what XamUserGetSigninState returns,
+  the two high-frequency calls a title polls while it waits.
+
+Assassin's Creed Revelations (14-01-51, debug and frame detail):
+- The save fix works: the name prompt returned, XamContentCreateEx and
+  XamContentClose ran for the new save, no host exception.
+- Flicker: the game ends 5 occlusion queries per frame (counts 230400,
+  71489, ~199000, 921600, ~36100: sizes such as 1280x720 and 190x190, a
+  sun or glare test). The guess written at a query's end was the last
+  count at the same address, but the game takes its reports from a
+  rotating pool, so an address often held another query last time: one
+  frame guessed 36100 for a query that counted 198944. If the game reads
+  the report before the correction, the effect flickers.
+- Next build: a second guess, the last count at the same place among the
+  frame's query ends (zpd_results_by_ordinal_), used when it has been the
+  closer of the two lately (zpd_ordinal_score_). The occlusion perf line
+  says which guess is in use; frame detail shows both.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

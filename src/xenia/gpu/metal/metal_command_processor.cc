@@ -2792,6 +2792,7 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
   }
   frame_detail_passes_ = 0;
   frame_detail_draws_ = 0;
+  zpd_frame_query_ends_ = 0;
   frame_detail_stats_ = draw_stats_;
   // Host time between guest swaps, for the perf line below.
   const auto metal_perf_swap_time = std::chrono::steady_clock::now();
@@ -2939,13 +2940,15 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
             "Metal occlusion queries over {} frames: {} counted ({} with no "
             "samples), {} guesses corrected, {} left as guesses (draws "
             "skipped for compiles, or no free slot), {} draw passes restarted "
-            "to count, {} in flight",
+            "to count, {} in flight; guessing by {} (score {})",
             draw_stats_.frames, take(metal_perf_counters.zpd_queries_measured),
             take(metal_perf_counters.zpd_queries_hidden),
             take(metal_perf_counters.zpd_queries_corrected),
             take(metal_perf_counters.zpd_queries_guessed),
             take(metal_perf_counters.zpd_pass_restarts),
-            zpd_queries_in_flight_.size());
+            zpd_queries_in_flight_.size(),
+            zpd_ordinal_score_ > 0 ? "place in the frame" : "address",
+            zpd_ordinal_score_);
       }
     }
     metal_gpu_pass_timer.Log(draw_stats_.frames, metal_perf_window_us);
@@ -7016,17 +7019,31 @@ bool MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(uint32_t packet,
   query.address = sample_count_addr;
   query.ticket = ++zpd_query_ends_;
   address_result.second = query.ticket;
+  query.ordinal = zpd_frame_query_ends_++;
+  if (query.ordinal >= zpd_results_by_ordinal_.size() && query.ordinal < 4096) {
+    zpd_results_by_ordinal_.resize(query.ordinal + 1, UINT32_MAX);
+  }
   uint32_t samples = 0;
   if (query.slots.empty() && !query.inexact) {
     // Nothing was drawn: no samples, known now.
     address_result.first = 0;
+    if (query.ordinal < zpd_results_by_ordinal_.size()) {
+      zpd_results_by_ordinal_[query.ordinal] = 0;
+    }
     metal_perf_counters.zpd_queries_measured.fetch_add(
         1, std::memory_order_relaxed);
     metal_perf_counters.zpd_queries_hidden.fetch_add(1,
                                                      std::memory_order_relaxed);
   } else {
-    // Unknown until the GPU is done: guess the last count here, or visible.
-    samples = std::max<uint32_t>(address_result.first, 1);
+    // Unknown until the GPU is done: guess the last count at this address,
+    // or at this place in the frame if that has been closer, or visible.
+    query.address_guess = std::max<uint32_t>(address_result.first, 1);
+    if (query.ordinal < zpd_results_by_ordinal_.size()) {
+      query.ordinal_guess = zpd_results_by_ordinal_[query.ordinal];
+    }
+    samples = zpd_ordinal_score_ > 0 && query.ordinal_guess != UINT32_MAX
+                  ? std::max<uint32_t>(query.ordinal_guess, 1)
+                  : query.address_guess;
     query.guess = samples;
     query.submission = submission_current_;
     zpd_queries_in_flight_.push_back(std::move(query));
@@ -7092,6 +7109,23 @@ void MetalCommandProcessor::ProcessCompletedZPDQueries() {
         metal_perf_counters.zpd_queries_hidden.fetch_add(
             1, std::memory_order_relaxed);
       }
+      if (query.ordinal_guess != UINT32_MAX) {
+        // Score the two guesses against the count, within -8...8.
+        auto miss = [count](uint32_t guess) {
+          return guess > count ? guess - count : count - guess;
+        };
+        const uint32_t ordinal_miss =
+            miss(std::max<uint32_t>(query.ordinal_guess, 1));
+        const uint32_t address_miss = miss(query.address_guess);
+        if (ordinal_miss < address_miss) {
+          zpd_ordinal_score_ = std::min(zpd_ordinal_score_ + 1, 8);
+        } else if (address_miss < ordinal_miss) {
+          zpd_ordinal_score_ = std::max(zpd_ordinal_score_ - 1, -8);
+        }
+      }
+      if (query.ordinal < zpd_results_by_ordinal_.size()) {
+        zpd_results_by_ordinal_[query.ordinal] = count;
+      }
       auto address_result = zpd_results_by_address_.find(query.address);
       if (address_result != zpd_results_by_address_.end()) {
         address_result->second.first = count;
@@ -7111,8 +7145,12 @@ void MetalCommandProcessor::ProcessCompletedZPDQueries() {
         }
         if (metal_perf_counters.frame_detail_frames.load(
                 std::memory_order_relaxed)) {
-          XELOGI("Frame detail query at {:08X} counted {} (guessed {})",
-                 query.address, count, query.guess);
+          XELOGI(
+              "Frame detail query at {:08X} counted {} (guessed {}; query {} "
+              "of the frame, by address {}, by place {}, score {})",
+              query.address, count, query.guess, query.ordinal,
+              query.address_guess, int64_t(int32_t(query.ordinal_guess)),
+              zpd_ordinal_score_);
         }
       }
     }
