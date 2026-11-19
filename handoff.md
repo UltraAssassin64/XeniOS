@@ -1372,6 +1372,8 @@ request and has not been confirmed to work on iOS 16.
   plus its request queue. Likely cause: a completion routine that never runs.
   Next build logs every async NtReadFile/NtReadFileScatter at debug level
   (event, APC, context, offset, length, status, bytes) to confirm.
+- Built as 9628 (`xenios_ios_arm64_0.2.9-9628`, commit 9c1e6c5, CI run 318
+  passed), with the crash dump and wait-handle additions.
 
 Owner's decisions (2026-11-19, after 9623):
 - Include the profiling/stability tools now (crash dump, wait objects);
