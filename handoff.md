@@ -1129,6 +1129,11 @@ almost black.
   positions. All APIs are iOS 11+. Startup line: "MetalRenderTargetCache:
   programmable sample positions supported; Xenos MSAA sample positions
   used".
+- Build #9618 (`xenios_ios_arm64_0.2.9-9618`, 10592e38, run 44436797777)
+  built on the first attempt and has the fix. Not yet run on device; test
+  plan given: the startup line above, Batman's knees on save select and
+  close-ups in gameplay with the setting on and off (it applies at once),
+  and a shadow's box with it on.
 - Queries on (19-20-16): 10,000-12,000 queries per 120 frames, about 60%
   with no samples; gameplay frames 51-58 ms against 44-50 ms in the other
   runs (one run each, not conclusive).
