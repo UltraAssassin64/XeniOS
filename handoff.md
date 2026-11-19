@@ -1400,6 +1400,29 @@ Owner's decisions (2026-11-19, after 9623):
   the headers and CI has the copy step commented out.
 - The library cache and the VS interpreter stand-ins are tied to that path
   (`UseDxilPath()`), with its binding layout.
+- spirv2air's target is set in a few places: `mtlb::air_version` and
+  `make_target` (src/metallib/metallib.cpp, floor iOS 18), `Version
+  language{3, 1}` (metallib.h), and `air.version`/`air.language_version`
+  metadata (translate.cpp 1397-1434, airkit.cpp 523). An iOS 16 mode (AIR
+  2.5, Metal 3.0, file version 2.6, triple `air64_v25-apple-ios16.0.0`) is a
+  small patch; whether iOS 16's GPU compiler accepts the emitted IR (LLVM 13
+  layout bitcode, Metal 3.1 era intrinsics; 32-bit atomics are noted as
+  relaxed-only per Metal 3.1) can only be tested on the device. It needs
+  CommonCrypto (SHA-256 of the bitcode), which iOS has.
+- Size of the port: XeniOS HEAD's Metal backend has diverged a lot from this
+  branch. Files only upstream: dxil_shader, metal_dxil_binder,
+  metal_shader_library_cache, metal_pipeline_archive, metal_buffer_hazards,
+  metal_compile_activity, metal_upload_cache, metal_transfer_spirv_cross,
+  metal_tessellation_shaders, ir_runtime_impl.cc, shader_cache_version.cmake,
+  CMake build files (this branch builds the Metal backend with premake).
+  Headers: metal_command_processor.h 1929 lines upstream vs 985 here,
+  metal_render_target_cache.h 1314 vs 549, metal_texture_cache.h 584 vs 282.
+  So "the async compile backport" is close to adopting upstream's Metal
+  backend, not a contained change.
+- Suggested first step: a probe build that links spirv2air with an iOS 16
+  mode, translates one of our SPIR-V shaders at launch, loads the metallib
+  (`newLibraryWithData`) and creates a pipeline, and logs each step. Only
+  if that works does the port make sense.
 - Steady state is not compile-bound: in 9623's gameplay windows the frame is
   ~40 ms with the GPU busy 110%, no compiles, and per frame ~31 ms of GPU in
   render target transfers (67 passes, ~213 MB loaded and stored) against
