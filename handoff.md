@@ -1451,6 +1451,10 @@ Changes for the next build:
   screen's 3D models and gameplay first.
 - Next after this: the render thread's hot functions (longer sampling), and
   the GPU's render target transfers.
+- Built as 9635.2 (`xenios_ios_arm64_0.2.9-9635.2`, commit cf82827, CI run
+  320 attempt 2; attempt 1's iOS job was cancelled after 15 minutes without
+  a runner). This workflow has no CPU test job, so the new pass is only
+  checked on the device.
 
 Owner's decisions (2026-11-19, after 9623):
 - Include the profiling/stability tools now (crash dump, wait objects);
