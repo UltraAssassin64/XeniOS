@@ -1743,6 +1743,43 @@ the last claim at its base; resolve clears claim their area).
   Xenos sample positions approximated by the 2x2 / 1x2 pixel grid, resolves
   reading samples as pixels), behind a setting, first for depth.
 
+### Build 9644 results (owner, zip "9644_logs": AC 17-54-53, Spider-Man 17-52-32 and 17-53-35)
+
+AC Revelations crash (17-54-53), same site again: PC 833378E0 (allocator
+free-list unlink) from 8232121C on thread F80001E0; node r4 = 0x44FFEA08
+holds 40370037 00001161 FFFFFFFF 00000000 (prev -1, next 0), heap header r3
+= 0x40102150. The new dump: the node's page is a 64 KB allocation at
+0x44FF0000, allocated last (#24 of the 1024-call history) by thread
+F80001C0 with 0x20803000 (64 KB pages, NOZERO, reserve+commit), right after
+F8000154 freed 44FF0000+20000 (#27) that it had allocated at #28; before
+that, F8000154 allocated and freed 0x160000/0xB0000/0x40000 regions over the
+same address many times. So three threads use the game's allocator on that
+page within a few calls. Not found in our code yet:
+- RtlEnterCriticalSection's recovery/steal path never fired (no warning in
+  any AC log); lock_count is host-endian as upstream.
+- protect_on_release is false: released blocks stay readable and writable,
+  so a use after NtFreeVirtualMemory corrupts silently. Asked of the owner:
+  one run with protect_on_release = true (Settings, Memory section), which
+  is console-like and makes such a use crash at the culprit.
+
+Spider-Man: the storm code dump works. Game Master's wait (82962D70, called
+with r26 = -1) loops up to 10000 times while the job system's pending +
+active counters (globals at 0x82F718C8 + 0x48/0x4C, read with lwsync)
+are non-zero, calling 82963600 (help/sleep) in between: it waits for every
+job to finish. Workers 0, 2, 3 find nothing to run; worker 1 runs the
+loading-screen render loop; worker F8000064 (start 82A25CE8) waits on event
+F8000060, signaled ~96,000 times before sign-in and never after. Next
+diagnostic idea: per event, the thread and guest lr that last set it, shown
+in the thread report (who stopped signaling F8000060).
+
+Samples as pixels: the owner asked before any build (2026-11-19): (1) the
+effect on other games and the downsides, (2) whether it can be a setting
+that falls back to the current path. Answer given: only MSAA render targets
+change; no-MSAA games are unaffected; real-MSAA scenes cost 2-4x pixel
+shading and change AA quality (sample positions, alpha to coverage,
+derivatives, resolves); it will be a setting (Off = today's path, untouched;
+On; later Auto per surface), off by default.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own
