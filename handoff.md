@@ -1708,8 +1708,36 @@ which was signaled ~96,000 times before sign-in and never after.
   is waiting for. Disassembler: capstone (PPC 32-bit big endian) in the
   session scratchpad's pylib.
 
-Batman: two traces (15-50-11, 15-53-37); offline parser in the session
-scratchpad (tools/xtr_parse.py; not in the repository).
+Batman: two traces (15-50-11, 15-53-37), 4 frames each (~3,550 draws and
+27-32 resolves per frame). Offline tools in the session scratchpad (not in
+the repository): tools/xtr_parse.py (trace -> per-draw register JSONL, with
+a pure-Python snappy decoder) and tools/edram_sim.py (a simplified model of
+the render target cache's EDRAM ownership: extent from the scissors and, with
+the viewport transform on, the viewport; a draw bounded by neither inherits
+the last claim at its base; resolve clears claim their area).
+- Model check: 97-123 transfers and 196-252 MB moved per frame, against the
+  device's ~68 transfer passes and 190-220 MB loaded/stored: close enough
+  to compare rules.
+- Rules, per frame (trace 15-50-11 / 15-53-37):
+  current: 123 / 97 transfers, 49,248 / 38,231 tiles (252 / 196 MB);
+  skip unchanged (the 9637 setting): no change, the 4x passes write stencil;
+  + stencil-only copy back: 23,408 / 16,208 of those tiles need only the
+  stencil (depth intact), same count of passes;
+  samples as pixels (1x/2x/4x views of a base, width in samples and format
+  share one texture): 36.5 / 32.5 transfers, 16,088 / 14,224 tiles
+  (82 / 73 MB), about two thirds less; stencil-only adds nothing on top.
+- Largest transfers now: main depth D24FS8@0 1x <-> 4x (8,600-12,600 tiles
+  each way), color c3 (2_10_10_10_FLOAT) <-> c12 (its AS_16_16_16_16 view)
+  at 720 (2,900-4,300), shadow depth D24S8@1440 1x <-> 4x (2,000-3,600).
+- Cost of samples as pixels here: the 4x surfaces get 15-38 draws per frame
+  with ~100 vertices in all (full-screen stencil clears and the like), so
+  per-sample shading costs next to nothing in Batman. Games that draw real
+  scenes with MSAA would pay 2-4x pixel shading on those draws: hence the
+  owner's idea of choosing per surface from recent use.
+- Next: design samples-as-pixels storage for the Metal render target cache
+  (keys without msaa for storage, viewport/scissor scaled by the sample grid,
+  Xenos sample positions approximated by the 2x2 / 1x2 pixel grid, resolves
+  reading samples as pixels), behind a setting, first for depth.
 
 ### Async shader compilation backport: first scoping (2026-11-19)
 
