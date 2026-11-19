@@ -1407,6 +1407,8 @@ request and has not been confirmed to work on iOS 16.
   in the bottom border rows of the map (e.g. map 1, cleared rows 0-315: rows
   312-315 all 1.0). The only non-1.0 rows left are those the resolve rounds
   up past the map (316-319), which the projection never samples.
+- The fix is build 9632 (`xenios_ios_arm64_0.2.9-9632`, commit d280cd6, CI
+  run 319); to check with Limit Render Pass Area back on.
 
 Owner's decisions (2026-11-19, after 9623):
 - Include the profiling/stability tools now (crash dump, wait objects);
