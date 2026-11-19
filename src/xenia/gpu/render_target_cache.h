@@ -33,6 +33,7 @@ DECLARE_bool(depth_float24_round);
 DECLARE_bool(depth_float24_convert_in_pixel_shader);
 DECLARE_bool(draw_resolution_scaled_texture_offsets);
 DECLARE_bool(gamma_render_target_as_unorm16);
+DECLARE_bool(msaa_samples_as_pixels);
 DECLARE_bool(native_2x_msaa);
 DECLARE_bool(native_stencil_value_output);
 DECLARE_bool(snorm16_render_target_full_range);
@@ -210,6 +211,17 @@ class RenderTargetCache {
   // based on), or 0 if it didn't get to estimate it.
   uint32_t last_update_height_used() const { return last_update_height_used_; }
 
+  // msaa_samples_as_pixels: how many times (log2) draws to the render targets
+  // the last Update bound are scaled horizontally and vertically, on top of
+  // the resolution scale, because those render targets keep an MSAA surface's
+  // samples as pixels - 1 and 1 at 4x MSAA, 0 and 1 at 2x, 0 and 0 otherwise.
+  uint32_t last_update_samples_as_pixels_x_log2() const {
+    return uint32_t(last_update_samples_as_pixels_ >= xenos::MsaaSamples::k4X);
+  }
+  uint32_t last_update_samples_as_pixels_y_log2() const {
+    return uint32_t(last_update_samples_as_pixels_ >= xenos::MsaaSamples::k2X);
+  }
+
   // Ownership transfers whose destination still held the range's contents
   // (nothing written to the range since that render target last owned it),
   // and how many of them skip_unchanged_render_target_transfers skipped,
@@ -237,6 +249,10 @@ class RenderTargetCache {
   const RegisterFile& register_file() const { return register_file_; }
 
   virtual bool IsGammaFormatHostStorageSeparate() const = 0;
+
+  // Whether the implementation scales draws by the sample grid when
+  // msaa_samples_as_pixels is on.
+  virtual bool SupportsMsaaSamplesAsPixels() const { return false; }
 
   // Call last in implementation-specific initialization (when things like path
   // are initialized by the implementation).
@@ -619,6 +635,9 @@ class RenderTargetCache {
 
   DrawExtentEstimator draw_extent_estimator_;
   uint32_t last_update_height_used_ = 0;
+  // The guest MSAA of the surface the last Update bound as 1x render targets
+  // of its samples (msaa_samples_as_pixels), or k1X.
+  xenos::MsaaSamples last_update_samples_as_pixels_ = xenos::MsaaSamples::k1X;
 
   // For host render targets.
 

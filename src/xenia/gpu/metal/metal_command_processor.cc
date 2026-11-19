@@ -3400,6 +3400,13 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
         texture_cache_ ? texture_cache_->draw_resolution_scale_x() : 1;
     uint32_t area_scale_y =
         texture_cache_ ? texture_cache_->draw_resolution_scale_y() : 1;
+    if (render_target_cache_) {
+      // msaa_samples_as_pixels: drawing to the samples of an MSAA surface.
+      area_scale_x <<=
+          render_target_cache_->last_update_samples_as_pixels_x_log2();
+      area_scale_y <<=
+          render_target_cache_->last_update_samples_as_pixels_y_log2();
+    }
     uint32_t area_bottom = area_scissor.offset[1] + area_scissor.extent[1];
     // The scissor is often the whole surface; the height the render target
     // cache estimated the draw uses (from the viewport and the vertex
@@ -4965,13 +4972,26 @@ bool MetalCommandProcessor::IssueDrawMsl(
       texture_cache_ ? texture_cache_->draw_resolution_scale_x() : 1;
   uint32_t draw_resolution_scale_y =
       texture_cache_ ? texture_cache_->draw_resolution_scale_y() : 1;
+  // msaa_samples_as_pixels: drawing to the samples of an MSAA surface, scaled
+  // by the sample grid.
+  bool samples_as_pixels =
+      render_target_cache_ &&
+      render_target_cache_->last_update_samples_as_pixels_y_log2();
+  if (samples_as_pixels) {
+    draw_resolution_scale_x <<=
+        render_target_cache_->last_update_samples_as_pixels_x_log2();
+    draw_resolution_scale_y <<=
+        render_target_cache_->last_update_samples_as_pixels_y_log2();
+  }
   draw_util::GetViewportInfoArgs gviargs{};
   gviargs.Setup(
       draw_resolution_scale_x, draw_resolution_scale_y,
-      texture_cache_ ? texture_cache_->draw_resolution_scale_x_divisor()
-                     : divisors::MagicDiv(1),
-      texture_cache_ ? texture_cache_->draw_resolution_scale_y_divisor()
-                     : divisors::MagicDiv(1),
+      samples_as_pixels ? divisors::MagicDiv(draw_resolution_scale_x)
+      : texture_cache_  ? texture_cache_->draw_resolution_scale_x_divisor()
+                        : divisors::MagicDiv(1),
+      samples_as_pixels ? divisors::MagicDiv(draw_resolution_scale_y)
+      : texture_cache_  ? texture_cache_->draw_resolution_scale_y_divisor()
+                        : divisors::MagicDiv(1),
       true, kViewportBoundsMax, kViewportBoundsMax, false,
       normalized_depth_control, convert_z_to_float24, true,
       msl_pixel_shader && msl_pixel_shader->writes_depth());
@@ -7516,7 +7536,8 @@ void MetalCommandProcessor::BeginCommandBuffer() {
                  ? area_height
                  : uint32_t(
                        pass_descriptor->depthAttachment()->texture()->height()))
-            << uint32_t(surface_info.msaa_samples >= xenos::MsaaSamples::k2X);
+            << (uint32_t(surface_info.msaa_samples >= xenos::MsaaSamples::k2X) -
+                render_target_cache_->last_update_samples_as_pixels_y_log2());
         const uint32_t tile_bytes = xenos::kEdramTileWidthSamples *
                                     xenos::kEdramTileHeightSamples *
                                     sizeof(uint32_t);
@@ -8381,10 +8402,15 @@ void MetalCommandProcessor::ApplyRasterizerState(bool primitive_polygonal) {
                                 ? draw_util::kD3D10PolygonOffsetFactorUnorm24
                                 : draw_util::kD3D10PolygonOffsetFactorFloat24;
   float depth_bias_constant = polygon_offset * depth_bias_factor;
+  // msaa_samples_as_pixels: drawing to the samples of an MSAA surface, scaled
+  // by the sample grid.
   float depth_bias_slope =
       polygon_offset_scale * xenos::kPolygonOffsetScaleSubpixelUnit *
-      float(std::max(render_target_cache_->draw_resolution_scale_x(),
-                     render_target_cache_->draw_resolution_scale_y()));
+      float(std::max(
+          render_target_cache_->draw_resolution_scale_x()
+              << render_target_cache_->last_update_samples_as_pixels_x_log2(),
+          render_target_cache_->draw_resolution_scale_y()
+              << render_target_cache_->last_update_samples_as_pixels_y_log2()));
   current_render_encoder_->setDepthBias(depth_bias_constant, depth_bias_slope,
                                         0.0f);
 
@@ -11491,6 +11517,15 @@ void MetalCommandProcessor::UpdateSpirvSystemConstantValues(
   // MSAA sample count.
   flags |= uint32_t(rb_surface_info.msaa_samples)
            << SpirvShaderTranslator::kSysFlag_MsaaSamples_Shift;
+  // msaa_samples_as_pixels: drawing to the samples of an MSAA surface.
+  if (render_target_cache_) {
+    if (render_target_cache_->last_update_samples_as_pixels_x_log2()) {
+      flags |= SpirvShaderTranslator::kSysFlag_SamplesAsPixelsX;
+    }
+    if (render_target_cache_->last_update_samples_as_pixels_y_log2()) {
+      flags |= SpirvShaderTranslator::kSysFlag_SamplesAsPixelsY;
+    }
+  }
 
   // Depth format.
   if (rb_depth_info.depth_format == xenos::DepthRenderTargetFormat::kD24FS8) {
@@ -11576,6 +11611,13 @@ void MetalCommandProcessor::UpdateSpirvSystemConstantValues(
       texture_cache_ ? texture_cache_->draw_resolution_scale_x() : 1;
   uint32_t draw_resolution_scale_y =
       texture_cache_ ? texture_cache_->draw_resolution_scale_y() : 1;
+  if (render_target_cache_) {
+    // msaa_samples_as_pixels, as for the viewport.
+    draw_resolution_scale_x <<=
+        render_target_cache_->last_update_samples_as_pixels_x_log2();
+    draw_resolution_scale_y <<=
+        render_target_cache_->last_update_samples_as_pixels_y_log2();
+  }
   consts.point_screen_diameter_to_ndc_radius[0] =
       float(draw_resolution_scale_x) /
       float(std::max(viewport_info.xy_extent[0], uint32_t(1)));

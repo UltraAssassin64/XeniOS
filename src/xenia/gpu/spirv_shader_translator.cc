@@ -3419,6 +3419,20 @@ void SpirvShaderTranslator::StartFragmentShaderInMain() {
           spv::OpFMul, type_float_, param_gen_x,
           builder_->makeFloatConstant(1.0f / float(draw_resolution_scale_x_)));
     }
+    // msaa_samples_as_pixels: the guest pixel containing the sample.
+    param_gen_x = builder_->createTriOp(
+        spv::OpSelect, type_float_,
+        builder_->createBinOp(
+            spv::OpINotEqual, type_bool_,
+            builder_->createBinOp(
+                spv::OpBitwiseAnd, type_uint_, main_system_constant_flags_,
+                builder_->makeUintConstant(kSysFlag_SamplesAsPixelsX)),
+            const_uint_0_),
+        builder_->createUnaryBuiltinCall(
+            type_float_, ext_inst_glsl_std_450_, GLSLstd450Floor,
+            builder_->createBinOp(spv::OpFMul, type_float_, param_gen_x,
+                                  builder_->makeFloatConstant(0.5f))),
+        param_gen_x);
     if (!modification.pixel.param_gen_point) {
       assert_true(input_front_facing_ != spv::NoResult);
       param_gen_x = builder_->createTriOp(
@@ -3460,6 +3474,20 @@ void SpirvShaderTranslator::StartFragmentShaderInMain() {
           spv::OpFMul, type_float_, param_gen_y,
           builder_->makeFloatConstant(1.0f / float(draw_resolution_scale_y_)));
     }
+    // msaa_samples_as_pixels: the guest pixel containing the sample.
+    param_gen_y = builder_->createTriOp(
+        spv::OpSelect, type_float_,
+        builder_->createBinOp(
+            spv::OpINotEqual, type_bool_,
+            builder_->createBinOp(
+                spv::OpBitwiseAnd, type_uint_, main_system_constant_flags_,
+                builder_->makeUintConstant(kSysFlag_SamplesAsPixelsY)),
+            const_uint_0_),
+        builder_->createUnaryBuiltinCall(
+            type_float_, ext_inst_glsl_std_450_, GLSLstd450Floor,
+            builder_->createBinOp(spv::OpFMul, type_float_, param_gen_y,
+                                  builder_->makeFloatConstant(0.5f))),
+        param_gen_y);
     if (modification.pixel.param_gen_point) {
       param_gen_y = builder_->createUnaryOp(
           spv::OpBitcast, type_float_,

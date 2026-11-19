@@ -37,6 +37,7 @@
 #include "xenia/kernel/kernel_flags.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/object_table.h"
+#include "xenia/kernel/xevent.h"
 #include "xenia/kernel/xobject.h"
 #include "xenia/kernel/xthread.h"
 namespace xe {
@@ -251,6 +252,11 @@ void LogKernelCallThreads() {
               fmt::format("object type {} name \"{}\"",
                           uint32_t(kernel_call_xobject->type()),
                           kernel_call_xobject->name());
+          if (kernel_call_xobject->type() == XObject::Type::Event) {
+            kernel_call_object +=
+                ", " + static_cast<XEvent*>(kernel_call_xobject.get())
+                           ->DescribeLastSignal();
+          }
         }
         kernel_call_global.unlock();
       } else {
@@ -279,10 +285,16 @@ void LogKernelCallThreads() {
             fmt::format_to(std::back_inserter(kernel_call_wait_objects),
                            " {:08X} ", kernel_call_wait_handle);
             if (kernel_call_wait_object) {
-              fmt::format_to(std::back_inserter(kernel_call_wait_objects),
-                             "(type {} name \"{}\")",
-                             uint32_t(kernel_call_wait_object->type()),
-                             kernel_call_wait_object->name());
+              fmt::format_to(
+                  std::back_inserter(kernel_call_wait_objects),
+                  "(type {} name \"{}\"{})",
+                  uint32_t(kernel_call_wait_object->type()),
+                  kernel_call_wait_object->name(),
+                  kernel_call_wait_object->type() == XObject::Type::Event
+                      ? ", " +
+                            static_cast<XEvent*>(kernel_call_wait_object.get())
+                                ->DescribeLastSignal()
+                      : std::string());
             } else {
               kernel_call_wait_objects += "(no object)";
             }

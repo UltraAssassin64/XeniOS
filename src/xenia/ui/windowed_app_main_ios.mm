@@ -3603,6 +3603,16 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "shadows or effects look wrong. Applies at once. Off by default "
                  "while it is being tested.",
                  false);
+  AddBoolSetting(performance.items, "msaa_samples_as_pixels", "MSAA Samples as Pixels",
+                 "Keeps each multisampled (MSAA) buffer as a plain buffer of its "
+                 "samples, so a game switching a buffer between full resolution and "
+                 "MSAA (Batman: Arkham Asylum's depth buffer, for every light) uses one "
+                 "copy with no conversions. Games that really draw with MSAA shade up "
+                 "to 4 times as many pixels and may look slightly different, so it is "
+                 "best for games that use MSAA briefly. Turn off if edges, foliage or "
+                 "effects look wrong. Applies at once. Off by default while it is "
+                 "being tested.",
+                 false);
   AddBoolSetting(performance.items, "context_promote_vec128", "Keep Vector Registers in CPU",
                  "Lets the recompiler keep the Xbox 360's vector registers in host "
                  "registers between instructions instead of storing and reloading them "
@@ -7848,8 +7858,15 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 
 @end
 
+@interface XeniaConfigViewController () <UISearchBarDelegate>
+@end
+
 @implementation XeniaConfigViewController {
   std::vector<IOSConfigSection> sections_;
+  // What the settings search shows: indices into sections_ and, per shown
+  // section, into its items.
+  std::vector<size_t> shown_sections_;
+  std::vector<std::vector<size_t>> shown_items_;
   BOOL hasPendingChanges_;
   UIBarButtonItem* saveButton_;
 }
@@ -7964,6 +7981,7 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
     self.tableView.sectionHeaderTopPadding = 0;
   }
   sections_ = BuildIOSConfigSections();
+  [self applySettingsSearch:nil];
   hasPendingChanges_ = NO;
   self.tableView.tableHeaderView = [self restartNoticeHeaderView];
   self.tableView.tableFooterView = [self versionFooterView];
@@ -7979,6 +7997,63 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
                                                 action:@selector(saveTapped:)];
   saveButton_.enabled = NO;
   self.navigationItem.rightBarButtonItem = saveButton_;
+
+  // A plain search bar rather than a UISearchController, which would be
+  // presented by this controller while active and block its alerts.
+  UISearchBar* search = [[[UISearchBar alloc] init] autorelease];
+  search.delegate = self;
+  search.placeholder = @"Search Settings";
+  search.searchBarStyle = UISearchBarStyleMinimal;
+  search.autocorrectionType = UITextAutocorrectionTypeNo;
+  search.autocapitalizationType = UITextAutocapitalizationTypeNone;
+  self.navigationItem.titleView = search;
+  self.tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
+}
+
+// Shows the settings whose section, title, description or config name contain
+// every word of the search text, ignoring case and accents; all of them when
+// the text has no words.
+- (void)applySettingsSearch:(NSString*)search_text {
+  NSArray<NSString*>* words =
+      [search_text componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+  BOOL filtering = NO;
+  for (NSString* word in words) {
+    filtering = filtering || word.length != 0;
+  }
+  shown_sections_.clear();
+  shown_items_.clear();
+  for (size_t section_index = 0; section_index < sections_.size(); ++section_index) {
+    const IOSConfigSection& section = sections_[section_index];
+    std::vector<size_t> items;
+    for (size_t item_index = 0; item_index < section.items.size(); ++item_index) {
+      const IOSConfigItem& item = section.items[item_index];
+      NSString* text =
+          ToNSString(section.title + "\n" + item.title + "\n" + item.subtitle + "\n" + item.key);
+      BOOL matches = YES;
+      for (NSString* word in words) {
+        if (word.length != 0 && ![text localizedStandardContainsString:word]) {
+          matches = NO;
+          break;
+        }
+      }
+      if (matches) {
+        items.push_back(item_index);
+      }
+    }
+    if (!items.empty() || !filtering) {
+      shown_sections_.push_back(section_index);
+      shown_items_.push_back(std::move(items));
+    }
+  }
+}
+
+- (void)searchBar:(UISearchBar*)searchBar textDidChange:(NSString*)searchText {
+  [self applySettingsSearch:searchText];
+  [self.tableView reloadData];
+}
+
+- (void)searchBarSearchButtonClicked:(UISearchBar*)searchBar {
+  [searchBar resignFirstResponder];
 }
 
 - (void)footerLinkTapped:(UIButton*)sender {
@@ -8132,39 +8207,41 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 }
 
 - (IOSConfigItem*)itemAtIndexPath:(NSIndexPath*)indexPath {
-  if (indexPath.section < 0 || indexPath.section >= static_cast<NSInteger>(sections_.size())) {
+  if (indexPath.section < 0 ||
+      indexPath.section >= static_cast<NSInteger>(shown_sections_.size())) {
     return nullptr;
   }
-  IOSConfigSection& section = sections_[indexPath.section];
-  if (indexPath.row < 0 || indexPath.row >= static_cast<NSInteger>(section.items.size())) {
+  const std::vector<size_t>& items = shown_items_[indexPath.section];
+  if (indexPath.row < 0 || indexPath.row >= static_cast<NSInteger>(items.size())) {
     return nullptr;
   }
-  return &section.items[indexPath.row];
+  return &sections_[shown_sections_[indexPath.section]].items[items[indexPath.row]];
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView*)tableView {
-  return static_cast<NSInteger>(sections_.size());
+  return static_cast<NSInteger>(shown_sections_.size());
 }
 
 - (NSInteger)tableView:(UITableView*)tableView numberOfRowsInSection:(NSInteger)section {
-  if (section < 0 || section >= static_cast<NSInteger>(sections_.size())) {
+  if (section < 0 || section >= static_cast<NSInteger>(shown_sections_.size())) {
     return 0;
   }
-  return static_cast<NSInteger>(sections_[section].items.size());
+  return static_cast<NSInteger>(shown_items_[section].size());
 }
 
 - (NSString*)tableView:(UITableView*)tableView titleForHeaderInSection:(NSInteger)section {
-  if (section < 0 || section >= static_cast<NSInteger>(sections_.size())) {
+  if (section < 0 || section >= static_cast<NSInteger>(shown_sections_.size())) {
     return nil;
   }
-  return ToNSString(sections_[section].title);
+  return ToNSString(sections_[shown_sections_[section]].title);
 }
 
 - (NSString*)tableView:(UITableView*)tableView titleForFooterInSection:(NSInteger)section {
-  if (section < 0 || section >= static_cast<NSInteger>(sections_.size())) {
+  if (section < 0 || section >= static_cast<NSInteger>(shown_sections_.size())) {
     return nil;
   }
-  return sections_[section].footer.empty() ? nil : ToNSString(sections_[section].footer);
+  const IOSConfigSection& shown = sections_[shown_sections_[section]];
+  return shown.footer.empty() ? nil : ToNSString(shown.footer);
 }
 
 - (UITableViewCell*)tableView:(UITableView*)tableView

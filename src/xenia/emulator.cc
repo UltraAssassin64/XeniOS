@@ -120,6 +120,7 @@ DECLARE_bool(context_promote_vec128);
 DECLARE_bool(occlusion_query_enable);
 DECLARE_bool(native_stencil_value_output);
 DECLARE_bool(skip_unchanged_render_target_transfers);
+DECLARE_bool(msaa_samples_as_pixels);
 
 DEFINE_int32(priority_class, 0,
              "Forces Xenia to use different process priority than default one. "
@@ -2249,10 +2250,11 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
   XELOGI(
       "Settings at launch: context_promote_vec128 {}, occlusion_query_enable "
       "{}, native_stencil_value_output {}, "
-      "skip_unchanged_render_target_transfers {}",
+      "skip_unchanged_render_target_transfers {}, msaa_samples_as_pixels {}",
       cvars::context_promote_vec128, cvars::occlusion_query_enable,
       cvars::native_stencil_value_output,
-      cvars::skip_unchanged_render_target_transfers);
+      cvars::skip_unchanged_render_target_transfers,
+      cvars::msaa_samples_as_pixels);
 
   auto main_thread = kernel_state_->LaunchModule(module);
   if (!main_thread) {

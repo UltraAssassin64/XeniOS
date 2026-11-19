@@ -137,6 +137,7 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
   }
 
   bool IsGammaFormatHostStorageSeparate() const override;
+  bool SupportsMsaaSamplesAsPixels() const override;
 
   // Check if the render target key uses a 64bpp format.
   bool IsKey64bpp(RenderTargetKey key) const;

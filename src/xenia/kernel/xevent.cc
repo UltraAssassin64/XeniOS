@@ -10,7 +10,10 @@
 #include "xenia/kernel/xevent.h"
 
 #include "xenia/base/byte_stream.h"
+#include "xenia/base/clock.h"
 #include "xenia/base/logging.h"
+#include "xenia/cpu/thread_state.h"
+#include "xenia/kernel/xthread.h"
 
 namespace xe {
 namespace kernel {
@@ -58,12 +61,41 @@ void XEvent::InitializeNative(void* native_ptr, X_DISPATCH_HEADER* header) {
   SetNativePointer(memory()->HostToGuestVirtual(native_ptr), true);
 }
 
+void XEvent::NoteSignal() {
+  XThread* signal_thread =
+      XThread::IsInThread() ? XThread::GetCurrentThread() : nullptr;
+  cpu::ThreadState* thread_state = cpu::ThreadState::Get();
+  last_signal_thread_.store(signal_thread ? signal_thread->handle() : 0,
+                            std::memory_order_relaxed);
+  last_signal_lr_.store(
+      thread_state ? uint32_t(thread_state->context()->lr) : 0,
+      std::memory_order_relaxed);
+  last_signal_ms_.store(Clock::QueryHostUptimeMillis(),
+                        std::memory_order_relaxed);
+  signal_count_.fetch_add(1, std::memory_order_relaxed);
+}
+
+std::string XEvent::DescribeLastSignal() const {
+  const uint64_t signal_count = signal_count_.load(std::memory_order_relaxed);
+  if (!signal_count) {
+    return "never set";
+  }
+  return fmt::format(
+      "set {} times, last by thread {:08X} at guest lr {:08X} {} ms ago",
+      signal_count, last_signal_thread_.load(std::memory_order_relaxed),
+      last_signal_lr_.load(std::memory_order_relaxed),
+      Clock::QueryHostUptimeMillis() -
+          last_signal_ms_.load(std::memory_order_relaxed));
+}
+
 int32_t XEvent::Set(uint32_t priority_increment, bool wait) {
+  NoteSignal();
   event_->Set();
   return 1;
 }
 
 int32_t XEvent::Pulse(uint32_t priority_increment, bool wait) {
+  NoteSignal();
   event_->Pulse();
   return 1;
 }

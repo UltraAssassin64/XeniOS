@@ -151,6 +151,11 @@ class SpirvShaderTranslator : public ShaderTranslator {
     // taking into account the potential relation with occlusion queries (but
     // should be safe at least temporarily).
     kSysFlag_FSIDepthStencilEarlyWrite_Shift,
+    // msaa_samples_as_pixels: the render targets keep the samples of an MSAA
+    // surface as pixels, so for the pixel position, a host pixel is a sample -
+    // half a guest pixel horizontally (4x MSAA) and vertically (2x and 4x).
+    kSysFlag_SamplesAsPixelsX_Shift,
+    kSysFlag_SamplesAsPixelsY_Shift,
 
     kSysFlag_Count,
 
@@ -191,6 +196,8 @@ class SpirvShaderTranslator : public ShaderTranslator {
     kSysFlag_FSIStencilTest = 1u << kSysFlag_FSIStencilTest_Shift,
     kSysFlag_FSIDepthStencilEarlyWrite =
         1u << kSysFlag_FSIDepthStencilEarlyWrite_Shift,
+    kSysFlag_SamplesAsPixelsX = 1u << kSysFlag_SamplesAsPixelsX_Shift,
+    kSysFlag_SamplesAsPixelsY = 1u << kSysFlag_SamplesAsPixelsY_Shift,
   };
   static_assert(kSysFlag_Count <= 32, "Too many flags in the system constants");
 

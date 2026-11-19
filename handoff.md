@@ -1780,6 +1780,91 @@ shading and change AA quality (sample positions, alpha to coverage,
 derivatives, resolves); it will be a setting (Off = today's path, untouched;
 On; later Auto per surface), off by default.
 
+### AC protect_on_release runs (owner, logs 18-10-14 and 18-12-08) and the next build
+
+Both runs stop at the same instruction. 18-10-14 (the setting was still
+off) crash-dumps on TaskThread1 F80001B0 at PC 82338710, lr 82338580:
+read of guest 0x43000000, which is unreserved; r3 = 0x42FF0000 is a 64 KB
+block (allocated with 0x20803000) and r10 = 0x43000000 is its end. The
+code there is a vector fill loop (stvx, then `stvlx`/`stvrx` for the
+unaligned head and tail). 18-12-08 (protect_on_release on) hits the same
+fault ("Unhandled host exception ... address 0x2E3000000" = membase +
+0x43000000, same lr), but the thread was suspended instead of dumped, so the
+game waits for it forever at the Ubisoft logo (F8000008 waits on a task
+event; F80001B0 has made no kernel call for 7 s, suspend count 1).
+
+Cause: our a64 STVL/STVR were a read-modify-write of the whole aligned
+16-byte block. `stvrx` with a 16-aligned address stores nothing on the
+console, so at the end of a buffer the game legally points it at the next,
+unmapped page; ours read (and wrote back) that page. The same RMW also
+explains the earlier AC heap corruption: it rewrites bytes outside the
+stored range non-atomically, so another thread's store to the same 16 bytes
+in between is lost (the allocator free-list nodes found holding stale
+values, 9643/9644). Fix (next build): xenia-edge's partial store,
+`EmitPartialVectorStore`, which writes exactly the bytes of the range with
+overlapping 8/4/2/1-byte stores and nothing for an empty range; no read.
+To test: AC with protect_on_release off and on, past the logo into chapter
+1; the free-list crash (833378E0) should be gone too if this was it.
+
+Spider-Man diagnostic in the same build: the thread report now shows, for
+each event a thread waits on, who last set or pulsed it ("set N times, last
+by thread X at guest lr Y Z ms ago", or "never set"), from
+XEvent::NoteSignal in Set and Pulse. Run to "Please Wait" and let the storm
+report fire: the line for F8000060 names the thread and code that stopped
+signaling it after sign-in.
+
+### MSAA samples as pixels (msaa_samples_as_pixels, next build)
+
+What it does: with the setting on, an MSAA surface's render targets are the
+1x render targets of the same EDRAM (base, pitch in tiles, format), whose
+pixels are its samples - the EDRAM layout of 4x samples (2x2 per pixel) and
+2x (1x2) is the 1x layout, which is why games alias them in the first
+place. So Batman's per-light 1x -> 4x depth copy, the 4x stencil clear, and
+the copy back become one draw into the 1x depth buffer, and the render pass
+is not broken. Draws to such a surface are scaled by the sample grid on top
+of the resolution scale (RenderTargetCache::last_update_samples_as_pixels_
+x/y_log2): viewport and scissor (IssueDrawMsl, with MagicDiv of the combined
+scale), the render pass area (IssueDraw), point size and depth bias slope.
+Resolve clears use the same keys and scale the clear rectangle to samples.
+Resolves need nothing: owners are dumped to EDRAM by key, and the 1x dump
+has the MSAA sample layout. Pipelines take the sample count from the
+attachments (1). The pixel position parameter (vPos) is divided back to the
+guest pixel with two new system flags (kSysFlag_SamplesAsPixelsX/Y) in the
+SPIR-V translator; that changes only param-gen pixel shaders, which
+recompile once (the MSL cache key includes the SPIR-V hash).
+
+Where: RenderTargetCache::Update and PrepareHostRenderTargetsResolveClear
+(storage_msaa_samples), SupportsMsaaSamplesAsPixels (Metal: SPIRV-Cross
+path only, i.e. iOS; MSC/D3D12/Vulkan keep the old path whatever the cvar
+says). Off = the exact old path. Settings > Performance > MSAA Samples as
+Pixels; logged in "Settings at launch". Applies at once (switching mid-game
+just moves EDRAM ownership between the two kinds of render targets).
+
+Downsides, as told to the owner: in games that really draw with MSAA, every
+sample is shaded (2x/4x pixel shader work, supersampling-like look),
+alpha-to-coverage becomes a per-sample threshold, derivatives and texture
+LOD are per sample (sharper mips), and sample positions are an ordered grid.
+
+Owner wants this automatic later (2026-11-19): the target is an Auto mode
+that picks per surface without game-specific patterns - for example, store
+samples as pixels for a surface only while its MSAA draws are few or
+depth/stencil-only (Batman's stencil clears), and keep host MSAA for
+surfaces with many colour draws; or measure transfer time per surface and
+switch the cheaper way. Needs per-surface draw/transfer counts (the
+transfer log already has totals) before the rule can be chosen. To test in
+the next build: Batman with the setting off and on (FPS, transfers per
+frame in the log, shadows/lighting correct), and one real-MSAA game on and
+off for looks.
+
+Settings search (owner's request, same build): a search bar in the
+navigation bar of Settings (a plain UISearchBar as the title view; a
+UISearchController would be presented by the settings controller while
+active, and its Save/Discard alerts and text editor could not be presented)
+filters every row, including the generated per-category ones, by section,
+title, description and config name; all words must match, ignoring case and
+accents. Edits made while filtered go to the same items. Dragging the list
+hides the keyboard.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

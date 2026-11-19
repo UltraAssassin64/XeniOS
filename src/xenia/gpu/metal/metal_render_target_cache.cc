@@ -3172,6 +3172,15 @@ bool MetalRenderTargetCache::IsGammaFormatHostStorageSeparate() const {
   return gamma_render_target_as_unorm16_;
 }
 
+bool MetalRenderTargetCache::SupportsMsaaSamplesAsPixels() const {
+  // Draws are scaled by the sample grid on the SPIRV-Cross path only.
+#if METAL_SHADER_CONVERTER_AVAILABLE
+  return cvars::metal_use_spirvcross;
+#else
+  return true;
+#endif  // METAL_SHADER_CONVERTER_AVAILABLE
+}
+
 RenderTargetCache::RenderTarget* MetalRenderTargetCache::CreateRenderTarget(
     RenderTargetKey key) {
   // Calculate dimensions

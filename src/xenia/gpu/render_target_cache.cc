@@ -44,6 +44,17 @@ DEFINE_bool(
     "depth buffer used at full resolution and as a 4x MSAA half-resolution "
     "buffer.",
     "GPU");
+DEFINE_bool(
+    msaa_samples_as_pixels, false,
+    "With host render targets, keep each MSAA render target as a 1x render "
+    "target of its samples (2x2 pixels per pixel at 4x MSAA, 1x2 at 2x), "
+    "drawing to it scaled by that grid. The guest's 1x and MSAA views of the "
+    "same EDRAM data then share one render target, with no copies between "
+    "them. Shading and coverage become per-sample (like supersampling), so "
+    "games that really use MSAA shade 2x to 4x as many pixels, and alpha to "
+    "coverage becomes an on / off threshold. Supported by the Metal "
+    "SPIRV-Cross path only.",
+    "GPU");
 // Lossless round trip: 545407F2.
 // Lossy round trip with the "greater or equal" test afterwards: 4D530919.
 // Lossy round trip with the "equal" test afterwards: 535107F5, 565507EF.
@@ -599,6 +610,15 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
   }
   uint32_t msaa_samples_x_log2 =
       uint32_t(msaa_samples >= xenos::MsaaSamples::k4X);
+  // msaa_samples_as_pixels: the render targets of an MSAA surface are the 1x
+  // render targets of the same EDRAM, whose pixels are its samples.
+  xenos::MsaaSamples storage_msaa_samples = msaa_samples;
+  last_update_samples_as_pixels_ = xenos::MsaaSamples::k1X;
+  if (!interlock_barrier_only && cvars::msaa_samples_as_pixels &&
+      SupportsMsaaSamplesAsPixels()) {
+    storage_msaa_samples = xenos::MsaaSamples::k1X;
+    last_update_samples_as_pixels_ = msaa_samples;
+  }
   uint32_t pitch_pixels = rb_surface_info.surface_pitch;
   // surface_pitch 0 should be handled in disabling rasterization (hopefully
   // it's safe to assume that).
@@ -748,7 +768,7 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
         }
         RenderTargetKey rt_key = render_target->key();
         if (rt_key.pitch_tiles_at_32bpp != pitch_tiles_at_32bpp ||
-            rt_key.msaa_samples != msaa_samples) {
+            rt_key.msaa_samples != storage_msaa_samples) {
           are_accumulated_render_targets_valid_ = false;
           break;
         }
@@ -838,7 +858,7 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
     RenderTargetKey& rt_key = rt_keys[rt_bit_index];
     rt_key.base_tiles = rt_base;
     rt_key.pitch_tiles_at_32bpp = pitch_tiles_at_32bpp;
-    rt_key.msaa_samples = msaa_samples;
+    rt_key.msaa_samples = storage_msaa_samples;
     rt_key.is_depth = rt_bit_index == 0;
     rt_key.resource_format = resource_formats[rt_bit_index];
     if (!interlock_barrier_only) {
@@ -962,7 +982,7 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
       } else {
         RenderTargetKey accumulated_rt_key = accumulated_rt->key();
         if (accumulated_rt_key.pitch_tiles_at_32bpp != pitch_tiles_at_32bpp ||
-            accumulated_rt_key.msaa_samples != msaa_samples) {
+            accumulated_rt_key.msaa_samples != storage_msaa_samples) {
           // The previously bound render target is incompatible with the
           // current surface info.
           are_accumulated_render_targets_valid_ = false;
@@ -1209,6 +1229,11 @@ bool RenderTargetCache::PrepareHostRenderTargetsResolveClear(
       uint32_t(msaa_samples >= xenos::MsaaSamples::k4X);
   uint32_t msaa_samples_y_log2 =
       uint32_t(msaa_samples >= xenos::MsaaSamples::k2X);
+  // msaa_samples_as_pixels, as in Update.
+  xenos::MsaaSamples storage_msaa_samples =
+      cvars::msaa_samples_as_pixels && SupportsMsaaSamplesAsPixels()
+          ? xenos::MsaaSamples::k1X
+          : msaa_samples;
   if (pitch_tiles_at_32bpp >
       ((xenos::kTexture2DCubeMaxWidthHeight << msaa_samples_x_log2) +
        (xenos::kEdramTileWidthSamples - 1)) /
@@ -1335,7 +1360,7 @@ bool RenderTargetCache::PrepareHostRenderTargetsResolveClear(
   if (depth_clear_length_tiles) {
     depth_render_target_key.base_tiles = resolve_info.depth_original_base;
     depth_render_target_key.pitch_tiles_at_32bpp = pitch_tiles_at_32bpp;
-    depth_render_target_key.msaa_samples = msaa_samples;
+    depth_render_target_key.msaa_samples = storage_msaa_samples;
     depth_render_target_key.is_depth = 1;
     depth_render_target_key.resource_format =
         resolve_info.depth_edram_info.format;
@@ -1351,7 +1376,7 @@ bool RenderTargetCache::PrepareHostRenderTargetsResolveClear(
   if (color_clear_length_tiles) {
     color_render_target_key.base_tiles = resolve_info.color_original_base;
     color_render_target_key.pitch_tiles_at_32bpp = pitch_tiles_at_32bpp;
-    color_render_target_key.msaa_samples = msaa_samples;
+    color_render_target_key.msaa_samples = storage_msaa_samples;
     color_render_target_key.is_depth = 0;
     color_render_target_key.resource_format = uint32_t(GetColorResourceFormat(
         xenos::ColorRenderTargetFormat(resolve_info.color_edram_info.format)));
@@ -1367,6 +1392,13 @@ bool RenderTargetCache::PrepareHostRenderTargetsResolveClear(
     return false;
   }
 
+  if (storage_msaa_samples != msaa_samples) {
+    // The render targets' pixels are the samples.
+    clear_rectangle.x_pixels <<= msaa_samples_x_log2;
+    clear_rectangle.y_pixels <<= msaa_samples_y_log2;
+    clear_rectangle.width_pixels <<= msaa_samples_x_log2;
+    clear_rectangle.height_pixels <<= msaa_samples_y_log2;
+  }
   clear_rectangle_out = clear_rectangle;
   depth_render_target_out = depth_render_target;
   depth_transfers_out.clear();

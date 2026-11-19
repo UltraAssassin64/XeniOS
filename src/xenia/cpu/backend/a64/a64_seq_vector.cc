@@ -1909,62 +1909,89 @@ struct LVR_V128 : Sequence<LVR_V128, I<OPCODE_LVR, V128Op, I64Op>> {
 };
 EMITTER_OPCODE_TABLE(OPCODE_LVR, LVR_V128);
 
+// Copy count (0..16) bytes from [src] to [dst] with overlapping power-of-two
+// accesses, so nothing outside the range is touched (as in xenia-edge).
+// Baseline NEON has no byte-masked store, and merging a whole 16-byte block
+// back with a blend would lose a concurrent write to the bytes this store is
+// not supposed to reach, and would touch a page the store does not reach at
+// all.
+static void EmitPartialVectorStore(A64Emitter& e,
+                                   const Xbyak_aarch64::XReg& dst,
+                                   const Xbyak_aarch64::XReg& src,
+                                   const Xbyak_aarch64::WReg& count) {
+  using namespace Xbyak_aarch64;
+  auto& from8 = e.NewCachedLabel();
+  auto& from4 = e.NewCachedLabel();
+  auto& from2 = e.NewCachedLabel();
+  auto& from1 = e.NewCachedLabel();
+  auto& done = e.NewCachedLabel();
+
+  e.cmp(count, 8);
+  e.b(HS, from8);
+  e.cmp(count, 4);
+  e.b(HS, from4);
+  e.cmp(count, 2);
+  e.b(HS, from2);
+  e.cbnz(count, from1);
+  e.b(done);
+
+  e.L(from8);
+  e.sub(e.w6, count, 8);
+  e.ldr(e.x3, ptr(src));
+  e.str(e.x3, ptr(dst));
+  e.ldr(e.x3, ptr(src, e.x6));
+  e.str(e.x3, ptr(dst, e.x6));
+  e.b(done);
+
+  e.L(from4);
+  e.sub(e.w6, count, 4);
+  e.ldr(e.w3, ptr(src));
+  e.str(e.w3, ptr(dst));
+  e.ldr(e.w3, ptr(src, e.x6));
+  e.str(e.w3, ptr(dst, e.x6));
+  e.b(done);
+
+  e.L(from2);
+  e.sub(e.w6, count, 2);
+  e.ldrh(e.w3, ptr(src));
+  e.strh(e.w3, ptr(dst));
+  e.ldrh(e.w3, ptr(src, e.x6));
+  e.strh(e.w3, ptr(dst, e.x6));
+  e.b(done);
+
+  e.L(from1);
+  e.ldrb(e.w3, ptr(src));
+  e.strb(e.w3, ptr(dst));
+
+  e.L(done);
+}
+
 // ============================================================================
 // OPCODE_STVL (Store Vector Left)
 // ============================================================================
 struct STVL_V128 : Sequence<STVL_V128, I<OPCODE_STVL, VoidOp, I64Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    // Inline STVL using 2-register TBL over {original_mem, rev32(src)}.
-    // STVL writes bytes offset..15 from the byte-swapped source.
-    // ctrl[i] = i (keep original) where i < offset,
-    // ctrl[i] = 16 + (i - offset) (from rev32(src)) where i >= offset.
-    // This equals: ctrl = identity + (mask & delta)
-    //   where mask = (i >= offset), delta = (16 - offset).
+    // Store bytes offset..15 of the block holding the address, taking them
+    // from the head of the byte-swapped source: 16 - offset bytes ending at
+    // the block boundary, one contiguous copy. The old blend of the whole
+    // block wrote bytes 0..offset-1 back from a stale read, undoing another
+    // thread's write to them (Assassin's Creed Revelations heap corruption).
     // A constant source first: LoadV128Const may use x0 as its GPR scratch,
     // and ComputeMemoryAddress returns the address in x0.
-    int s = SrcVReg(e, i.src2, 2);
+    int s = SrcVReg(e, i.src2, 0);
+
+    // Stash rev32(src) so its bytes can be addressed individually.
+    e.rev32(VReg(0).b16, VReg(s).b16);
+    e.str(QReg(0),
+          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
+
     auto addr = ComputeMemoryAddress(e, i.src1);
-
-    // x0 = host address, w17 = offset, x16 = aligned address (saved).
     e.add(e.x0, e.GetMembaseReg(), addr);
-    e.and_(e.w17, e.w0, 0xF);
-    e.and_(e.x0, e.x0, ~0xFull);
-    e.mov(e.x16, e.x0);  // save aligned addr for final store
-
-    // v0 = original mem (table reg 0), v1 = rev32(src) (table reg 1).
-    e.ldr(QReg(0), ptr(e.x0));
-    e.rev32(VReg(1).b16, VReg(s).b16);
-
-    // Build identity {0,1,...,15} in v2.
-    e.mov(e.x0, 0x0706050403020100ull);
-    e.fmov(DReg(2), e.x0);
-    e.mov(e.x0, 0x0F0E0D0C0B0A0908ull);
-    e.ins(VReg(2).d2[1], e.x0);
-
-    // Save identity to stack scratch (needed after mask computation).
-    e.str(QReg(2),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-
-    // v3 = mask: 0xFF where i >= offset.
-    e.dup(VReg(3).b16, e.w17);
-    e.cmhs(VReg(3).b16, VReg(2).b16, VReg(3).b16);
-
-    // v2 = delta splat = (16 - offset).
-    e.mov(e.w0, 16);
-    e.sub(e.w0, e.w0, e.w17);
-    e.dup(VReg(2).b16, e.w0);
-
-    // v3 = masked delta = mask & delta.
-    e.and_(VReg(3).b16, VReg(3).b16, VReg(2).b16);
-
-    // Restore identity and compute ctrl = identity + masked_delta.
-    e.ldr(QReg(2),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    e.add(VReg(2).b16, VReg(2).b16, VReg(3).b16);
-
-    // 2-register TBL: blend original mem and rev32(src).
-    e.tbl(VReg(2).b16, VReg(0).b16, 2, VReg(2).b16);
-    e.str(QReg(2), ptr(e.x16));
+    e.and_(e.w2, e.w0, 0xF);
+    e.mov(e.w1, 16);
+    e.sub(e.w2, e.w1, e.w2);
+    e.add(e.x1, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH));
+    EmitPartialVectorStore(e, e.x0, e.x1, e.w2);
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_STVL, STVL_V128);
@@ -1974,59 +2001,24 @@ EMITTER_OPCODE_TABLE(OPCODE_STVL, STVL_V128);
 // ============================================================================
 struct STVR_V128 : Sequence<STVR_V128, I<OPCODE_STVR, VoidOp, I64Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    // Inline STVR using 2-register TBL over {original_mem, rev32(src)}.
-    // STVR writes bytes 0..offset-1 from the byte-swapped source tail.
-    // ctrl[i] = 16 + (16 - offset + i) where i < offset (from rev32(src)),
-    // ctrl[i] = i (keep original) where i >= offset.
-    // This equals: ctrl = identity + (mask & delta)
-    //   where mask = (i < offset), delta = (32 - offset).
-    // When offset == 0, no bytes are written (mask is all-zero → identity →
-    // load and store back the same memory, effectively a no-op).
-    // A constant source first: LoadV128Const may use x0 as its GPR scratch,
-    // and ComputeMemoryAddress returns the address in x0.
-    int s = SrcVReg(e, i.src2, 2);
+    // Store bytes 0..offset-1 of the block from the tail of the byte-swapped
+    // source, again contiguous. offset == 0 stores nothing, which matters:
+    // memcpy tails use stvrx on an address that can sit one past a valid page
+    // (the old full-block load and store faulted there with
+    // protect_on_release, and otherwise rewrote another allocation's bytes).
+    int s = SrcVReg(e, i.src2, 0);
+
+    e.rev32(VReg(0).b16, VReg(s).b16);
+    e.str(QReg(0),
+          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
+
     auto addr = ComputeMemoryAddress(e, i.src1);
-
-    // x0 = host address, w17 = offset, x16 = aligned address (saved).
     e.add(e.x0, e.GetMembaseReg(), addr);
-    e.and_(e.w17, e.w0, 0xF);
+    e.and_(e.w2, e.w0, 0xF);
     e.and_(e.x0, e.x0, ~0xFull);
-    e.mov(e.x16, e.x0);
-
-    // v0 = original mem (table reg 0), v1 = rev32(src) (table reg 1).
-    e.ldr(QReg(0), ptr(e.x0));
-    e.rev32(VReg(1).b16, VReg(s).b16);
-
-    // Build identity in v2.
-    e.mov(e.x0, 0x0706050403020100ull);
-    e.fmov(DReg(2), e.x0);
-    e.mov(e.x0, 0x0F0E0D0C0B0A0908ull);
-    e.ins(VReg(2).d2[1], e.x0);
-
-    // Save identity to stack scratch.
-    e.str(QReg(2),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-
-    // v3 = mask: 0xFF where i < offset (complement of STVL's mask).
-    e.dup(VReg(3).b16, e.w17);
-    e.cmhi(VReg(3).b16, VReg(3).b16, VReg(2).b16);
-
-    // v2 = delta splat = (32 - offset).
-    e.mov(e.w0, 32);
-    e.sub(e.w0, e.w0, e.w17);
-    e.dup(VReg(2).b16, e.w0);
-
-    // v3 = masked delta.
-    e.and_(VReg(3).b16, VReg(3).b16, VReg(2).b16);
-
-    // Restore identity and compute ctrl.
-    e.ldr(QReg(2),
-          ptr(e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH)));
-    e.add(VReg(2).b16, VReg(2).b16, VReg(3).b16);
-
-    // 2-register TBL and store.
-    e.tbl(VReg(2).b16, VReg(0).b16, 2, VReg(2).b16);
-    e.str(QReg(2), ptr(e.x16));
+    e.add(e.x1, e.sp, static_cast<uint32_t>(StackLayout::GUEST_SCRATCH) + 16);
+    e.sub(e.x1, e.x1, e.x2);
+    EmitPartialVectorStore(e, e.x0, e.x1, e.w2);
   }
 };
 EMITTER_OPCODE_TABLE(OPCODE_STVR, STVR_V128);

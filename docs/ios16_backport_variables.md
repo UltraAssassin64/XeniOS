@@ -26,15 +26,15 @@ further edits.
 | `now` | local in GetLogFilePath | Current time used to name the log file. | `src/xenia/ui/windowed_app_main_ios.mm` | 1264, 1266 | 2 |
 | `local_time` | local in GetLogFilePath | now broken down in the device's time zone. | `src/xenia/ui/windowed_app_main_ios.mm` | 1265, 1266, 1269 | 3 |
 | `log_name` | local in GetLogFilePath | File name xenia_<date>_<time>.log. | `src/xenia/ui/windowed_app_main_ios.mm` | 1267, 1268, 1270 | 4 |
-| `kText` | enumerator of IOSConfigControlType | Settings row whose value is edited as text. | `src/xenia/ui/windowed_app_main_ios.mm` | 543, 1230, 3876, 8218, 8271 | 5 |
-| `AddAllConfigVarSettings` | function | Adds a settings section per config category with every variable not already shown. | `src/xenia/ui/windowed_app_main_ios.mm` | 1204, 3792 | 2 |
+| `kText` | enumerator of IOSConfigControlType | Settings row whose value is edited as text. | `src/xenia/ui/windowed_app_main_ios.mm` | 543, 1230, 3886, 8295, 8348 | 5 |
+| `AddAllConfigVarSettings` | function | Adds a settings section per config category with every variable not already shown. | `src/xenia/ui/windowed_app_main_ios.mm` | 1204, 3802 | 2 |
 | `existing_keys` | local in AddAllConfigVarSettings | Config keys the curated sections already expose, so they are not listed twice. | `src/xenia/ui/windowed_app_main_ios.mm` | 1208, 1212, 1218 | 3 |
 | `by_category` | local in AddAllConfigVarSettings | Generated sections keyed by config category. | `src/xenia/ui/windowed_app_main_ios.mm` | 1216, 1234, 1238 | 3 |
-| `parsed` | local in ApplyIOSConfigSections | The edited text parsed as a TOML value. | `src/xenia/ui/windowed_app_main_ios.mm` | 3890, 3892, 3895, 3902 | 4 |
-| `editor` | local in tableView:didSelectRowAtIndexPath: | Alert with a text field used to edit a kText row. | `src/xenia/ui/windowed_app_main_ios.mm` | 8275, 8279, 8285, 8288, 8291, 8301 | 6 |
+| `parsed` | local in ApplyIOSConfigSections | The edited text parsed as a TOML value. | `src/xenia/ui/windowed_app_main_ios.mm` | 3900, 3902, 3905, 3912 | 4 |
+| `editor` | local in tableView:didSelectRowAtIndexPath: | Alert with a text field used to edit a kText row. | `src/xenia/ui/windowed_app_main_ios.mm` | 8352, 8356, 8362, 8365, 8368, 8378 | 6 |
 | `DrawStats` | struct in MetalCommandProcessor | Counters describing what happened to guest draws. | `src/xenia/gpu/metal/metal_command_processor.h` | 644, 659, 669 | 3 |
 | `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.h` | 659, 661 | 2 |
-| `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2773, 2778, 2785, 2786, 2787, 2788, 2789, 2790, 2841, 2849, 2850, 2851, 2852, 2853, 2856, 2863, 2864, 2865, 2866, 2867, 2868, 2869, 2886, 2897, 2898, 2899, 2900, 2962, 2969, 2989, 2999, 3000, 3002, 3275, 3277, 3313, 3338, 4745, 4776, 4824, 6363, 6364, 7039, 7052 | 53 |
+| `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2773, 2778, 2785, 2786, 2787, 2788, 2789, 2790, 2841, 2849, 2850, 2851, 2852, 2853, 2856, 2863, 2864, 2865, 2866, 2867, 2868, 2869, 2886, 2897, 2898, 2899, 2900, 2962, 2969, 2989, 2999, 3000, 3002, 3275, 3277, 3313, 3338, 4752, 4783, 4831, 6383, 6384, 7059, 7072 | 53 |
 | `kDrawStatsFrames` | constant in MetalCommandProcessor | Number of presented frames between draw-stat log lines. | `src/xenia/gpu/metal/metal_command_processor.h` | 641, 643 | 2 |
 | `kDrawStatsFrames` | constant in MetalCommandProcessor | Number of presented frames between draw-stat log lines. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2856 | 1 |
 | `app_version` | shell variable, CI Prepare artifacts step | CFBundleShortVersionString of the built app. | `.github/workflows/CI.yml` | 662, 664 | 2 |
@@ -47,7 +47,7 @@ further edits.
 | `touch` | namespace `xe::hid::touch` | Holds the on-screen controller driver and its state. | `src/xenia/hid/touch_input_driver_ios.cc` | 20, 185 | 2 |
 | `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/hid/touch_input_driver_ios.h` | 27 | 1 |
 | `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/hid/touch_input_driver_ios.cc` | 159 | 1 |
-| `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/ui/windowed_app_main_ios.mm` | 8380, 8536 | 2 |
+| `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/ui/windowed_app_main_ios.mm` | 8457, 8613 | 2 |
 | `TouchInputDriver` | class (anonymous namespace) | Input driver presenting the on-screen controller as a fallback gamepad. | `src/xenia/hid/touch_input_driver_ios.cc` | 29, 31, 182 | 3 |
 | `touch_state_mutex_` | file-scope variable | Guards `touch_state_`. | `src/xenia/hid/touch_input_driver_ios.cc` | 24, 25, 66, 107, 162 | 5 |
 | `touch_state_` | file-scope variable | Latest on-screen controller state and packet number. | `src/xenia/hid/touch_input_driver_ios.cc` | 27, 67, 108, 109, 113, 163, 177 | 8 |
@@ -57,51 +57,51 @@ further edits.
 | `keystroke_bit` | local in GetKeystroke | Bit of the button being examined. | `src/xenia/hid/touch_input_driver_ios.cc` | 121, 122, 124, 128 | 4 |
 | `pressed` | local in GetKeystroke | Whether that button is currently down. | `src/xenia/hid/touch_input_driver_ios.cc` | 122, 125, 132 | 3 |
 | `last_keystroke_buttons_` | member of TouchInputDriver | Buttons already reported through GetKeystroke. | `src/xenia/hid/touch_input_driver_ios.cc` | 124, 128, 154 | 3 |
-| `XeniaTouchPadView` | Objective-C class | The on-screen controller view. | `src/xenia/ui/windowed_app_main_ios.mm` | 8378, 8400, 8407, 8647, 8746 | 5 |
-| `XeniaTouchPadControl` | struct | One control of the on-screen controller: kind, button bit, label, centre, radius. | `src/xenia/ui/windowed_app_main_ios.mm` | 8390, 8408, 8441, 8586 | 4 |
-| `XeniaTouchPadControlKind` | enum | Kind of control. | `src/xenia/ui/windowed_app_main_ios.mm` | 8382, 8391 | 2 |
-| `XeniaTouchPadControlKindButton` | enumerator | A digital button. | `src/xenia/ui/windowed_app_main_ios.mm` | 8383, 8446, 8448, 8450, 8452, 8453, 8455, 8457, 8459, 8461, 8463, 8465, 8467, 8469, 8471, 8473 | 16 |
-| `XeniaTouchPadControlKindLeftTrigger` | enumerator | Left trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8384, 8444, 8528 | 3 |
-| `XeniaTouchPadControlKindRightTrigger` | enumerator | Right trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8385, 8445, 8530 | 3 |
-| `XeniaTouchPadControlKindLeftStick` | enumerator | Left thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8386, 8442, 8507, 8518, 8591, 8619 | 6 |
-| `XeniaTouchPadControlKindRightStick` | enumerator | Right thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8387, 8443, 8508, 8592, 8620 | 5 |
-| `kXeniaTouchPadControlCount` | file-scope constant | Number of controls (19). | `src/xenia/ui/windowed_app_main_ios.mm` | 8398, 8408, 8441, 8476, 8483, 8585 | 6 |
-| `controls_` | instance variable of XeniaTouchPadView | The controls with their current positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 8408, 8477, 8484, 8485, 8487, 8507, 8508, 8510, 8511, 8518, 8528, 8530, 8533, 8586 | 16 |
-| `pad_touches_` | instance variable of XeniaTouchPadView | Touches currently on the pad. | `src/xenia/ui/windowed_app_main_ios.mm` | 8410, 8421, 8428, 8504, 8505, 8542, 8545, 8554, 8567, 8569, 8589, 8590 | 12 |
-| `pad_touch_controls_` | instance variable of XeniaTouchPadView | Control each of those touches started on. | `src/xenia/ui/windowed_app_main_ios.mm` | 8411, 8422, 8429, 8506, 8546, 8555, 8570, 8593 | 8 |
-| `controlIndexAtPoint` | method of XeniaTouchPadView | Index of the control at a point, or -1. | `src/xenia/ui/windowed_app_main_ios.mm` | 8402, 8482, 8497, 8524, 8552, 8594, 10156 | 7 |
-| `resetTouches` | method of XeniaTouchPadView | Releases every control and reports the idle state. | `src/xenia/ui/windowed_app_main_ios.mm` | 8404, 8541, 9544 | 3 |
-| `reportState` | method of XeniaTouchPadView | Computes the gamepad state from the touches and passes it to SetTouchState. | `src/xenia/ui/windowed_app_main_ios.mm` | 8500, 8547, 8558, 8562, 8573 | 5 |
-| `touchPadView` | property of XeniaViewController | The on-screen controller view instance. | `src/xenia/ui/windowed_app_main_ios.mm` | 8647, 8746, 8747, 8749, 8750, 9541, 9542, 9544, 10155, 10156 | 11 |
-| `hide_touch_pad` | local in pollControllerNavigation | Whether the on-screen controller should be hidden now. | `src/xenia/ui/windowed_app_main_ios.mm` | 9538, 9541, 9542, 9543 | 4 |
-| `width` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8435, 8439, 8440, 8631 | 5 |
-| `height` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8436, 8442, 8443, 8456, 8458, 8460, 8462, 8464, 8466, 8468, 8470, 8472, 8474, 8632 | 15 |
-| `insets` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8437, 8438, 8439 | 3 |
-| `left` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8438, 8442, 8444, 8447, 8456, 8458, 8460, 8462, 8472 | 10 |
-| `right` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8439, 8443, 8445, 8449, 8464, 8466, 8468, 8470, 8474 | 10 |
-| `middle` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8440, 8451, 8452, 8454 | 4 |
-| `controls` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8441, 8477, 8495 | 3 |
-| `reach` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8487, 8488 | 3 |
-| `dx` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8484, 8488 | 3 |
-| `dy` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8485, 8488 | 3 |
-| `buttons` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8392, 8501, 8533, 8536 | 4 |
-| `triggers` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8502, 8523, 8529, 8531, 8536 | 6 |
-| `axes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8503, 8519, 8520, 8536, 8537 | 7 |
-| `point` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8401, 8402, 8482, 8484, 8485, 8496, 8497, 8505, 8510, 8511, 8524, 8590, 8594, 8597, 8598 | 15 |
-| `index` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8506, 8507, 8508, 8510, 8511, 8518, 8524, 8525, 8528, 8530, 8533, 8552, 8553, 8555 | 16 |
-| `x` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8484, 8510, 8512, 8514, 8519, 8597, 8599, 8601, 8604, 8631 | 18 |
-| `y` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8485, 8511, 8512, 8515, 8520, 8598, 8599, 8602, 8604, 8632 | 18 |
-| `length` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8512, 8513, 8514, 8515, 8599, 8600, 8601, 8602 | 8 |
-| `axis` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8517, 8519, 8520 | 3 |
-| `position` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8567, 8568, 8569, 8570 | 4 |
-| `attributes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8581, 8630, 8633 | 3 |
-| `control` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8401, 8403, 8409, 8486, 8586, 8588, 8591, 8592, 8597, 8598, 8600, 8601, 8602, 8604, 8609, 8610, 8619, 8620, 8623, 8630, 8631 | 22 |
-| `active` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8587, 8595, 8614 | 4 |
-| `knob` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8588, 8604, 8622, 8631, 8632 | 5 |
-| `is_stick` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8591, 8593, 8596 | 3 |
-| `outline` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8608, 8615, 8617, 8618 | 4 |
-| `knob_path` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8621, 8628 | 2 |
-| `label_size` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8630, 8631, 8632 | 3 |
+| `XeniaTouchPadView` | Objective-C class | The on-screen controller view. | `src/xenia/ui/windowed_app_main_ios.mm` | 8455, 8477, 8484, 8724, 8823 | 5 |
+| `XeniaTouchPadControl` | struct | One control of the on-screen controller: kind, button bit, label, centre, radius. | `src/xenia/ui/windowed_app_main_ios.mm` | 8467, 8485, 8518, 8663 | 4 |
+| `XeniaTouchPadControlKind` | enum | Kind of control. | `src/xenia/ui/windowed_app_main_ios.mm` | 8459, 8468 | 2 |
+| `XeniaTouchPadControlKindButton` | enumerator | A digital button. | `src/xenia/ui/windowed_app_main_ios.mm` | 8460, 8523, 8525, 8527, 8529, 8530, 8532, 8534, 8536, 8538, 8540, 8542, 8544, 8546, 8548, 8550 | 16 |
+| `XeniaTouchPadControlKindLeftTrigger` | enumerator | Left trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8461, 8521, 8605 | 3 |
+| `XeniaTouchPadControlKindRightTrigger` | enumerator | Right trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8462, 8522, 8607 | 3 |
+| `XeniaTouchPadControlKindLeftStick` | enumerator | Left thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8463, 8519, 8584, 8595, 8668, 8696 | 6 |
+| `XeniaTouchPadControlKindRightStick` | enumerator | Right thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8464, 8520, 8585, 8669, 8697 | 5 |
+| `kXeniaTouchPadControlCount` | file-scope constant | Number of controls (19). | `src/xenia/ui/windowed_app_main_ios.mm` | 8475, 8485, 8518, 8553, 8560, 8662 | 6 |
+| `controls_` | instance variable of XeniaTouchPadView | The controls with their current positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 8485, 8554, 8561, 8562, 8564, 8584, 8585, 8587, 8588, 8595, 8605, 8607, 8610, 8663 | 16 |
+| `pad_touches_` | instance variable of XeniaTouchPadView | Touches currently on the pad. | `src/xenia/ui/windowed_app_main_ios.mm` | 8487, 8498, 8505, 8581, 8582, 8619, 8622, 8631, 8644, 8646, 8666, 8667 | 12 |
+| `pad_touch_controls_` | instance variable of XeniaTouchPadView | Control each of those touches started on. | `src/xenia/ui/windowed_app_main_ios.mm` | 8488, 8499, 8506, 8583, 8623, 8632, 8647, 8670 | 8 |
+| `controlIndexAtPoint` | method of XeniaTouchPadView | Index of the control at a point, or -1. | `src/xenia/ui/windowed_app_main_ios.mm` | 8479, 8559, 8574, 8601, 8629, 8671, 10233 | 7 |
+| `resetTouches` | method of XeniaTouchPadView | Releases every control and reports the idle state. | `src/xenia/ui/windowed_app_main_ios.mm` | 8481, 8618, 9621 | 3 |
+| `reportState` | method of XeniaTouchPadView | Computes the gamepad state from the touches and passes it to SetTouchState. | `src/xenia/ui/windowed_app_main_ios.mm` | 8577, 8624, 8635, 8639, 8650 | 5 |
+| `touchPadView` | property of XeniaViewController | The on-screen controller view instance. | `src/xenia/ui/windowed_app_main_ios.mm` | 8724, 8823, 8824, 8826, 8827, 9618, 9619, 9621, 10232, 10233 | 11 |
+| `hide_touch_pad` | local in pollControllerNavigation | Whether the on-screen controller should be hidden now. | `src/xenia/ui/windowed_app_main_ios.mm` | 9615, 9618, 9619, 9620 | 4 |
+| `width` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8512, 8516, 8517, 8708 | 5 |
+| `height` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8513, 8519, 8520, 8533, 8535, 8537, 8539, 8541, 8543, 8545, 8547, 8549, 8551, 8709 | 15 |
+| `insets` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8514, 8515, 8516 | 3 |
+| `left` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8515, 8519, 8521, 8524, 8533, 8535, 8537, 8539, 8549 | 10 |
+| `right` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8516, 8520, 8522, 8526, 8541, 8543, 8545, 8547, 8551 | 10 |
+| `middle` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8517, 8528, 8529, 8531 | 4 |
+| `controls` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8518, 8554, 8572 | 3 |
+| `reach` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8564, 8565 | 3 |
+| `dx` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8561, 8565 | 3 |
+| `dy` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8562, 8565 | 3 |
+| `buttons` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8469, 8578, 8610, 8613 | 4 |
+| `triggers` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8579, 8600, 8606, 8608, 8613 | 6 |
+| `axes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8580, 8596, 8597, 8613, 8614 | 7 |
+| `point` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8478, 8479, 8559, 8561, 8562, 8573, 8574, 8582, 8587, 8588, 8601, 8667, 8671, 8674, 8675 | 15 |
+| `index` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8583, 8584, 8585, 8587, 8588, 8595, 8601, 8602, 8605, 8607, 8610, 8629, 8630, 8632 | 16 |
+| `x` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8561, 8587, 8589, 8591, 8596, 8674, 8676, 8678, 8681, 8708 | 18 |
+| `y` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8562, 8588, 8589, 8592, 8597, 8675, 8676, 8679, 8681, 8709 | 18 |
+| `length` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8589, 8590, 8591, 8592, 8676, 8677, 8678, 8679 | 8 |
+| `axis` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8594, 8596, 8597 | 3 |
+| `position` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8644, 8645, 8646, 8647 | 4 |
+| `attributes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8658, 8707, 8710 | 3 |
+| `control` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8478, 8480, 8486, 8563, 8663, 8665, 8668, 8669, 8674, 8675, 8677, 8678, 8679, 8681, 8686, 8687, 8696, 8697, 8700, 8707, 8708 | 22 |
+| `active` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8664, 8672, 8691 | 4 |
+| `knob` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8665, 8681, 8699, 8708, 8709 | 5 |
+| `is_stick` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8668, 8670, 8673 | 3 |
+| `outline` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8685, 8692, 8694, 8695 | 4 |
+| `knob_path` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8698, 8705 | 2 |
+| `label_size` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8707, 8708, 8709 | 3 |
 | `ppc-test-binaries` | job id and artifact name, CPU tests workflow | Assembles the PowerPC instruction tests on Linux and hands the binaries to the macOS job. | `.github/workflows/cpu-tests.yml` | 19, 55, 64, 128 | 4 |
 | `cpu-tests-macos-arm64` | job id, CPU tests workflow | Builds and runs the CPU test programs on Apple Silicon. | `.github/workflows/cpu-tests.yml` | 62 | 1 |
 | `cache-binutils` | step id, CPU tests workflow | Cache of the patched PowerPC binutils build. | `.github/workflows/cpu-tests.yml` | 26, 35 | 2 |
@@ -142,9 +142,9 @@ further edits.
 | `mmio_text` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Text of one dump line. | `src/xenia/cpu/mmio_handler.cc` | 630, 634, 640, 657, 660, 665 | 6 |
 | `mmio_word` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Index of the word being added to a dump line. | `src/xenia/cpu/mmio_handler.cc` | 631, 632, 633, 637, 658, 659, 662 | 9 |
 | `mmio_end` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | End address of the guest function, or start + 0x200 if unknown. | `src/xenia/cpu/mmio_handler.cc` | 644, 648, 651 | 3 |
-| `kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey` | static NSString constant, iOS UI | User-defaults key of the "Auto-Enable JIT via TrollStore" toggle (stored as ios_auto_enable_jit_via_trollstore). | `src/xenia/ui/windowed_app_main_ios.mm` | 594, 3755, 10901, 10931 | 4 |
-| `jit_provider_name` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | "TrollStore" or "StikDebug", for the status label and log lines. | `src/xenia/ui/windowed_app_main_ios.mm` | 10929, 10936, 10968, 10969, 10979, 10981 | 6 |
-| `trollstore_url` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | apple-magnifier://enable-jit?bundle-id=... request for TrollStore. | `src/xenia/ui/windowed_app_main_ios.mm` | 10932, 10934, 10935 | 4 |
+| `kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey` | static NSString constant, iOS UI | User-defaults key of the "Auto-Enable JIT via TrollStore" toggle (stored as ios_auto_enable_jit_via_trollstore). | `src/xenia/ui/windowed_app_main_ios.mm` | 594, 3765, 10978, 11008 | 4 |
+| `jit_provider_name` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | "TrollStore" or "StikDebug", for the status label and log lines. | `src/xenia/ui/windowed_app_main_ios.mm` | 11006, 11013, 11045, 11046, 11056, 11058 | 6 |
+| `trollstore_url` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | apple-magnifier://enable-jit?bundle-id=... request for TrollStore. | `src/xenia/ui/windowed_app_main_ios.mm` | 11009, 11011, 11012 | 4 |
 | `mmio_frame` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Guest stack frame being walked (starts at r1). | `src/xenia/cpu/mmio_handler.cc` | 670, 672, 675, 676, 687 | 6 |
 | `mmio_depth` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Depth of the frame in the guest stack walk. | `src/xenia/cpu/mmio_handler.cc` | 671, 672, 673, 681, 683 | 5 |
 | `mmio_caller_frame` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Back-chain pointer: the caller's frame. | `src/xenia/cpu/mmio_handler.cc` | 674, 676, 680, 682, 687 | 6 |
@@ -177,80 +177,80 @@ further edits.
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.cc` | 18 | 1 |
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.h` | 16 | 1 |
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.h` | 547, 592 | 2 |
-| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.cc` | 577 | 1 |
+| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.cc` | 589 | 1 |
 | `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.h` | 548, 549, 594 | 3 |
-| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.cc` | 533 | 1 |
-| `kernel_call_history` | thread_local array | The thread's last 32 kernel exports, newest first. | `src/xenia/kernel/util/shim_utils.cc` | 556, 561, 569, 570, 574, 594, 598, 637, 651 | 9 |
-| `kernel_call_runs` | thread_local array | For cycle lengths 1-8, how many calls in a row matched the call that many places earlier; only the shortest cycle at the threshold is reported. | `src/xenia/kernel/util/shim_utils.cc` | 558, 562, 564, 621 | 4 |
-| `kernel_call_period` | local | Cycle length being checked (1-8). | `src/xenia/kernel/util/shim_utils.cc` | 559, 560, 561, 562, 564, 619, 620, 621, 635, 646 | 12 |
-| `kernel_call_index` | local | Index into the history. | `src/xenia/kernel/util/shim_utils.cc` | 567, 568, 569, 570, 571, 572, 592, 593, 594, 598, 599, 635, 636, 637, 646, 647, 651 | 21 |
-| `kernel_call_threshold` | local | Copy of the cvar for this call. | `src/xenia/kernel/util/shim_utils.cc` | 577, 624, 629, 630, 660, 684, 685 | 7 |
-| `kernel_call_run` | local | Run length for the cycle length being checked. | `src/xenia/kernel/util/shim_utils.cc` | 621, 624, 629, 630, 656, 660, 684, 685 | 8 |
-| `kernel_call_names` | local | Text of the repeating cycle ("A -> B"), of the last 32 calls in a storm report, or of a listed thread's suspend count, priority, CPU and start address. | `src/xenia/kernel/util/shim_utils.cc` | 374, 379, 388, 399, 591, 597, 608, 645, 648, 649, 651, 657 | 12 |
-| `kernel_call_thread` | local | Current guest XThread, for its handle. | `src/xenia/kernel/util/shim_utils.cc` | 578, 604, 656 | 5 |
-| `kernel_call_memory` | local | Guest memory, for the stack walk and the code dumps. | `src/xenia/kernel/util/shim_utils.cc` | 94, 113, 121, 406, 416, 664, 674 | 7 |
-| `kernel_call_frame` | parameter of LogKernelCallStack | Guest stack frame being walked. | `src/xenia/kernel/util/shim_utils.cc` | 93, 104, 107, 109, 113, 114, 123 | 8 |
-| `kernel_call_stack` | local | Text of the guest return addresses. | `src/xenia/kernel/util/shim_utils.cc` | 95, 108, 119, 126 | 4 |
-| `kernel_call_depth` | local | Depth in the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 102, 103 | 3 |
-| `kernel_call_caller_frame` | local | Back-chain pointer to the caller's frame. | `src/xenia/kernel/util/shim_utils.cc` | 112, 114, 115, 116, 122, 123 | 6 |
+| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.cc` | 545 | 1 |
+| `kernel_call_history` | thread_local array | The thread's last 32 kernel exports, newest first. | `src/xenia/kernel/util/shim_utils.cc` | 568, 573, 581, 582, 586, 606, 610, 649, 663 | 9 |
+| `kernel_call_runs` | thread_local array | For cycle lengths 1-8, how many calls in a row matched the call that many places earlier; only the shortest cycle at the threshold is reported. | `src/xenia/kernel/util/shim_utils.cc` | 570, 574, 576, 633 | 4 |
+| `kernel_call_period` | local | Cycle length being checked (1-8). | `src/xenia/kernel/util/shim_utils.cc` | 571, 572, 573, 574, 576, 631, 632, 633, 647, 658 | 12 |
+| `kernel_call_index` | local | Index into the history. | `src/xenia/kernel/util/shim_utils.cc` | 579, 580, 581, 582, 583, 584, 604, 605, 606, 610, 611, 647, 648, 649, 658, 659, 663 | 21 |
+| `kernel_call_threshold` | local | Copy of the cvar for this call. | `src/xenia/kernel/util/shim_utils.cc` | 589, 636, 641, 642, 672, 696, 697 | 7 |
+| `kernel_call_run` | local | Run length for the cycle length being checked. | `src/xenia/kernel/util/shim_utils.cc` | 633, 636, 641, 642, 668, 672, 696, 697 | 8 |
+| `kernel_call_names` | local | Text of the repeating cycle ("A -> B"), of the last 32 calls in a storm report, or of a listed thread's suspend count, priority, CPU and start address. | `src/xenia/kernel/util/shim_utils.cc` | 386, 391, 400, 411, 603, 609, 620, 657, 660, 661, 663, 669 | 12 |
+| `kernel_call_thread` | local | Current guest XThread, for its handle. | `src/xenia/kernel/util/shim_utils.cc` | 590, 616, 668 | 5 |
+| `kernel_call_memory` | local | Guest memory, for the stack walk and the code dumps. | `src/xenia/kernel/util/shim_utils.cc` | 95, 114, 122, 418, 428, 676, 686 | 7 |
+| `kernel_call_frame` | parameter of LogKernelCallStack | Guest stack frame being walked. | `src/xenia/kernel/util/shim_utils.cc` | 94, 105, 108, 110, 114, 115, 124 | 8 |
+| `kernel_call_stack` | local | Text of the guest return addresses. | `src/xenia/kernel/util/shim_utils.cc` | 96, 109, 120, 127 | 4 |
+| `kernel_call_depth` | local | Depth in the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 103, 104 | 3 |
+| `kernel_call_caller_frame` | local | Back-chain pointer to the caller's frame. | `src/xenia/kernel/util/shim_utils.cc` | 113, 115, 116, 117, 123, 124 | 6 |
 | `NoteKernelCallDone` | function, kernel shim | Clears the thread's in-call mark after every kernel export returns. | `src/xenia/kernel/util/shim_utils.h` | 550, 624 | 2 |
-| `NoteKernelCallDone` | function, kernel shim | Clears the thread's in-call mark after every kernel export returns. | `src/xenia/kernel/util/shim_utils.cc` | 526 | 1 |
+| `NoteKernelCallDone` | function, kernel shim | Clears the thread's in-call mark after every kernel export returns. | `src/xenia/kernel/util/shim_utils.cc` | 538 | 1 |
 | `kernel_call_noted` | local in the export trampoline | Whether this call was reported to NoteKernelCall (so NoteKernelCallDone is called). | `src/xenia/kernel/util/shim_utils.h` | 592, 593, 623 | 3 |
-| `KernelCallThreadState` | struct (anonymous namespace) | One guest thread's kernel-call state, readable from any thread. | `src/xenia/kernel/util/shim_utils.cc` | 58, 73, 74, 218, 535 | 5 |
-| `kernel_call_threads_mutex` | file-static mutex | Guards kernel_call_threads. | `src/xenia/kernel/util/shim_utils.cc` | 72, 217, 540 | 3 |
-| `kernel_call_threads` | file-static vector | Every thread's KernelCallThreadState; entries are never freed. | `src/xenia/kernel/util/shim_utils.cc` | 73, 218, 541 | 3 |
-| `kernel_call_this_thread` | thread_local pointer | This thread's KernelCallThreadState. | `src/xenia/kernel/util/shim_utils.cc` | 74, 527, 528, 529, 534, 535, 537, 538, 541, 543, 544, 545, 546, 547, 549, 550, 551 | 17 |
-| `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/kernel/util/shim_utils.cc` | 215, 614, 686 | 3 |
-| `kernel_call_now` | local | Current host uptime in ms (in LogKernelCallThreads and in NoteKernelCall). | `src/xenia/kernel/util/shim_utils.cc` | 216, 227, 548, 549, 587, 588 | 6 |
-| `kernel_call_lock` | local | Lock on kernel_call_threads_mutex. | `src/xenia/kernel/util/shim_utils.cc` | 217, 540 | 2 |
-| `kernel_call_state` | local | Thread state being logged. | `src/xenia/kernel/util/shim_utils.cc` | 218, 219, 220, 227, 231, 235, 241, 260, 261, 262 | 12 |
-| `kernel_call_last` | local | That thread's last export. | `src/xenia/kernel/util/shim_utils.cc` | 219, 222, 223, 233 | 5 |
-| `kernel_call_inside` | local | Whether that thread is inside a kernel call now. | `src/xenia/kernel/util/shim_utils.cc` | 220, 222, 232, 234, 240 | 5 |
-| `kernel_call_owner` | local | The new thread's XThread, for handle and name. | `src/xenia/kernel/util/shim_utils.cc` | 536, 537, 538 | 3 |
-| `kernel_call_only_sleeps` | local | True when the repeating cycle is only KeDelayExecutionThread (idle, not reported). | `src/xenia/kernel/util/shim_utils.cc` | 634, 639, 642 | 3 |
-| `kernel_call_code` | local | Guest address a code dump starts at (lr - 0x80 in a repeat report; sampled guest PC - 0x40 in the guest-thread list). | `src/xenia/kernel/util/shim_utils.cc` | 407, 408, 417, 421, 665, 675, 678 | 7 |
-| `kernel_call_line` | local | First word of a code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 409, 410, 412, 413, 421, 667, 668, 670, 671, 678 | 12 |
-| `kernel_call_words` | local | Text of one code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 411, 414, 421, 669, 672, 678 | 6 |
-| `kernel_call_word` | local | Word being added to a code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 412, 413, 417, 670, 671, 675 | 8 |
-| `LogKernelCallStack` | function in xe::kernel::shim | Returns the guest return addresses up the stack from a frame (back chain at 0(r1), saved LR at caller frame - 8); also used by the guest crash dump. | `src/xenia/kernel/util/shim_utils.cc` | 93, 262, 402, 610, 662 | 5 |
-| `guest_stack_pointer` | KernelCallThreadState field | Guest r1 at the thread's last kernel call, for its stack when it is blocked. | `src/xenia/kernel/util/shim_utils.cc` | 67, 262, 545 | 3 |
-| `guest_arg0` | KernelCallThreadState field | Guest r3 at the thread's last kernel call (the handle for NtWaitForSingleObjectEx). | `src/xenia/kernel/util/shim_utils.cc` | 68, 241, 546 | 3 |
-| `guest_arg1` | KernelCallThreadState field | Guest r4 at the thread's last kernel call. | `src/xenia/kernel/util/shim_utils.cc` | 69, 261, 547 | 3 |
-| `kernel_call_ms` | local | How long the logged thread has been inside, or out of, its last call. | `src/xenia/kernel/util/shim_utils.cc` | 226, 234, 240 | 3 |
-| `kernel_call_handle` | local | The blocked thread's r3, looked up in the object table. | `src/xenia/kernel/util/shim_utils.cc` | 241, 249, 260 | 3 |
-| `kernel_call_object` | local | Text naming a wait object, or the guest function / host symbol a sampled host PC is in. | `src/xenia/kernel/util/shim_utils.cc` | 242, 250, 257, 261, 324, 335, 340, 350, 366, 399 | 10 |
-| `kernel_call_xobject` | local | Object-table lookup result for that handle. | `src/xenia/kernel/util/shim_utils.cc` | 247, 252, 253 | 3 |
-| `kernel_call_total` | local | This thread's call count including this call. | `src/xenia/kernel/util/shim_utils.cc` | 551, 585, 605 | 3 |
-| `kernel_call_history_lr` | thread_local array | Guest return address of each call in kernel_call_history. | `src/xenia/kernel/util/shim_utils.cc` | 557, 571, 572, 575, 599 | 5 |
-| `kernel_call_storm_ms` | thread_local | Uptime at the last millionth call on this thread. | `src/xenia/kernel/util/shim_utils.cc` | 583, 587, 588 | 3 |
-| `kernel_call_storm_reports` | thread_local | How many million-call bursts under a second this thread has had (every tenth is logged). | `src/xenia/kernel/util/shim_utils.cc` | 584, 590, 611 | 3 |
-| `kernel_call_storm_elapsed` | local | Milliseconds this thread took for its last million calls. | `src/xenia/kernel/util/shim_utils.cc` | 586, 589, 605 | 3 |
-| `kernel_call_global` | local | The global critical region mutex, only try-locked so a report never waits on a stuck thread (wait-object lookup, guest-thread list, stack walk). | `src/xenia/kernel/util/shim_utils.cc` | 98, 99, 125, 245, 246, 255, 304, 305, 311, 375, 386, 405, 424 | 13 |
-| `kernel_call_xthreads` | local | Every XThread in the object table. | `src/xenia/kernel/util/shim_utils.cc` | 309, 312 | 2 |
-| `kernel_call_xthread` | local | The XThread being listed. | `src/xenia/kernel/util/shim_utils.cc` | 312, 313, 318, 376, 378, 381, 382, 383, 384, 391, 392, 397, 398, 420 | 15 |
-| `kernel_call_host_pc` | local / parameter | Host program counter of a thread (in SampleKernelCallHostPc and the guest-thread list). | `src/xenia/kernel/util/shim_utils.cc` | 191, 204, 210, 320, 328, 329, 334, 360, 363, 368, 399 | 11 |
-| `kernel_call_host_thread` | local / parameter | A running guest thread's host thread, to sample. | `src/xenia/kernel/util/shim_utils.cc` | 190, 194, 317, 321, 322, 345 | 6 |
-| `kernel_call_port` | local | Mach thread port of the host thread (in SampleKernelCallHostPc). | `src/xenia/kernel/util/shim_utils.cc` | 193, 195, 196, 197, 201, 207 | 6 |
-| `kernel_call_arm_state` | local | ARM64 register state read with thread_get_state (in SampleKernelCallHostPc). | `src/xenia/kernel/util/shim_utils.cc` | 198, 202, 205 | 3 |
-| `kernel_call_state_count` | local | Size argument for thread_get_state (in SampleKernelCallHostPc). | `src/xenia/kernel/util/shim_utils.cc` | 199, 203 | 2 |
-| `kernel_call_function` | local | JIT guest function containing a sampled host PC, from the code cache. | `src/xenia/kernel/util/shim_utils.cc` | 327, 332, 333, 337, 346, 351, 354 | 7 |
-| `kernel_call_context` | local | That thread's guest PPC context, for lr and r1. | `src/xenia/kernel/util/shim_utils.cc` | 390, 400, 401, 402 | 5 |
-| `KernelCallReadable` | function in xe::kernel::shim | Whether a guest memory range is committed and readable, so the reports and the crash dump never read a page an exited thread released. | `src/xenia/kernel/util/shim_utils.cc` | 84, 107, 116, 270, 376, 378, 408 | 7 |
-| `kernel_call_heap` | local | Guest heap containing the address being checked. | `src/xenia/kernel/util/shim_utils.cc` | 85, 86, 89 | 3 |
-| `kernel_call_symbol` | local | dladdr() result naming the host function a sampled PC is in. | `src/xenia/kernel/util/shim_utils.cc` | 362, 364, 365, 367, 368 | 5 |
-| `SampleKernelCallHostPc` | function (anonymous namespace) | Reads another thread's host PC while it is suspended for a moment (Apple ARM64; 0 elsewhere). | `src/xenia/kernel/util/shim_utils.cc` | 189, 322, 345 | 3 |
-| `kernel_call_code_cache` | local | The JIT code cache, to map sampled host PCs to guest functions. | `src/xenia/kernel/util/shim_utils.cc` | 325, 329, 348 | 3 |
-| `kernel_call_guest_pc` | local | Guest address of the first sample for a thread running game code; 0 if it is not in game code. | `src/xenia/kernel/util/shim_utils.cc` | 331, 333, 337, 405, 407 | 5 |
-| `kernel_call_sample` | local | Index of the extra samples (7, 1 ms apart). | `src/xenia/kernel/util/shim_utils.cc` | 341, 342 | 3 |
-| `kernel_call_sample_pc` | local | Host PC of one extra sample. | `src/xenia/kernel/util/shim_utils.cc` | 344, 347, 348, 355 | 4 |
+| `KernelCallThreadState` | struct (anonymous namespace) | One guest thread's kernel-call state, readable from any thread. | `src/xenia/kernel/util/shim_utils.cc` | 59, 74, 75, 219, 547 | 5 |
+| `kernel_call_threads_mutex` | file-static mutex | Guards kernel_call_threads. | `src/xenia/kernel/util/shim_utils.cc` | 73, 218, 552 | 3 |
+| `kernel_call_threads` | file-static vector | Every thread's KernelCallThreadState; entries are never freed. | `src/xenia/kernel/util/shim_utils.cc` | 74, 219, 553 | 3 |
+| `kernel_call_this_thread` | thread_local pointer | This thread's KernelCallThreadState. | `src/xenia/kernel/util/shim_utils.cc` | 75, 539, 540, 541, 546, 547, 549, 550, 553, 555, 556, 557, 558, 559, 561, 562, 563 | 17 |
+| `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/kernel/util/shim_utils.cc` | 216, 626, 698 | 3 |
+| `kernel_call_now` | local | Current host uptime in ms (in LogKernelCallThreads and in NoteKernelCall). | `src/xenia/kernel/util/shim_utils.cc` | 217, 228, 560, 561, 599, 600 | 6 |
+| `kernel_call_lock` | local | Lock on kernel_call_threads_mutex. | `src/xenia/kernel/util/shim_utils.cc` | 218, 552 | 2 |
+| `kernel_call_state` | local | Thread state being logged. | `src/xenia/kernel/util/shim_utils.cc` | 219, 220, 221, 228, 232, 236, 242, 266, 267, 268 | 12 |
+| `kernel_call_last` | local | That thread's last export. | `src/xenia/kernel/util/shim_utils.cc` | 220, 223, 224, 234 | 5 |
+| `kernel_call_inside` | local | Whether that thread is inside a kernel call now. | `src/xenia/kernel/util/shim_utils.cc` | 221, 223, 233, 235, 241 | 5 |
+| `kernel_call_owner` | local | The new thread's XThread, for handle and name. | `src/xenia/kernel/util/shim_utils.cc` | 548, 549, 550 | 3 |
+| `kernel_call_only_sleeps` | local | True when the repeating cycle is only KeDelayExecutionThread (idle, not reported). | `src/xenia/kernel/util/shim_utils.cc` | 646, 651, 654 | 3 |
+| `kernel_call_code` | local | Guest address a code dump starts at (lr - 0x80 in a repeat report; sampled guest PC - 0x40 in the guest-thread list). | `src/xenia/kernel/util/shim_utils.cc` | 419, 420, 429, 433, 677, 687, 690 | 7 |
+| `kernel_call_line` | local | First word of a code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 421, 422, 424, 425, 433, 679, 680, 682, 683, 690 | 12 |
+| `kernel_call_words` | local | Text of one code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 423, 426, 433, 681, 684, 690 | 6 |
+| `kernel_call_word` | local | Word being added to a code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 424, 425, 429, 682, 683, 687 | 8 |
+| `LogKernelCallStack` | function in xe::kernel::shim | Returns the guest return addresses up the stack from a frame (back chain at 0(r1), saved LR at caller frame - 8); also used by the guest crash dump. | `src/xenia/kernel/util/shim_utils.cc` | 94, 268, 414, 622, 674 | 5 |
+| `guest_stack_pointer` | KernelCallThreadState field | Guest r1 at the thread's last kernel call, for its stack when it is blocked. | `src/xenia/kernel/util/shim_utils.cc` | 68, 268, 557 | 3 |
+| `guest_arg0` | KernelCallThreadState field | Guest r3 at the thread's last kernel call (the handle for NtWaitForSingleObjectEx). | `src/xenia/kernel/util/shim_utils.cc` | 69, 242, 558 | 3 |
+| `guest_arg1` | KernelCallThreadState field | Guest r4 at the thread's last kernel call. | `src/xenia/kernel/util/shim_utils.cc` | 70, 267, 559 | 3 |
+| `kernel_call_ms` | local | How long the logged thread has been inside, or out of, its last call. | `src/xenia/kernel/util/shim_utils.cc` | 227, 235, 241 | 3 |
+| `kernel_call_handle` | local | The blocked thread's r3, looked up in the object table. | `src/xenia/kernel/util/shim_utils.cc` | 242, 250, 266 | 3 |
+| `kernel_call_object` | local | Text naming a wait object, or the guest function / host symbol a sampled host PC is in. | `src/xenia/kernel/util/shim_utils.cc` | 243, 251, 256, 263, 267, 336, 347, 352, 362, 378, 411 | 11 |
+| `kernel_call_xobject` | local | Object-table lookup result for that handle. | `src/xenia/kernel/util/shim_utils.cc` | 248, 253, 254, 255, 257 | 5 |
+| `kernel_call_total` | local | This thread's call count including this call. | `src/xenia/kernel/util/shim_utils.cc` | 563, 597, 617 | 3 |
+| `kernel_call_history_lr` | thread_local array | Guest return address of each call in kernel_call_history. | `src/xenia/kernel/util/shim_utils.cc` | 569, 583, 584, 587, 611 | 5 |
+| `kernel_call_storm_ms` | thread_local | Uptime at the last millionth call on this thread. | `src/xenia/kernel/util/shim_utils.cc` | 595, 599, 600 | 3 |
+| `kernel_call_storm_reports` | thread_local | How many million-call bursts under a second this thread has had (every tenth is logged). | `src/xenia/kernel/util/shim_utils.cc` | 596, 602, 623 | 3 |
+| `kernel_call_storm_elapsed` | local | Milliseconds this thread took for its last million calls. | `src/xenia/kernel/util/shim_utils.cc` | 598, 601, 617 | 3 |
+| `kernel_call_global` | local | The global critical region mutex, only try-locked so a report never waits on a stuck thread (wait-object lookup, guest-thread list, stack walk). | `src/xenia/kernel/util/shim_utils.cc` | 99, 100, 126, 246, 247, 261, 316, 317, 323, 387, 398, 417, 436 | 13 |
+| `kernel_call_xthreads` | local | Every XThread in the object table. | `src/xenia/kernel/util/shim_utils.cc` | 321, 324 | 2 |
+| `kernel_call_xthread` | local | The XThread being listed. | `src/xenia/kernel/util/shim_utils.cc` | 324, 325, 330, 388, 390, 393, 394, 395, 396, 403, 404, 409, 410, 432 | 15 |
+| `kernel_call_host_pc` | local / parameter | Host program counter of a thread (in SampleKernelCallHostPc and the guest-thread list). | `src/xenia/kernel/util/shim_utils.cc` | 192, 205, 211, 332, 340, 341, 346, 372, 375, 380, 411 | 11 |
+| `kernel_call_host_thread` | local / parameter | A running guest thread's host thread, to sample. | `src/xenia/kernel/util/shim_utils.cc` | 191, 195, 329, 333, 334, 357 | 6 |
+| `kernel_call_port` | local | Mach thread port of the host thread (in SampleKernelCallHostPc). | `src/xenia/kernel/util/shim_utils.cc` | 194, 196, 197, 198, 202, 208 | 6 |
+| `kernel_call_arm_state` | local | ARM64 register state read with thread_get_state (in SampleKernelCallHostPc). | `src/xenia/kernel/util/shim_utils.cc` | 199, 203, 206 | 3 |
+| `kernel_call_state_count` | local | Size argument for thread_get_state (in SampleKernelCallHostPc). | `src/xenia/kernel/util/shim_utils.cc` | 200, 204 | 2 |
+| `kernel_call_function` | local | JIT guest function containing a sampled host PC, from the code cache. | `src/xenia/kernel/util/shim_utils.cc` | 339, 344, 345, 349, 358, 363, 366 | 7 |
+| `kernel_call_context` | local | That thread's guest PPC context, for lr and r1. | `src/xenia/kernel/util/shim_utils.cc` | 402, 412, 413, 414 | 5 |
+| `KernelCallReadable` | function in xe::kernel::shim | Whether a guest memory range is committed and readable, so the reports and the crash dump never read a page an exited thread released. | `src/xenia/kernel/util/shim_utils.cc` | 85, 108, 117, 276, 388, 390, 420 | 7 |
+| `kernel_call_heap` | local | Guest heap containing the address being checked. | `src/xenia/kernel/util/shim_utils.cc` | 86, 87, 90 | 3 |
+| `kernel_call_symbol` | local | dladdr() result naming the host function a sampled PC is in. | `src/xenia/kernel/util/shim_utils.cc` | 374, 376, 377, 379, 380 | 5 |
+| `SampleKernelCallHostPc` | function (anonymous namespace) | Reads another thread's host PC while it is suspended for a moment (Apple ARM64; 0 elsewhere). | `src/xenia/kernel/util/shim_utils.cc` | 190, 334, 357 | 3 |
+| `kernel_call_code_cache` | local | The JIT code cache, to map sampled host PCs to guest functions. | `src/xenia/kernel/util/shim_utils.cc` | 337, 341, 360 | 3 |
+| `kernel_call_guest_pc` | local | Guest address of the first sample for a thread running game code; 0 if it is not in game code. | `src/xenia/kernel/util/shim_utils.cc` | 343, 345, 349, 417, 419 | 5 |
+| `kernel_call_sample` | local | Index of the extra samples (7, 1 ms apart). | `src/xenia/kernel/util/shim_utils.cc` | 353, 354 | 3 |
+| `kernel_call_sample_pc` | local | Host PC of one extra sample. | `src/xenia/kernel/util/shim_utils.cc` | 356, 359, 360, 367 | 4 |
 | `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/kernel/util/shim_utils.h` | 554 | 1 |
 | `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/app/xenia_main_ios.mm` | 586 | 1 |
 
 | `MetalPerfCounters` | struct | Performance counters filled in across the Metal backend, logged and reset with the draw stats. | `src/xenia/gpu/metal/metal_perf_counters.h` | 26, 76 | 2 |
 | `gpu_us` | MetalPerfCounters field | GPU execution time of completed submission command buffers (us). | `src/xenia/gpu/metal/metal_perf_counters.h` | 28 | 1 |
-| `gpu_us` | MetalPerfCounters field | GPU execution time of completed submission command buffers (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2888, 6689 | 2 |
+| `gpu_us` | MetalPerfCounters field | GPU execution time of completed submission command buffers (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2888, 6709 | 2 |
 | `gpu_command_buffers` | MetalPerfCounters field | Number of those command buffers. | `src/xenia/gpu/metal/metal_perf_counters.h` | 29 | 1 |
-| `gpu_command_buffers` | MetalPerfCounters field | Number of those command buffers. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2901, 6693 | 2 |
+| `gpu_command_buffers` | MetalPerfCounters field | Number of those command buffers. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2901, 6713 | 2 |
 | `cpu_wait_us` | MetalPerfCounters field | Time the CPU spent blocked in waitUntilCompleted (us). | `src/xenia/gpu/metal/metal_perf_counters.h` | 31, 90 | 2 |
 | `cpu_wait_us` | MetalPerfCounters field | Time the CPU spent blocked in waitUntilCompleted (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2905 | 1 |
 | `cpu_waits` | MetalPerfCounters field | Number of those waits. | `src/xenia/gpu/metal/metal_perf_counters.h` | 32, 92 | 2 |
@@ -262,24 +262,24 @@ further edits.
 | `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/msl_shader.cc` | 1491 | 1 |
 | `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2909 | 1 |
 | `pipeline_compiles` | MetalPerfCounters field | Render pipeline states created. | `src/xenia/gpu/metal/metal_perf_counters.h` | 37 | 1 |
-| `pipeline_compiles` | MetalPerfCounters field | Render pipeline states created. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1118, 2912, 8763 | 3 |
+| `pipeline_compiles` | MetalPerfCounters field | Render pipeline states created. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1118, 2912, 8789 | 3 |
 | `pipeline_compile_us` | MetalPerfCounters field | Time spent creating them (us). | `src/xenia/gpu/metal/metal_perf_counters.h` | 38 | 1 |
-| `pipeline_compile_us` | MetalPerfCounters field | Time spent creating them (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 1119, 2914, 8764 | 3 |
+| `pipeline_compile_us` | MetalPerfCounters field | Time spent creating them (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 1119, 2914, 8790 | 3 |
 | `upload_bytes` | MetalPerfCounters field | Guest memory copied into the shared memory buffer. | `src/xenia/gpu/metal/metal_perf_counters.h` | 70 | 1 |
 | `upload_bytes` | MetalPerfCounters field | Guest memory copied into the shared memory buffer. | `src/xenia/gpu/metal/metal_shared_memory.cc` | 141 | 1 |
 | `upload_bytes` | MetalPerfCounters field | Guest memory copied into the shared memory buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2922 | 1 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_perf_counters.h` | 76, 90, 92 | 3 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 14 | 1 |
-| `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 32, 5066 | 2 |
+| `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 32, 5075 | 2 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/msl_shader.cc` | 34, 1490, 1491 | 3 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_shared_memory.cc` | 11, 141 | 2 |
-| `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_command_processor.cc` | 50, 941, 942, 1118, 1119, 2775, 2791, 2798, 2888, 2901, 2904, 2905, 2907, 2909, 2912, 2914, 2917, 2919, 2922, 2946, 2948, 2950, 2952, 2954, 2956, 2964, 2968, 2971, 2989, 2990, 2991, 2992, 2993, 5861, 6405, 6689, 6693, 6994, 6997, 7022, 7040, 7078, 7080, 7106, 7143, 7151, 7154, 7188, 7191, 7420, 7429, 7578, 7581, 7583, 7597, 8763, 8764 | 57 |
+| `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_command_processor.cc` | 50, 941, 942, 1118, 1119, 2775, 2791, 2798, 2888, 2901, 2904, 2905, 2907, 2909, 2912, 2914, 2917, 2919, 2922, 2946, 2948, 2950, 2952, 2954, 2956, 2964, 2968, 2971, 2989, 2990, 2991, 2992, 2993, 5881, 6425, 6709, 6713, 7014, 7017, 7042, 7060, 7098, 7100, 7126, 7163, 7171, 7174, 7208, 7211, 7440, 7449, 7599, 7602, 7604, 7618, 8789, 8790 | 57 |
 | `MetalPerfMicrosecondsSince` | inline function | Microseconds since a steady_clock time point. | `src/xenia/gpu/metal/metal_perf_counters.h` | 78, 91 | 2 |
-| `MetalPerfMicrosecondsSince` | inline function | Microseconds since a steady_clock time point. | `src/xenia/gpu/metal/metal_command_processor.cc` | 939, 1120, 1168, 1233, 8765 | 5 |
+| `MetalPerfMicrosecondsSince` | inline function | Microseconds since a steady_clock time point. | `src/xenia/gpu/metal/metal_command_processor.cc` | 939, 1120, 1168, 1233, 8791 | 5 |
 | `metal_perf_begin` | parameter / local | Start time of a timed operation. | `src/xenia/gpu/metal/metal_perf_counters.h` | 79, 81, 88, 91 | 4 |
 | `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_perf_counters.h` | 86 | 1 |
 | `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1379, 1538, 3127 | 3 |
-| `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3351, 4413, 4969 | 3 |
+| `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3360, 4422, 4978 | 3 |
 | `WaitUntilCompletedCounted` | inline function | waitUntilCompleted that adds the blocked time to cpu_wait_us; replaces the direct calls in the Metal GPU code. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2065, 2097 | 2 |
 | `metal_perf_command_buffer` | parameter | Command buffer waited on. | `src/xenia/gpu/metal/metal_perf_counters.h` | 87, 89 | 2 |
 | `MetalPerfThreadCpu` | function (anonymous namespace) | Host CPU share of every thread since the previous call, busiest first, with name, ID and host priority (Apple only). | `src/xenia/gpu/metal/metal_command_processor.cc` | 595, 2927 | 2 |
@@ -311,9 +311,9 @@ further edits.
 | `metal_perf_gpu_us` | local | GPU time in the window. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2887, 2900, 2903 | 3 |
 | `metal_perf_swap_time` | local | Host time of this swap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2843, 2847, 2855 | 3 |
 | `metal_perf_frame_us` | local | Host time since the previous swap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2845, 2849, 2851, 2852, 2853 | 5 |
-| `pipeline_compile_begin` | local (two functions) | Start time of a newRenderPipelineState call. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1115, 1120, 8761, 8765 | 4 |
-| `completed_buffer` | lambda parameter | Completed submission command buffer, for its GPU times. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6684, 6687 | 3 |
-| `metal_perf_gpu_seconds` | local | Its GPUEndTime - GPUStartTime. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6686, 6688, 6690 | 3 |
+| `pipeline_compile_begin` | local (two functions) | Start time of a newRenderPipelineState call. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1115, 1120, 8787, 8791 | 4 |
+| `completed_buffer` | lambda parameter | Completed submission command buffer, for its GPU times. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6704, 6707 | 3 |
+| `metal_perf_gpu_seconds` | local | Its GPUEndTime - GPUStartTime. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6706, 6708, 6710 | 3 |
 | `frame_us_total` | DrawStats field | Host time between swaps in the window (us). | `src/xenia/gpu/metal/metal_command_processor.h` | 654 | 1 |
 | `frame_us_total` | DrawStats field | Host time between swaps in the window (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2849, 2886, 2898 | 3 |
 | `frame_us_max` | DrawStats field | Longest frame in the window (us). | `src/xenia/gpu/metal/metal_command_processor.h` | 655 | 1 |
@@ -369,15 +369,15 @@ further edits.
 | `Initialize` | MetalGpuPassTimer member function | Creates the sample buffers for a device and calibrates GPU ticks. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 94 | 1 |
 | `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 74, 81 | 2 |
 | `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 270 | 1 |
-| `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7562 | 1 |
-| `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4093, 6168 | 2 |
+| `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7583 | 1 |
+| `RenderEncoder` | MetalGpuPassTimer member function | Render encoder with the pass timestamps attached (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4102, 6177 | 2 |
 | `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 74, 84 | 2 |
 | `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 366 | 1 |
-| `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4106, 4214, 4937, 5153 | 4 |
+| `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4115, 4223, 4946, 5162 | 4 |
 | `ComputeEncoder` | MetalGpuPassTimer member function | Compute encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1112 | 1 |
 | `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 75, 86 | 2 |
 | `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 389 | 1 |
-| `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5684 | 1 |
+| `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5693 | 1 |
 | `BlitEncoder` | MetalGpuPassTimer member function | Blit encoder with timestamps (plain when off). | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1241 | 1 |
 | `Log` | MetalGpuPassTimer and MetalCompileStallTracker member function | Logs and resets the window totals. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 95, 165 | 2 |
 | `Log` | MetalGpuPassTimer and MetalCompileStallTracker member function | Logs and resets the window totals. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 604, 819 | 2 |
@@ -432,13 +432,13 @@ further edits.
 | `stats_by_pass_` | MetalGpuPassTimer member | Totals per render pass configuration. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 142 | 1 |
 | `stats_by_pass_` | MetalGpuPassTimer member | Totals per render pass configuration. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 112, 523, 530, 665, 718 | 5 |
 | `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 150 | 1 |
-| `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1534, 2999, 6366, 7562 | 4 |
-| `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4093, 4106, 4214, 4937, 5153, 5684, 6168 | 7 |
+| `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1534, 2999, 6386, 7583 | 4 |
+| `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4102, 4115, 4223, 4946, 5162, 5693, 6177 | 7 |
 | `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1112, 1241 | 2 |
 | `metal_gpu_pass_timing` | cvar (Metal); iOS settings key | Turns pass timing, the traffic estimate, per-pipeline time and compile stall tracking on (default) or off; Diagnostics section toggle. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 10, 19, 217, 221, 737, 750 | 7 |
-| `metal_gpu_pass_timing` | cvar (Metal); iOS settings key | Turns pass timing, the traffic estimate, per-pipeline time and compile stall tracking on (default) or off; Diagnostics section toggle. | `src/xenia/ui/windowed_app_main_ios.mm` | 3773 | 1 |
+| `metal_gpu_pass_timing` | cvar (Metal); iOS settings key | Turns pass timing, the traffic estimate, per-pipeline time and compile stall tracking on (default) or off; Diagnostics section toggle. | `src/xenia/ui/windowed_app_main_ios.mm` | 3783 | 1 |
 | `metal_gpu_pass_record_` | MetalCommandProcessor member | Record of the current render encoder, for its draw count. | `src/xenia/gpu/metal/metal_command_processor.h` | 455 | 1 |
-| `metal_gpu_pass_record_` | MetalCommandProcessor member | Record of the current render encoder, for its draw count. | `src/xenia/gpu/metal/metal_command_processor.cc` | 688, 2035, 2109, 6367, 7293, 7564 | 6 |
+| `metal_gpu_pass_record_` | MetalCommandProcessor member | Record of the current render encoder, for its draw count. | `src/xenia/gpu/metal/metal_command_processor.cc` | 688, 2035, 2109, 6387, 7313, 7585 | 6 |
 | `timestamp_set` | local in Initialize | The timestamp counter set. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 129, 148, 150, 156, 164 | 5 |
 | `counter_sets` | local in Initialize | The device counter sets. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 133, 134, 135 | 3 |
 | `counter_set` | local in Initialize | One of them. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 135, 136, 139, 140, 148, 150 | 7 |
@@ -483,7 +483,7 @@ further edits.
 | `texture_samples` | MetalGpuPassStats field; local in MetalGpuPixelShaderFeatures | Texture sample, gather and read calls in the pixel shader source. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 516, 558, 563, 566, 711 | 5 |
 | `NoteDraw` | MetalGpuPassTimer member function | Counts a guest draw in its pass, per pipeline. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 55, 89 | 2 |
 | `NoteDraw` | MetalGpuPassTimer member function | Counts a guest draw in its pass, per pipeline. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 569 | 1 |
-| `NoteDraw` | MetalGpuPassTimer member function | Counts a guest draw in its pass, per pipeline. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6366 | 1 |
+| `NoteDraw` | MetalGpuPassTimer member function | Counts a guest draw in its pass, per pipeline. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6386 | 1 |
 | `MetalGpuPixelShaderFeatures` | MetalGpuPassTimer member function | Scans a pixel shader MSL source for features slow on Apple GPUs and counts its texture samples. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 107, 123 | 2 |
 | `MetalGpuPixelShaderFeatures` | MetalGpuPassTimer member function | Scans a pixel shader MSL source for features slow on Apple GPUs and counts its texture samples. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 545, 595 | 2 |
 | `stats_by_pipeline_` | MetalGpuPassTimer member | Totals per pipeline (pass time shared by draws and vertices). | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 146 | 1 |
@@ -515,7 +515,7 @@ further edits.
 | `Queued` | MetalCompileStallTracker member function | A compile was queued. | `src/xenia/gpu/metal/metal_command_processor.cc` | 978, 1016 | 2 |
 | `Skipped` | MetalCompileStallTracker member function | A draw was skipped for a pending compile. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 162 | 1 |
 | `Skipped` | MetalCompileStallTracker member function | A draw was skipped for a pending compile. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 749 | 1 |
-| `Skipped` | MetalCompileStallTracker member function | A draw was skipped for a pending compile. | `src/xenia/gpu/metal/metal_command_processor.cc` | 4742, 4773, 4818 | 3 |
+| `Skipped` | MetalCompileStallTracker member function | A draw was skipped for a pending compile. | `src/xenia/gpu/metal/metal_command_processor.cc` | 4749, 4780, 4825 | 3 |
 | `Finished` | MetalCompileStallTracker member function | A compile finished: buckets it and notes it if draws waited 100 ms or more. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 164, 181 | 2 |
 | `Finished` | MetalCompileStallTracker member function | A compile finished: buckets it and notes it if draws waited 100 ms or more. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 762 | 1 |
 | `Finished` | MetalCompileStallTracker member function | A compile finished: buckets it and notes it if draws waited 100 ms or more. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1191, 1251 | 2 |
@@ -550,7 +550,7 @@ further edits.
 | `finished_` | MetalCompileStallTracker member | Finished compiles with skipped draws in the window. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 187 | 1 |
 | `finished_` | MetalCompileStallTracker member | Finished compiles with skipped draws in the window. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 727, 789, 856, 862, 866, 867, 882 | 10 |
 | `metal_compile_stall_tracker` | inline global | The one MetalCompileStallTracker. | `src/xenia/gpu/metal/metal_gpu_pass_timing.h` | 190 | 1 |
-| `metal_compile_stall_tracker` | inline global | The one MetalCompileStallTracker. | `src/xenia/gpu/metal/metal_command_processor.cc` | 978, 1016, 1191, 1251, 1535, 3000, 4742, 4773, 4818 | 9 |
+| `metal_compile_stall_tracker` | inline global | The one MetalCompileStallTracker. | `src/xenia/gpu/metal/metal_command_processor.cc` | 978, 1016, 1191, 1251, 1535, 3000, 4749, 4780, 4825 | 9 |
 | `stall` | locals in Skipped and Finished | The tracked compile. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 742, 743, 744, 745, 756, 757, 758, 771, 773, 775, 777, 781, 785, 786, 787, 788, 789, 791, 793, 795, 796, 797, 831, 832, 836, 840 | 31 |
 | `note` | local in Finished | The stall note to log after unlocking. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 764, 790, 792, 801, 802 | 5 |
 | `bucket_limits_ms` | function static in Finished | Bucket upper limits. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 778, 781 | 2 |
@@ -561,12 +561,12 @@ further edits.
 | `oldest_us` | local in Log | Age of the oldest of them. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 829, 837, 838, 875 | 4 |
 | `bucket_names` | function static in Log | Bucket labels. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 848, 853 | 2 |
 | `worst` | local in Log | Text of the 8 compiles with the most skipped draws. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 861, 863, 875 | 3 |
-| `XE_TRANSFER_STENCIL_OUTPUT` | MSL preprocessor define (transfer shaders) | 1 when a depth-output transfer shader also writes the guest stencil through [[stencil]]. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 7188, 8362, 8679, 8717, 8775, 8946 | 6 |
-| `stencil` | TransferDepthOut member (MSL) | The [[stencil]] output of a depth transfer with native stencil output (only these two lines; the word is common in the file). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 747, 751, 752, 1909, 1970, 2087, 2149, 2266, 2322, 3623, 3624, 4038, 4047, 6106, 6182, 6546, 7118, 8363, 8681, 8682, 8776, 8777, 8947, 9305, 9306, 9308, 9309, 9310, 9311, 9314, 9315, 9316, 9317, 9318, 9320, 9330, 9331, 9342, 9347, 9415, 9416, 9417, 9418, 9419, 9420, 9421, 9422, 9423, 9425, 9438, 9439, 9440, 9441, 9442, 9443, 9444, 9445, 9446, 9448, 9466, 9467, 9468, 9469, 9470, 9471, 9472, 9473, 9474, 9476 | 72 |
-| `stencil_packed` | local in transfer_ps (MSL) | Gamma color packed after conversion, as the per-bit stencil draws pack it. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8683, 8719, 8781 | 3 |
-| `stencil_packed_set` | local in transfer_ps (MSL) | stencil_packed was computed (8_8_8_8_GAMMA source). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8684, 8721, 8781 | 3 |
-| `transfer_stencil` | local in transfer_ps (MSL) | Guest stencil written with the depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8780, 8783, 8786, 8947 | 4 |
-| `depth_stencil_output_state` | local in PerformTransfersAndResolveClears | GetTransferDepthAndStencilOutputState() for a draw writing stencil with depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6548, 6550, 6553 | 3 |
+| `XE_TRANSFER_STENCIL_OUTPUT` | MSL preprocessor define (transfer shaders) | 1 when a depth-output transfer shader also writes the guest stencil through [[stencil]]. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 7197, 8371, 8688, 8726, 8784, 8955 | 6 |
+| `stencil` | TransferDepthOut member (MSL) | The [[stencil]] output of a depth transfer with native stencil output (only these two lines; the word is common in the file). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 747, 751, 752, 1909, 1970, 2087, 2149, 2266, 2322, 3632, 3633, 4047, 4056, 6115, 6191, 6555, 7127, 8372, 8690, 8691, 8785, 8786, 8956, 9314, 9315, 9317, 9318, 9319, 9320, 9323, 9324, 9325, 9326, 9327, 9329, 9339, 9340, 9351, 9356, 9424, 9425, 9426, 9427, 9428, 9429, 9430, 9431, 9432, 9434, 9447, 9448, 9449, 9450, 9451, 9452, 9453, 9454, 9455, 9457, 9475, 9476, 9477, 9478, 9479, 9480, 9481, 9482, 9483, 9485 | 72 |
+| `stencil_packed` | local in transfer_ps (MSL) | Gamma color packed after conversion, as the per-bit stencil draws pack it. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8692, 8728, 8790 | 3 |
+| `stencil_packed_set` | local in transfer_ps (MSL) | stencil_packed was computed (8_8_8_8_GAMMA source). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8693, 8730, 8790 | 3 |
+| `transfer_stencil` | local in transfer_ps (MSL) | Guest stencil written with the depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8789, 8792, 8795, 8956 | 4 |
+| `depth_stencil_output_state` | local in PerformTransfersAndResolveClears | GetTransferDepthAndStencilOutputState() for a draw writing stencil with depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6557, 6559, 6562 | 3 |
 | `named_candidate_count` | local in CompileToMsl | Entry point candidates before those found in the MSL source, which are only searched for when none of them resolves. | `src/xenia/gpu/metal/msl_shader.cc` | 1396, 1399 | 2 |
 | `argument_encoder_begin` | local in CompileToMsl | Start of the argument encoder creation, timed for the compile timings line. | `src/xenia/gpu/metal/msl_shader.cc` | 1459, 1484 | 2 |
 | `argument_encoder_ms` | local in CompileToMsl | Its time (argument-encoder= in the compile timings line). | `src/xenia/gpu/metal/msl_shader.cc` | 1483, 1501, 1510 | 3 |
@@ -583,7 +583,7 @@ further edits.
 | `msl_compile_wait_used_us_` | MetalCommandProcessor member | Time draws waited for compiles in the current frame; reset at each swap. | `src/xenia/gpu/metal/metal_command_processor.h` | 632 | 1 |
 | `msl_compile_wait_used_us_` | MetalCommandProcessor member | Time draws waited for compiles in the current frame; reset at each swap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 920, 933, 940, 3005 | 4 |
 | `WaitForMslCompileProgress` | MetalCommandProcessor member function | Waits for any compile to finish within the frame's remaining wait budget. | `src/xenia/gpu/metal/metal_command_processor.h` | 635 | 1 |
-| `WaitForMslCompileProgress` | MetalCommandProcessor member function | Waits for any compile to finish within the frame's remaining wait budget. | `src/xenia/gpu/metal/metal_command_processor.cc` | 914, 4737, 4768, 4798 | 4 |
+| `WaitForMslCompileProgress` | MetalCommandProcessor member function | Waits for any compile to finish within the frame's remaining wait budget. | `src/xenia/gpu/metal/metal_command_processor.cc` | 914, 4744, 4775, 4805 | 4 |
 | `compile_waits` | MetalPerfCounters field | Draws that waited for a compile. | `src/xenia/gpu/metal/metal_perf_counters.h` | 40 | 1 |
 | `compile_waits` | MetalPerfCounters field | Draws that waited for a compile. | `src/xenia/gpu/metal/metal_command_processor.cc` | 941, 2917 | 2 |
 | `compile_wait_us` | MetalPerfCounters field | Time they waited. | `src/xenia/gpu/metal/metal_perf_counters.h` | 41 | 1 |
@@ -594,92 +594,92 @@ further edits.
 | `completions` | local in WaitForMslCompileProgress | msl_compile_completions_ when the wait started. | `src/xenia/gpu/metal/metal_command_processor.cc` | 929, 935 | 2 |
 | `waited_us` | local in WaitForMslCompileProgress | Time waited. | `src/xenia/gpu/metal/metal_command_processor.cc` | 939, 940, 942 | 3 |
 | `metal_render_pass_area_from_scissor` | cvar (Metal); iOS settings key | Limit guest draw render passes to the area their scissors cover, and transfer passes to their rectangles (default off). Settings > Performance > Limit Render Pass Area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 131, 141, 3392, 3396 | 4 |
-| `metal_render_pass_area_from_scissor` | cvar (Metal); iOS settings key | Limit guest draw render passes to the area their scissors cover, and transfer passes to their rectangles (default off). Settings > Performance > Limit Render Pass Area. | `src/xenia/ui/windowed_app_main_ios.mm` | 3614 | 1 |
+| `metal_render_pass_area_from_scissor` | cvar (Metal); iOS settings key | Limit guest draw render passes to the area their scissors cover, and transfer passes to their rectangles (default off). Settings > Performance > Limit Render Pass Area. | `src/xenia/ui/windowed_app_main_ios.mm` | 3624 | 1 |
 | `render_area_needed_width_` | MetalCommandProcessor member | Right edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.h` | 463 | 1 |
-| `render_area_needed_width_` | MetalCommandProcessor member | Right edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3394, 3412, 7426, 7441, 7466, 7577 | 6 |
+| `render_area_needed_width_` | MetalCommandProcessor member | Right edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3394, 3419, 7446, 7461, 7486, 7598 | 6 |
 | `render_area_needed_height_` | MetalCommandProcessor member | Bottom edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.h` | 464 | 1 |
-| `render_area_needed_height_` | MetalCommandProcessor member | Bottom edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3395, 3415, 7427, 7441, 7468 | 5 |
+| `render_area_needed_height_` | MetalCommandProcessor member | Bottom edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3395, 3422, 7447, 7461, 7488 | 5 |
 | `current_render_area_width_` | MetalCommandProcessor member | Render area width of the current render encoder (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.h` | 465 | 1 |
-| `current_render_area_width_` | MetalCommandProcessor member | Render area width of the current render encoder (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7294, 7425, 7426, 7575, 7646, 7647 | 6 |
+| `current_render_area_width_` | MetalCommandProcessor member | Render area width of the current render encoder (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7314, 7445, 7446, 7596, 7667, 7668 | 6 |
 | `current_render_area_height_` | MetalCommandProcessor member | Render area height of the current render encoder (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.h` | 466 | 1 |
-| `current_render_area_height_` | MetalCommandProcessor member | Render area height of the current render encoder (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7295, 7427, 7576, 7648 | 4 |
+| `current_render_area_height_` | MetalCommandProcessor member | Render area height of the current render encoder (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7315, 7447, 7597, 7669 | 4 |
 | `render_area_by_descriptor_` | MetalCommandProcessor member | Largest render area so far per render pass descriptor, so passes stop growing. | `src/xenia/gpu/metal/metal_command_processor.h` | 468 | 1 |
-| `render_area_by_descriptor_` | MetalCommandProcessor member | Largest render area so far per render pass descriptor, so passes stop growing. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3007, 7464 | 2 |
-| `area_scissor` | local in IssueDraw | The draw's scissor. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3397, 3398, 3403, 3413 | 6 |
-| `area_scale_x` | local in IssueDraw | Draw resolution scale (x). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3399, 3413 | 2 |
-| `area_scale_y` | local in IssueDraw | Draw resolution scale (y). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3401, 3416 | 2 |
-| `area_width` | local in BeginCommandBuffer | Render area width for the new encoder (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7439, 7469, 7473, 7475, 7480, 7481, 7565, 7575, 7580, 7629 | 10 |
-| `area_height` | local in BeginCommandBuffer | Render area height for the new encoder. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7440, 7471, 7474, 7476, 7482, 7576, 7584, 7629 | 8 |
-| `attachments_width` | local in BeginCommandBuffer | Smallest attachment width, the most the area may be. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7442, 7452, 7453, 7463, 7470, 7473 | 6 |
-| `attachments_height` | local in BeginCommandBuffer | Smallest attachment height. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7443, 7454, 7455, 7472, 7474 | 5 |
-| `clears_on_load` | local in BeginCommandBuffer | An attachment is cleared on load: keep the whole area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7444, 7456, 7463 | 3 |
-| `limit_to_attachment` | lambda in BeginCommandBuffer | Takes an attachment's size and load action into account. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7445, 7459, 7461, 7462 | 4 |
-| `known_area` | local in BeginCommandBuffer | render_area_by_descriptor_ entry. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3007, 3008, 3009, 3010, 3011, 7464, 7465, 7466, 7467, 7468, 7470, 7471 | 16 |
+| `render_area_by_descriptor_` | MetalCommandProcessor member | Largest render area so far per render pass descriptor, so passes stop growing. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3007, 7484 | 2 |
+| `area_scissor` | local in IssueDraw | The draw's scissor. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3397, 3398, 3410, 3420 | 6 |
+| `area_scale_x` | local in IssueDraw | Draw resolution scale (x), times the sample grid with msaa_samples_as_pixels. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3399, 3405, 3420 | 3 |
+| `area_scale_y` | local in IssueDraw | Draw resolution scale (y), times the sample grid with msaa_samples_as_pixels. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3401, 3407, 3423 | 3 |
+| `area_width` | local in BeginCommandBuffer | Render area width for the new encoder (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7459, 7489, 7493, 7495, 7500, 7501, 7586, 7596, 7601, 7650 | 10 |
+| `area_height` | local in BeginCommandBuffer | Render area height for the new encoder. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7460, 7491, 7494, 7496, 7502, 7597, 7605, 7650 | 8 |
+| `attachments_width` | local in BeginCommandBuffer | Smallest attachment width, the most the area may be. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7462, 7472, 7473, 7483, 7490, 7493 | 6 |
+| `attachments_height` | local in BeginCommandBuffer | Smallest attachment height. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7463, 7474, 7475, 7492, 7494 | 5 |
+| `clears_on_load` | local in BeginCommandBuffer | An attachment is cleared on load: keep the whole area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7464, 7476, 7483 | 3 |
+| `limit_to_attachment` | lambda in BeginCommandBuffer | Takes an attachment's size and load action into account. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7465, 7479, 7481, 7482 | 4 |
+| `known_area` | local in BeginCommandBuffer | render_area_by_descriptor_ entry. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3007, 3008, 3009, 3010, 3011, 7484, 7485, 7486, 7487, 7488, 7490, 7491 | 16 |
 | `pass_width` | local in MetalGpuPassTimer::RenderEncoder | Render area width, or the attachment's, for the traffic estimate. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 290, 293, 294, 299, 311, 325 | 6 |
 | `pass_height` | local in MetalGpuPassTimer::RenderEncoder | Render area height, or the attachment's. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 291, 295, 296, 300, 311, 327 | 6 |
-| `transfer_area_width` | local in PerformTransfersAndResolveClears | Render area width of the transfer pass (0: whole target), for its full-target scissor. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6077, 6128, 6476, 6479 | 4 |
-| `transfer_area_height` | local in PerformTransfersAndResolveClears | Render area height of the transfer pass (0: whole target). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6078, 6129, 6480 | 3 |
-| `area_right` | local in ensure_transfer_encoder | Right edge of the rectangles drawn in the transfer pass. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6093, 6102, 6122, 6124 | 5 |
-| `area_bottom` | local in ensure_transfer_encoder | Bottom edge of the rectangles drawn in the transfer pass. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6094, 6103, 6122, 6126 | 5 |
-| `add_to_area` | lambda in ensure_transfer_encoder | Extends the area by a (scaled) rectangle. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6095, 6116, 6120 | 3 |
-| `metal_render_pass_area_from_scissor` | cvar (Metal); iOS settings key | Limit guest draw render passes to the area their scissors cover, and transfer passes to their rectangles (default off). Settings > Performance > Limit Render Pass Area. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 73, 6075, 6091 | 3 |
+| `transfer_area_width` | local in PerformTransfersAndResolveClears | Render area width of the transfer pass (0: whole target), for its full-target scissor. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6086, 6137, 6485, 6488 | 4 |
+| `transfer_area_height` | local in PerformTransfersAndResolveClears | Render area height of the transfer pass (0: whole target). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6087, 6138, 6489 | 3 |
+| `area_right` | local in ensure_transfer_encoder | Right edge of the rectangles drawn in the transfer pass. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6102, 6111, 6131, 6133 | 5 |
+| `area_bottom` | local in ensure_transfer_encoder | Bottom edge of the rectangles drawn in the transfer pass. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6103, 6112, 6131, 6135 | 5 |
+| `add_to_area` | lambda in ensure_transfer_encoder | Extends the area by a (scaled) rectangle. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6104, 6125, 6129 | 3 |
+| `metal_render_pass_area_from_scissor` | cvar (Metal); iOS settings key | Limit guest draw render passes to the area their scissors cover, and transfer passes to their rectangles (default off). Settings > Performance > Limit Render Pass Area. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 73, 6084, 6100 | 3 |
 | `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/kernel/kernel_flags.cc` | 24 | 1 |
 | `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/kernel/kernel_flags.h` | 17 | 1 |
-| `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/kernel/util/shim_utils.cc` | 430 | 1 |
-| `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/ui/windowed_app_main_ios.mm` | 3780 | 1 |
+| `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/kernel/util/shim_utils.cc` | 442 | 1 |
+| `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/ui/windowed_app_main_ios.mm` | 3790 | 1 |
 | `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/kernel/util/shim_utils.h` | 558 | 1 |
-| `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/kernel/util/shim_utils.cc` | 429 | 1 |
+| `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/kernel/util/shim_utils.cc` | 441 | 1 |
 | `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3001 | 1 |
-| `HotspotThread` | struct in LogGuestThreadHotspots | A sampled thread and where its samples were. | `src/xenia/kernel/util/shim_utils.cc` | 441, 449, 470, 492 | 4 |
-| `xthread` | HotspotThread field | The guest thread (kept referenced). | `src/xenia/kernel/util/shim_utils.cc` | 442, 520 | 2 |
-| `host_thread` | HotspotThread field | Its host thread, sampled. | `src/xenia/kernel/util/shim_utils.cc` | 443, 472, 520 | 3 |
-| `places` | HotspotThread field | Samples per place: guest function address or host symbol. | `src/xenia/kernel/util/shim_utils.cc` | 445, 489, 495, 508 | 4 |
-| `guest_samples` | HotspotThread field | Samples in guest (JIT) code. | `src/xenia/kernel/util/shim_utils.cc` | 446, 481, 494, 521 | 4 |
-| `samples` | HotspotThread field | Samples taken. | `src/xenia/kernel/util/shim_utils.cc` | 447, 476, 493, 519, 521 | 5 |
-| `kHotspotRounds` | constant in LogGuestThreadHotspots | Sampling rounds (16). | `src/xenia/kernel/util/shim_utils.cc` | 464, 465 | 2 |
-| `hotspot_global` | local | The global critical region, try-locked for the object table. | `src/xenia/kernel/util/shim_utils.cc` | 434, 435, 440 | 3 |
-| `hotspot_xthreads` | local | Every XThread. | `src/xenia/kernel/util/shim_utils.cc` | 438, 450 | 2 |
-| `hotspot_threads` | local | The running guest threads being sampled. | `src/xenia/kernel/util/shim_utils.cc` | 449, 453, 457, 470, 492 | 5 |
-| `hotspot_xthread` | loop variable | One XThread. | `src/xenia/kernel/util/shim_utils.cc` | 450, 451, 452, 454 | 6 |
-| `hotspot_code_cache` | local | JIT code cache, to map host PCs to guest functions. | `src/xenia/kernel/util/shim_utils.cc` | 460, 479 | 2 |
-| `hotspot_round` | loop variable | Sampling round. | `src/xenia/kernel/util/shim_utils.cc` | 465, 466, 467 | 4 |
-| `hotspot_thread` | loop variable | A sampled thread. | `src/xenia/kernel/util/shim_utils.cc` | 470, 472, 476, 481, 489, 492, 494, 495, 508, 520, 521 | 13 |
-| `hotspot_pc` | local | Its host program counter. | `src/xenia/kernel/util/shim_utils.cc` | 471, 473, 479, 484 | 4 |
-| `hotspot_place` | local; structured binding | Guest function address or host symbol of a sample. | `src/xenia/kernel/util/shim_utils.cc` | 477, 480, 486, 489, 495, 496, 497, 498, 499, 500, 508, 509 | 12 |
-| `hotspot_function` | local | Guest function at the PC. | `src/xenia/kernel/util/shim_utils.cc` | 478, 480 | 2 |
-| `hotspot_symbol` | local | dladdr result for host code. | `src/xenia/kernel/util/shim_utils.cc` | 483, 484, 485, 486 | 4 |
-| `hotspot_busy` | local | The thread had samples outside host waits. | `src/xenia/kernel/util/shim_utils.cc` | 494, 501, 504 | 3 |
-| `hotspot_count` | structured binding | Samples at a place. | `src/xenia/kernel/util/shim_utils.cc` | 495, 508, 509 | 3 |
-| `hotspot_sorted` | local | Places by sample count. | `src/xenia/kernel/util/shim_utils.cc` | 507, 509, 511, 513, 515, 516 | 7 |
-| `hotspot_text` | local | The logged list. | `src/xenia/kernel/util/shim_utils.cc` | 512, 514, 521 | 3 |
+| `HotspotThread` | struct in LogGuestThreadHotspots | A sampled thread and where its samples were. | `src/xenia/kernel/util/shim_utils.cc` | 453, 461, 482, 504 | 4 |
+| `xthread` | HotspotThread field | The guest thread (kept referenced). | `src/xenia/kernel/util/shim_utils.cc` | 454, 532 | 2 |
+| `host_thread` | HotspotThread field | Its host thread, sampled. | `src/xenia/kernel/util/shim_utils.cc` | 455, 484, 532 | 3 |
+| `places` | HotspotThread field | Samples per place: guest function address or host symbol. | `src/xenia/kernel/util/shim_utils.cc` | 457, 501, 507, 520 | 4 |
+| `guest_samples` | HotspotThread field | Samples in guest (JIT) code. | `src/xenia/kernel/util/shim_utils.cc` | 458, 493, 506, 533 | 4 |
+| `samples` | HotspotThread field | Samples taken. | `src/xenia/kernel/util/shim_utils.cc` | 459, 488, 505, 531, 533 | 5 |
+| `kHotspotRounds` | constant in LogGuestThreadHotspots | Sampling rounds (16). | `src/xenia/kernel/util/shim_utils.cc` | 476, 477 | 2 |
+| `hotspot_global` | local | The global critical region, try-locked for the object table. | `src/xenia/kernel/util/shim_utils.cc` | 446, 447, 452 | 3 |
+| `hotspot_xthreads` | local | Every XThread. | `src/xenia/kernel/util/shim_utils.cc` | 450, 462 | 2 |
+| `hotspot_threads` | local | The running guest threads being sampled. | `src/xenia/kernel/util/shim_utils.cc` | 461, 465, 469, 482, 504 | 5 |
+| `hotspot_xthread` | loop variable | One XThread. | `src/xenia/kernel/util/shim_utils.cc` | 462, 463, 464, 466 | 6 |
+| `hotspot_code_cache` | local | JIT code cache, to map host PCs to guest functions. | `src/xenia/kernel/util/shim_utils.cc` | 472, 491 | 2 |
+| `hotspot_round` | loop variable | Sampling round. | `src/xenia/kernel/util/shim_utils.cc` | 477, 478, 479 | 4 |
+| `hotspot_thread` | loop variable | A sampled thread. | `src/xenia/kernel/util/shim_utils.cc` | 482, 484, 488, 493, 501, 504, 506, 507, 520, 532, 533 | 13 |
+| `hotspot_pc` | local | Its host program counter. | `src/xenia/kernel/util/shim_utils.cc` | 483, 485, 491, 496 | 4 |
+| `hotspot_place` | local; structured binding | Guest function address or host symbol of a sample. | `src/xenia/kernel/util/shim_utils.cc` | 489, 492, 498, 501, 507, 508, 509, 510, 511, 512, 520, 521 | 12 |
+| `hotspot_function` | local | Guest function at the PC. | `src/xenia/kernel/util/shim_utils.cc` | 490, 492 | 2 |
+| `hotspot_symbol` | local | dladdr result for host code. | `src/xenia/kernel/util/shim_utils.cc` | 495, 496, 497, 498 | 4 |
+| `hotspot_busy` | local | The thread had samples outside host waits. | `src/xenia/kernel/util/shim_utils.cc` | 506, 513, 516 | 3 |
+| `hotspot_count` | structured binding | Samples at a place. | `src/xenia/kernel/util/shim_utils.cc` | 507, 520, 521 | 3 |
+| `hotspot_sorted` | local | Places by sample count. | `src/xenia/kernel/util/shim_utils.cc` | 519, 521, 523, 525, 527, 528 | 7 |
+| `hotspot_text` | local | The logged list. | `src/xenia/kernel/util/shim_utils.cc` | 524, 526, 533 | 3 |
 | `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/gpu/metal/msl_shader.cc` | 45, 1338 | 2 |
-| `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 3635 | 1 |
-| `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.h` | 211, 621 | 2 |
-| `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.cc` | 588, 773 | 2 |
-| `last_update_height_used` | RenderTargetCache member function | Getter for last_update_height_used_. | `src/xenia/gpu/render_target_cache.h` | 211 | 1 |
-| `last_update_height_used` | RenderTargetCache member function | Getter for last_update_height_used_. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3408, 3410 | 2 |
-| `area_bottom` | local in IssueDraw | Bottom of the draw's needed render area: scissor bottom, clamped to last_update_height_used(). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3403, 3409, 3416 | 4 |
+| `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 3645 | 1 |
+| `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.h` | 212, 637 | 2 |
+| `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.cc` | 599, 793 | 2 |
+| `last_update_height_used` | RenderTargetCache member function | Getter for last_update_height_used_. | `src/xenia/gpu/render_target_cache.h` | 212 | 1 |
+| `last_update_height_used` | RenderTargetCache member function | Getter for last_update_height_used_. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3415, 3417 | 2 |
+| `area_bottom` | local in IssueDraw | Bottom of the draw's needed render area: scissor bottom, clamped to last_update_height_used(). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3410, 3416, 3423 | 4 |
 | `render_area_draw_passes` | MetalPerfCounters field | Guest draw render passes created with the render area switch on. | `src/xenia/gpu/metal/metal_perf_counters.h` | 50 | 1 |
-| `render_area_draw_passes` | MetalPerfCounters field | Guest draw render passes created with the render area switch on. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2946, 7578 | 2 |
+| `render_area_draw_passes` | MetalPerfCounters field | Guest draw render passes created with the render area switch on. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2946, 7599 | 2 |
 | `render_area_draw_limited` | MetalPerfCounters field | Of those, passes with a limited render area. | `src/xenia/gpu/metal/metal_perf_counters.h` | 51 | 1 |
-| `render_area_draw_limited` | MetalPerfCounters field | Of those, passes with a limited render area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2948, 7581 | 2 |
+| `render_area_draw_limited` | MetalPerfCounters field | Of those, passes with a limited render area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2948, 7602 | 2 |
 | `render_area_draw_rows` | MetalPerfCounters field | Sum of their render area heights. | `src/xenia/gpu/metal/metal_perf_counters.h` | 52 | 1 |
-| `render_area_draw_rows` | MetalPerfCounters field | Sum of their render area heights. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2950, 7583 | 2 |
+| `render_area_draw_rows` | MetalPerfCounters field | Sum of their render area heights. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2950, 7604 | 2 |
 | `render_area_restarts` | MetalPerfCounters field | Draw passes restarted to grow their render area. | `src/xenia/gpu/metal/metal_perf_counters.h` | 53 | 1 |
-| `render_area_restarts` | MetalPerfCounters field | Draw passes restarted to grow their render area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2964, 7429 | 2 |
+| `render_area_restarts` | MetalPerfCounters field | Draw passes restarted to grow their render area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2964, 7449 | 2 |
 | `render_area_transfer_passes` | MetalPerfCounters field | Transfer render passes created with the render area switch on. | `src/xenia/gpu/metal/metal_perf_counters.h` | 54 | 1 |
 | `render_area_transfer_passes` | MetalPerfCounters field | Transfer render passes created with the render area switch on. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2952 | 1 |
-| `render_area_transfer_passes` | MetalPerfCounters field | Transfer render passes created with the render area switch on. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6088 | 1 |
+| `render_area_transfer_passes` | MetalPerfCounters field | Transfer render passes created with the render area switch on. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6097 | 1 |
 | `render_area_transfer_limited` | MetalPerfCounters field | Of those, passes with a limited render area. | `src/xenia/gpu/metal/metal_perf_counters.h` | 55 | 1 |
 | `render_area_transfer_limited` | MetalPerfCounters field | Of those, passes with a limited render area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2954 | 1 |
-| `render_area_transfer_limited` | MetalPerfCounters field | Of those, passes with a limited render area. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6132 | 1 |
+| `render_area_transfer_limited` | MetalPerfCounters field | Of those, passes with a limited render area. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6141 | 1 |
 | `render_area_transfer_rows` | MetalPerfCounters field | Sum of their render area heights. | `src/xenia/gpu/metal/metal_perf_counters.h` | 56 | 1 |
 | `render_area_transfer_rows` | MetalPerfCounters field | Sum of their render area heights. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2956 | 1 |
-| `render_area_transfer_rows` | MetalPerfCounters field | Sum of their render area heights. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6134 | 1 |
+| `render_area_transfer_rows` | MetalPerfCounters field | Sum of their render area heights. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6143 | 1 |
 | `occlusion_query_events` | MetalPerfCounters field | Guest EVENT_WRITE_ZPD events (query begins and ends). | `src/xenia/gpu/metal/metal_perf_counters.h` | 59 | 1 |
-| `occlusion_query_events` | MetalPerfCounters field | Guest EVENT_WRITE_ZPD events (query begins and ends). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2971, 6994 | 2 |
+| `occlusion_query_events` | MetalPerfCounters field | Guest EVENT_WRITE_ZPD events (query begins and ends). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2971, 7014 | 2 |
 | `occlusion_queries` | MetalPerfCounters field | Guest occlusion query ends. | `src/xenia/gpu/metal/metal_perf_counters.h` | 60 | 1 |
-| `occlusion_queries` | MetalPerfCounters field | Guest occlusion query ends. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2968, 6997 | 2 |
+| `occlusion_queries` | MetalPerfCounters field | Guest occlusion query ends. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2968, 7017 | 2 |
 | `take` | lambda in IssueSwap | Reads and resets a counter. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2942, 2946, 2948, 2950, 2952, 2954, 2956, 2964, 2968, 2971, 2989, 2990, 2991, 2992, 2993 | 15 |
 | `area_draw_passes` | local in IssueSwap | render_area_draw_passes for the log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2945, 2962 | 2 |
 | `area_draw_limited` | local in IssueSwap | render_area_draw_limited for the log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2947, 2962, 2963 | 4 |
@@ -688,294 +688,294 @@ further edits.
 | `area_transfer_limited` | local in IssueSwap | render_area_transfer_limited for the log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2953, 2964, 2966 | 4 |
 | `area_transfer_rows` | local in IssueSwap | render_area_transfer_rows for the log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2955, 2966 | 2 |
 | `area_descriptor` | structured binding in IssueSwap | Descriptor key while rolling render areas over to the previous frame (unused). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3007 | 1 |
-| `accuracy` | local in BuildIOSConfigSections | The Accuracy settings section. | `src/xenia/ui/windowed_app_main_ios.mm` | 3630, 3631, 3632, 3635, 3640, 3644, 3662, 3668, 3669 | 9 |
+| `accuracy` | local in BuildIOSConfigSections | The Accuracy settings section. | `src/xenia/ui/windowed_app_main_ios.mm` | 3640, 3641, 3642, 3645, 3650, 3654, 3672, 3678, 3679 | 9 |
 | `metal_uniform_buffers_max` | cvar (GPU) | Most SPIRV-Cross uniform buffers (8 draws each) in flight before draws wait for the GPU; 0 for the default (96 on iOS, 12 elsewhere). | `src/xenia/gpu/metal/metal_command_processor.cc` | 111, 175, 177, 178 | 4 |
-| `MetalUniformBuffersMax` | function (anonymous namespace) | metal_uniform_buffers_max, or its platform default. | `src/xenia/gpu/metal/metal_command_processor.cc` | 176, 2940, 7722, 7951 | 4 |
+| `MetalUniformBuffersMax` | function (anonymous namespace) | metal_uniform_buffers_max, or its platform default. | `src/xenia/gpu/metal/metal_command_processor.cc` | 176, 2940, 7743, 7972 | 4 |
 | `uniform_waits` | MetalPerfCounters field | Draws that waited for a free SPIRV-Cross uniform buffer. | `src/xenia/gpu/metal/metal_perf_counters.h` | 44 | 1 |
-| `uniform_waits` | MetalPerfCounters field | Draws that waited for a free SPIRV-Cross uniform buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2933, 7889 | 2 |
+| `uniform_waits` | MetalPerfCounters field | Draws that waited for a free SPIRV-Cross uniform buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2933, 7910 | 2 |
 | `uniform_wait_us` | MetalPerfCounters field | Microseconds those draws waited. | `src/xenia/gpu/metal/metal_perf_counters.h` | 45 | 1 |
-| `uniform_wait_us` | MetalPerfCounters field | Microseconds those draws waited. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2935, 7890 | 2 |
+| `uniform_wait_us` | MetalPerfCounters field | Microseconds those draws waited. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2935, 7911 | 2 |
 | `uniform_rollovers` | MetalPerfCounters field | Command buffers ended because no uniform buffer was free and the pool was at its cap. | `src/xenia/gpu/metal/metal_perf_counters.h` | 46 | 1 |
-| `uniform_rollovers` | MetalPerfCounters field | Command buffers ended because no uniform buffer was free and the pool was at its cap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2938, 7997 | 2 |
-| `uniform_wait_begin` | local in EnsureSpirvUniformBuffer | Start time of a wait for a free uniform buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7886, 7891 | 2 |
-| `float_constants_vertex_size` | local in IssueDrawMsl | Bytes of packed float constants the vertex shader reads (float_count x 16). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5263, 5267 | 2 |
-| `float_constants_pixel_size` | local in IssueDrawMsl | Bytes of packed float constants the pixel shader reads (0 without one). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5269, 5278 | 2 |
+| `uniform_rollovers` | MetalPerfCounters field | Command buffers ended because no uniform buffer was free and the pool was at its cap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2938, 8018 | 2 |
+| `uniform_wait_begin` | local in EnsureSpirvUniformBuffer | Start time of a wait for a free uniform buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7907, 7912 | 2 |
+| `float_constants_vertex_size` | local in IssueDrawMsl | Bytes of packed float constants the vertex shader reads (float_count x 16). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5283, 5287 | 2 |
+| `float_constants_pixel_size` | local in IssueDrawMsl | Bytes of packed float constants the pixel shader reads (0 without one). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5289, 5298 | 2 |
 | `ProcessCompletedZPDQueries` | MetalCommandProcessor member function | occlusion_query_enable: reads the counts of guest occlusion queries whose command buffers completed, releases their slots and corrects the guess written at their end. | `src/xenia/gpu/metal/metal_command_processor.h` | 197 | 1 |
-| `ProcessCompletedZPDQueries` | MetalCommandProcessor member function | occlusion_query_enable: reads the counts of guest occlusion queries whose command buffers completed, releases their slots and corrects the guess written at their end. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6731, 7033, 7115 | 3 |
+| `ProcessCompletedZPDQueries` | MetalCommandProcessor member function | occlusion_query_enable: reads the counts of guest occlusion queries whose command buffers completed, releases their slots and corrects the guess written at their end. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6751, 7053, 7135 | 3 |
 | `MetalZPDQuery` | struct in MetalCommandProcessor | A guest occlusion query counted with Metal visibility results: report address, slots, guess written at its end. | `src/xenia/gpu/metal/metal_command_processor.h` | 474, 500, 503 | 3 |
-| `MetalZPDQuery` | struct in MetalCommandProcessor | A guest occlusion query counted with Metal visibility results: report address, slots, guess written at its end. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7048, 7128 | 2 |
+| `MetalZPDQuery` | struct in MetalCommandProcessor | A guest occlusion query counted with Metal visibility results: report address, slots, guess written at its end. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7068, 7148 | 2 |
 | `address` | MetalZPDQuery field | Guest report address the count goes to, 0 for an abandoned query. | `src/xenia/gpu/metal/metal_command_processor.h` | 476 | 1 |
-| `address` | MetalZPDQuery field | Guest report address the count goes to, 0 for an abandoned query. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7015, 7064, 7142, 7145, 7174, 7181, 7196 | 7 |
+| `address` | MetalZPDQuery field | Guest report address the count goes to, 0 for an abandoned query. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7035, 7084, 7162, 7165, 7194, 7201, 7216 | 7 |
 | `submission` | MetalZPDQuery field | Command buffer of its last segment; read once it completes. | `src/xenia/gpu/metal/metal_command_processor.h` | 478 | 1 |
-| `submission` | MetalZPDQuery field | Command buffer of its last segment; read once it completes. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7016, 7093, 7127 | 3 |
+| `submission` | MetalZPDQuery field | Command buffer of its last segment; read once it completes. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7036, 7113, 7147 | 3 |
 | `ticket` | MetalZPDQuery field | zpd_query_ends_ at its end; only the latest query of an address is corrected. | `src/xenia/gpu/metal/metal_command_processor.h` | 480 | 1 |
-| `ticket` | MetalZPDQuery field | zpd_query_ends_ at its end; only the latest query of an address is corrected. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7065, 7066, 7182 | 3 |
+| `ticket` | MetalZPDQuery field | zpd_query_ends_ at its end; only the latest query of an address is corrected. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7085, 7086, 7202 | 3 |
 | `guess` | MetalZPDQuery field | Count written to the guest at its end. | `src/xenia/gpu/metal/metal_command_processor.h` | 482 | 1 |
-| `guess` | MetalZPDQuery field | Count written to the guest at its end. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7092, 7183, 7184, 7196 | 5 |
+| `guess` | MetalZPDQuery field | Count written to the guest at its end. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7112, 7203, 7204, 7216 | 5 |
 | `inexact` | MetalZPDQuery field | A draw was skipped for a pending compile, or found no slot or pass to count in: the guess stays. | `src/xenia/gpu/metal/metal_command_processor.h` | 490 | 1 |
-| `inexact` | MetalZPDQuery field | A draw was skipped for a pending compile, or found no slot or pass to count in: the guess stays. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5978, 5990, 7053, 7056, 7072, 7130, 7415 | 7 |
+| `inexact` | MetalZPDQuery field | A draw was skipped for a pending compile, or found no slot or pass to count in: the guess stays. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5998, 6010, 7073, 7076, 7092, 7150, 7435 | 7 |
 | `slots` | MetalZPDQuery field | {index, generation} of the pool slot of each render pass it counted in. | `src/xenia/gpu/metal/metal_command_processor.h` | 492 | 1 |
-| `slots` | MetalZPDQuery field | {index, generation} of the pool slot of each render pass it counted in. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5987, 7006, 7017, 7072, 7131 | 5 |
+| `slots` | MetalZPDQuery field | {index, generation} of the pool slot of each render pass it counted in. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6007, 7026, 7037, 7092, 7151 | 5 |
 | `zpd_query_active_` | MetalCommandProcessor member | A guest occlusion query began and has not ended. | `src/xenia/gpu/metal/metal_command_processor.h` | 498 | 1 |
-| `zpd_query_active_` | MetalCommandProcessor member | A guest occlusion query began and has not ended. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2116, 5909, 5978, 7012, 7014, 7038, 7049, 7051, 7415 | 9 |
+| `zpd_query_active_` | MetalCommandProcessor member | A guest occlusion query began and has not ended. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2116, 5929, 5998, 7032, 7034, 7058, 7069, 7071, 7435 | 9 |
 | `zpd_segment_open_` | MetalCommandProcessor member | A pool slot is counting in the current render encoder for that query. | `src/xenia/gpu/metal/metal_command_processor.h` | 499 | 1 |
-| `zpd_segment_open_` | MetalCommandProcessor member | A pool slot is counting in the current render encoder for that query. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2117, 5978, 5988, 7001, 7007, 7290 | 6 |
+| `zpd_segment_open_` | MetalCommandProcessor member | A pool slot is counting in the current render encoder for that query. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2117, 5998, 6008, 7021, 7027, 7310 | 6 |
 | `zpd_query_` | MetalCommandProcessor member | The query being counted. | `src/xenia/gpu/metal/metal_command_processor.h` | 500 | 1 |
-| `zpd_query_` | MetalCommandProcessor member | The query being counted. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5978, 5987, 5990, 7006, 7015, 7016, 7017, 7018, 7037, 7050, 7415 | 11 |
+| `zpd_query_` | MetalCommandProcessor member | The query being counted. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5998, 6007, 6010, 7026, 7035, 7036, 7037, 7038, 7057, 7070, 7435 | 11 |
 | `zpd_compile_pending_at_begin_` | MetalCommandProcessor member | draw_stats_.compile_pending at the query begin; a change by its end means draws were skipped. | `src/xenia/gpu/metal/metal_command_processor.h` | 501 | 1 |
-| `zpd_compile_pending_at_begin_` | MetalCommandProcessor member | draw_stats_.compile_pending at the query begin; a change by its end means draws were skipped. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7039, 7052 | 2 |
+| `zpd_compile_pending_at_begin_` | MetalCommandProcessor member | draw_stats_.compile_pending at the query begin; a change by its end means draws were skipped. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7059, 7072 | 2 |
 | `zpd_query_ends_` | MetalCommandProcessor member | Query ends so far, giving each its ticket. | `src/xenia/gpu/metal/metal_command_processor.h` | 479, 502 | 2 |
-| `zpd_query_ends_` | MetalCommandProcessor member | Query ends so far, giving each its ticket. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7065 | 1 |
+| `zpd_query_ends_` | MetalCommandProcessor member | Query ends so far, giving each its ticket. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7085 | 1 |
 | `zpd_queries_in_flight_` | MetalCommandProcessor member | Ended (and abandoned) queries waiting for their command buffers. | `src/xenia/gpu/metal/metal_command_processor.h` | 503 | 1 |
-| `zpd_queries_in_flight_` | MetalCommandProcessor member | Ended (and abandoned) queries waiting for their command buffers. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2119, 2994, 7018, 7094, 7116, 7126, 7127, 7128, 7202 | 9 |
+| `zpd_queries_in_flight_` | MetalCommandProcessor member | Ended (and abandoned) queries waiting for their command buffers. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2119, 2994, 7038, 7114, 7136, 7146, 7147, 7148, 7222 | 9 |
 | `zpd_results_by_address_` | MetalCommandProcessor member | Per guest report address: last count (the next guess) and the ticket of its latest query. | `src/xenia/gpu/metal/metal_command_processor.h` | 506 | 1 |
-| `zpd_results_by_address_` | MetalCommandProcessor member | Per guest report address: last count (the next guess) and the ticket of its latest query. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7058, 7059, 7060, 7063, 7174, 7175 | 6 |
+| `zpd_results_by_address_` | MetalCommandProcessor member | Per guest report address: last count (the next guess) and the ticket of its latest query. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7078, 7079, 7080, 7083, 7194, 7195 | 6 |
 | `zpd_queries_measured` | MetalPerfCounters field | Query ends given a counted result. | `src/xenia/gpu/metal/metal_perf_counters.h` | 64 | 1 |
-| `zpd_queries_measured` | MetalPerfCounters field | Query ends given a counted result. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2989, 7078, 7151 | 3 |
+| `zpd_queries_measured` | MetalPerfCounters field | Query ends given a counted result. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2989, 7098, 7171 | 3 |
 | `zpd_queries_hidden` | MetalPerfCounters field | Of those, with no samples. | `src/xenia/gpu/metal/metal_perf_counters.h` | 65 | 1 |
-| `zpd_queries_hidden` | MetalPerfCounters field | Of those, with no samples. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2990, 7080, 7154 | 3 |
+| `zpd_queries_hidden` | MetalPerfCounters field | Of those, with no samples. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2990, 7100, 7174 | 3 |
 | `zpd_queries_corrected` | MetalPerfCounters field | Of those, written over the guess. | `src/xenia/gpu/metal/metal_perf_counters.h` | 66 | 1 |
-| `zpd_queries_corrected` | MetalPerfCounters field | Of those, written over the guess. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2991, 7188 | 2 |
+| `zpd_queries_corrected` | MetalPerfCounters field | Of those, written over the guess. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2991, 7208 | 2 |
 | `zpd_queries_guessed` | MetalPerfCounters field | Query ends left with the guess. | `src/xenia/gpu/metal/metal_perf_counters.h` | 67 | 1 |
-| `zpd_queries_guessed` | MetalPerfCounters field | Query ends left with the guess. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2992, 7143 | 2 |
+| `zpd_queries_guessed` | MetalPerfCounters field | Query ends left with the guess. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2992, 7163 | 2 |
 | `zpd_pass_restarts` | MetalPerfCounters field | Draw passes restarted to count a query in. | `src/xenia/gpu/metal/metal_perf_counters.h` | 68 | 1 |
-| `zpd_pass_restarts` | MetalPerfCounters field | Draw passes restarted to count a query in. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2993, 7420 | 2 |
-| `kQueryFinished` | local in MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD (as in the Vulkan override) | 0xFFFFFEED, byte-swapped: the query end marker D3D writes. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6983, 6990, 6991, 6992, 6993 | 5 |
-| `sample_count_addr` | local in ExecutePacketType3_EVENT_WRITE_ZPD (as in the Vulkan override) | RB_SAMPLE_COUNT_ADDR, the guest report of the event. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6984, 6988, 7025, 7043, 7059, 7063, 7064, 7110 | 8 |
-| `sample_counts` | local in ExecutePacketType3_EVENT_WRITE_ZPD and ProcessCompletedZPDQueries (as in the Vulkan override) | The guest report. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6986, 6990, 6991, 6992, 6993, 7010, 7036, 7096, 7097, 7098, 7099, 7100, 7101, 7102, 7105, 7179, 7183, 7184, 7185, 7187 | 22 |
-| `is_end` | local in ExecutePacketType3_EVENT_WRITE_ZPD (as in the Vulkan override) | The event ends a query. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6989, 6996, 7012, 7025, 7034 | 5 |
-| `real_queries` | local in ExecutePacketType3_EVENT_WRITE_ZPD | occlusion_query_enable is on, on the SPIRV-Cross path, with the pool ready. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7009, 7012, 7021 | 3 |
-| `query` | local in ExecutePacketType3_EVENT_WRITE_ZPD and ProcessCompletedZPDQueries | The query ending, or the oldest in flight. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7048, 7050, 7053, 7056, 7064, 7065, 7066, 7067, 7068, 7069, 7072, 7075, 7076, 7085, 7086, 7087, 7089, 7090, 7091, 7092, 7093, 7094, 7128, 7130, 7131, 7142, 7145, 7157, 7163, 7164, 7171, 7172, 7174, 7181, 7182, 7183, 7184, 7196, 7197 | 46 |
-| `address_result` | local in ExecutePacketType3_EVENT_WRITE_ZPD and ProcessCompletedZPDQueries | zpd_results_by_address_ entry of the query address. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7062, 7066, 7074, 7085, 7174, 7175, 7176, 7182 | 8 |
-| `samples` | local in ExecutePacketType3_EVENT_WRITE_ZPD and ProcessCompletedZPDQueries | Count written at the end; summed slot results. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7071, 7089, 7092, 7096, 7105, 7110, 7129, 7136, 7146, 7147, 7148, 7150 | 12 |
-| `scale_area` | local in ProcessCompletedZPDQueries | Draw resolution scale area the counts are divided by. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7122, 7146, 7148 | 4 |
-| `slot_samples` | local in ProcessCompletedZPDQueries | Result of one slot. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7132, 7135, 7136 | 3 |
-| `counted` | local in ProcessCompletedZPDQueries | Every slot was read and the query is exact. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7130, 7138, 7142 | 3 |
-| `count` | local in ProcessCompletedZPDQueries | The normalized count for the guest. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7150, 7153, 7159, 7160, 7172, 7176, 7183, 7185, 7187, 7196 | 12 |
-| `slot_index` | local in IssueDrawMsl; structured binding in ProcessCompletedZPDQueries | Pool slot index. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5979, 5983, 5987, 7131, 7133, 7135, 7140 | 7 |
-| `slot_generation` | local in IssueDrawMsl; structured binding in ProcessCompletedZPDQueries | Pool slot generation. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5980, 5983, 5987, 7131, 7134, 7140 | 6 |
-| `slot_offset` | local in IssueDrawMsl | Byte offset of the slot in the visibility buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5981, 5984, 5986 | 3 |
-| `zpd_pass` | local in BeginCommandBuffer | The draw pass must be created with the visibility buffer (a query is being counted). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7415, 7417, 7484, 7570, 7574 | 5 |
+| `zpd_pass_restarts` | MetalPerfCounters field | Draw passes restarted to count a query in. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2993, 7440 | 2 |
+| `kQueryFinished` | local in MetalCommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD (as in the Vulkan override) | 0xFFFFFEED, byte-swapped: the query end marker D3D writes. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7003, 7010, 7011, 7012, 7013 | 5 |
+| `sample_count_addr` | local in ExecutePacketType3_EVENT_WRITE_ZPD (as in the Vulkan override) | RB_SAMPLE_COUNT_ADDR, the guest report of the event. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7004, 7008, 7045, 7063, 7079, 7083, 7084, 7130 | 8 |
+| `sample_counts` | local in ExecutePacketType3_EVENT_WRITE_ZPD and ProcessCompletedZPDQueries (as in the Vulkan override) | The guest report. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7006, 7010, 7011, 7012, 7013, 7030, 7056, 7116, 7117, 7118, 7119, 7120, 7121, 7122, 7125, 7199, 7203, 7204, 7205, 7207 | 22 |
+| `is_end` | local in ExecutePacketType3_EVENT_WRITE_ZPD (as in the Vulkan override) | The event ends a query. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7009, 7016, 7032, 7045, 7054 | 5 |
+| `real_queries` | local in ExecutePacketType3_EVENT_WRITE_ZPD | occlusion_query_enable is on, on the SPIRV-Cross path, with the pool ready. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7029, 7032, 7041 | 3 |
+| `query` | local in ExecutePacketType3_EVENT_WRITE_ZPD and ProcessCompletedZPDQueries | The query ending, or the oldest in flight. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7068, 7070, 7073, 7076, 7084, 7085, 7086, 7087, 7088, 7089, 7092, 7095, 7096, 7105, 7106, 7107, 7109, 7110, 7111, 7112, 7113, 7114, 7148, 7150, 7151, 7162, 7165, 7177, 7183, 7184, 7191, 7192, 7194, 7201, 7202, 7203, 7204, 7216, 7217 | 46 |
+| `address_result` | local in ExecutePacketType3_EVENT_WRITE_ZPD and ProcessCompletedZPDQueries | zpd_results_by_address_ entry of the query address. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7082, 7086, 7094, 7105, 7194, 7195, 7196, 7202 | 8 |
+| `samples` | local in ExecutePacketType3_EVENT_WRITE_ZPD and ProcessCompletedZPDQueries | Count written at the end; summed slot results. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7091, 7109, 7112, 7116, 7125, 7130, 7149, 7156, 7166, 7167, 7168, 7170 | 12 |
+| `scale_area` | local in ProcessCompletedZPDQueries | Draw resolution scale area the counts are divided by. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7142, 7166, 7168 | 4 |
+| `slot_samples` | local in ProcessCompletedZPDQueries | Result of one slot. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7152, 7155, 7156 | 3 |
+| `counted` | local in ProcessCompletedZPDQueries | Every slot was read and the query is exact. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7150, 7158, 7162 | 3 |
+| `count` | local in ProcessCompletedZPDQueries | The normalized count for the guest. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7170, 7173, 7179, 7180, 7192, 7196, 7203, 7205, 7207, 7216 | 12 |
+| `slot_index` | local in IssueDrawMsl; structured binding in ProcessCompletedZPDQueries | Pool slot index. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5999, 6003, 6007, 7151, 7153, 7155, 7160 | 7 |
+| `slot_generation` | local in IssueDrawMsl; structured binding in ProcessCompletedZPDQueries | Pool slot generation. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6000, 6003, 6007, 7151, 7154, 7160 | 6 |
+| `slot_offset` | local in IssueDrawMsl | Byte offset of the slot in the visibility buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6001, 6004, 6006 | 3 |
+| `zpd_pass` | local in BeginCommandBuffer | The draw pass must be created with the visibility buffer (a query is being counted). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7435, 7437, 7504, 7591, 7595 | 5 |
 | `metal_frame_detail_log` | cvar (GPU); iOS settings key | Changed to N while a game runs: logs every render pass, draw, texture fetch constant, resolve, render target transfer and occlusion query of the next N frames. Settings > Diagnostics > Frame Detail Log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 117, 1512, 2772, 2794, 2795 | 5 |
-| `metal_frame_detail_log` | cvar (GPU); iOS settings key | Changed to N while a game runs: logs every render pass, draw, texture fetch constant, resolve, render target transfer and occlusion query of the next N frames. Settings > Frame Capture > Frame Detail Log (first section). | `src/xenia/ui/windowed_app_main_ios.mm` | 3514, 3822 | 2 |
+| `metal_frame_detail_log` | cvar (GPU); iOS settings key | Changed to N while a game runs: logs every render pass, draw, texture fetch constant, resolve, render target transfer and occlusion query of the next N frames. Settings > Frame Capture > Frame Detail Log (first section). | `src/xenia/ui/windowed_app_main_ios.mm` | 3514, 3832 | 2 |
 | `frame_detail_frames` | MetalPerfCounters field | Frames left to log in detail; counted down at swaps, read by the render target cache for transfers. | `src/xenia/gpu/metal/metal_perf_counters.h` | 73 | 1 |
-| `frame_detail_frames` | MetalPerfCounters field | Frames left to log in detail; counted down at swaps, read by the render target cache for transfers. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2775, 2791, 2798, 5861, 6405, 7022, 7040, 7106, 7191, 7597 | 10 |
-| `frame_detail_frames` | MetalPerfCounters field | Frames left to log in detail; counted down at swaps, read by the render target cache for transfers. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5066 | 1 |
+| `frame_detail_frames` | MetalPerfCounters field | Frames left to log in detail; counted down at swaps, read by the render target cache for transfers. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2775, 2791, 2798, 5881, 6425, 7042, 7060, 7126, 7211, 7618 | 10 |
+| `frame_detail_frames` | MetalPerfCounters field | Frames left to log in detail; counted down at swaps, read by the render target cache for transfers. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5075 | 1 |
 | `frame_detail_setting_` | MetalCommandProcessor member | metal_frame_detail_log when last seen; a change starts a capture. | `src/xenia/gpu/metal/metal_command_processor.h` | 662 | 1 |
 | `frame_detail_setting_` | MetalCommandProcessor member | metal_frame_detail_log when last seen; a change starts a capture. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1512, 2794, 2795, 2796, 2797, 2799 | 6 |
 | `frame_detail_passes_` | MetalCommandProcessor member | Draw passes so far in the logged frame (their number in the log). | `src/xenia/gpu/metal/metal_command_processor.h` | 667 | 1 |
-| `frame_detail_passes_` | MetalCommandProcessor member | Draw passes so far in the logged frame (their number in the log). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2785, 2802, 5887, 7629 | 4 |
+| `frame_detail_passes_` | MetalCommandProcessor member | Draw passes so far in the logged frame (their number in the log). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2785, 2802, 5907, 7650 | 4 |
 | `frame_detail_draws_` | MetalCommandProcessor member | Draws encoded so far in the logged frame (their number in the log). | `src/xenia/gpu/metal/metal_command_processor.h` | 668 | 1 |
-| `frame_detail_draws_` | MetalCommandProcessor member | Draws encoded so far in the logged frame (their number in the log). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2803, 5887, 5971, 6412, 6438, 7025, 7043, 7110 | 8 |
+| `frame_detail_draws_` | MetalCommandProcessor member | Draws encoded so far in the logged frame (their number in the log). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2803, 5907, 5991, 6432, 6458, 7045, 7063, 7130 | 8 |
 | `frame_detail_stats_` | MetalCommandProcessor member | draw_stats_ at the frame start, for the frame's totals. | `src/xenia/gpu/metal/metal_command_processor.h` | 669 | 1 |
 | `frame_detail_stats_` | MetalCommandProcessor member | draw_stats_ at the frame start, for the frame's totals. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2778, 2841 | 3 |
 | `frame_start` | local in IssueSwap | frame_detail_stats_, or zeros if draw_stats_ was reset since. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2777, 2785, 2786, 2787, 2788, 2789, 2790 | 7 |
-| `frame_detail_attachments` | local in BeginCommandBuffer | Host attachments of the new draw pass, for its log line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7602, 7609, 7634 | 3 |
-| `add_attachment` | lambda in BeginCommandBuffer | Appends one attachment's size, format, samples and load/store actions. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7603, 7620, 7623 | 3 |
-| `kColorNames` | local static in BeginCommandBuffer | Names c0-c3 of the color attachments. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7618, 7620 | 2 |
-| `frame_detail_textures` | local in IssueDrawMsl | The draw's texture fetch constants, for its log line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5864, 5872, 5910 | 3 |
-| `fetch_bits` | local in IssueDrawMsl | used_texture_mask fetches not yet logged. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5865, 5867, 5868 | 3 |
-| `frame_detail_sources` | local in MetalRenderTargetCache::PerformTransfersAndResolveClears | A render target's transfer sources, for its log line. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5072, 5074, 5083 | 3 |
-| `metal_inline_shader_constants` | cvar (GPU); iOS settings key | SPIRV-Cross path: pass each draw's shader constants with setVertexBytes/setFragmentBytes when they change instead of through the pooled 8-draw uniform buffers (default on). Settings > Performance > Inline Shader Constants. | `src/xenia/gpu/metal/metal_command_processor.cc` | 104, 3441, 5087, 5090, 6663 | 5 |
-| `metal_inline_shader_constants` | cvar (GPU); iOS settings key | SPIRV-Cross path: pass each draw's shader constants with setVertexBytes/setFragmentBytes when they change instead of through the pooled 8-draw uniform buffers (default on). Settings > Performance > Inline Shader Constants. | `src/xenia/ui/windowed_app_main_ios.mm` | 3620 | 1 |
-| `inline_constants` | local in IssueDrawMsl | metal_inline_shader_constants for this draw. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5090, 5093, 5100, 5153, 5377, 5438 | 6 |
-| `write_constant_block` | lambda in IssueDrawMsl | Passes one constant block with set*Bytes if its version is not bound in this encoder, or writes it to the draw's table. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5146, 5175, 5180, 5265, 5276, 5291, 5295, 5311, 5315, 5322, 5330, 5336 | 12 |
-| `pixel_stage` | write_constant_block parameter | The block is for the pixel stage. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5147, 5157, 5165 | 3 |
-| `slot` | write_constant_block parameter | Index in msl_inline_constants_bound_versions_. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5147, 5154, 5162 | 3 |
-| `buffer_index` | write_constant_block parameter | Metal buffer index (MslBufferIndex). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5147, 5158, 5160 | 3 |
-| `offset` | write_constant_block parameter | Offset of the block in the stage's table (table path). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5148, 5167, 5170 | 3 |
-| `data` | write_constant_block parameter | The block's data. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5148, 5158, 5160, 5167, 5170 | 5 |
-| `size` | write_constant_block parameter | The block's size in bytes; 0 skips it. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5148, 5150, 5158, 5160, 5167, 5170 | 6 |
-| `version` | write_constant_block parameter | Version of the block's data. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5148, 5154, 5162, 5168 | 4 |
-| `table` | local in write_constant_block | The stage's table in the uniform buffer (table path). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5165, 5167, 5170 | 3 |
+| `frame_detail_attachments` | local in BeginCommandBuffer | Host attachments of the new draw pass, for its log line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7623, 7630, 7655 | 3 |
+| `add_attachment` | lambda in BeginCommandBuffer | Appends one attachment's size, format, samples and load/store actions. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7624, 7641, 7644 | 3 |
+| `kColorNames` | local static in BeginCommandBuffer | Names c0-c3 of the color attachments. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7639, 7641 | 2 |
+| `frame_detail_textures` | local in IssueDrawMsl | The draw's texture fetch constants, for its log line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5884, 5892, 5930 | 3 |
+| `fetch_bits` | local in IssueDrawMsl | used_texture_mask fetches not yet logged. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5885, 5887, 5888 | 3 |
+| `frame_detail_sources` | local in MetalRenderTargetCache::PerformTransfersAndResolveClears | A render target's transfer sources, for its log line. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5081, 5083, 5092 | 3 |
+| `metal_inline_shader_constants` | cvar (GPU); iOS settings key | SPIRV-Cross path: pass each draw's shader constants with setVertexBytes/setFragmentBytes when they change instead of through the pooled 8-draw uniform buffers (default on). Settings > Performance > Inline Shader Constants. | `src/xenia/gpu/metal/metal_command_processor.cc` | 104, 3448, 5107, 5110, 6683 | 5 |
+| `metal_inline_shader_constants` | cvar (GPU); iOS settings key | SPIRV-Cross path: pass each draw's shader constants with setVertexBytes/setFragmentBytes when they change instead of through the pooled 8-draw uniform buffers (default on). Settings > Performance > Inline Shader Constants. | `src/xenia/ui/windowed_app_main_ios.mm` | 3630 | 1 |
+| `inline_constants` | local in IssueDrawMsl | metal_inline_shader_constants for this draw. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5110, 5113, 5120, 5173, 5397, 5458 | 6 |
+| `write_constant_block` | lambda in IssueDrawMsl | Passes one constant block with set*Bytes if its version is not bound in this encoder, or writes it to the draw's table. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5166, 5195, 5200, 5285, 5296, 5311, 5315, 5331, 5335, 5342, 5350, 5356 | 12 |
+| `pixel_stage` | write_constant_block parameter | The block is for the pixel stage. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5167, 5177, 5185 | 3 |
+| `slot` | write_constant_block parameter | Index in msl_inline_constants_bound_versions_. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5167, 5174, 5182 | 3 |
+| `buffer_index` | write_constant_block parameter | Metal buffer index (MslBufferIndex). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5167, 5178, 5180 | 3 |
+| `offset` | write_constant_block parameter | Offset of the block in the stage's table (table path). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5168, 5187, 5190 | 3 |
+| `data` | write_constant_block parameter | The block's data. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5168, 5178, 5180, 5187, 5190 | 5 |
+| `size` | write_constant_block parameter | The block's size in bytes; 0 skips it. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5168, 5170, 5178, 5180, 5187, 5190 | 6 |
+| `version` | write_constant_block parameter | Version of the block's data. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5168, 5174, 5182, 5188 | 4 |
+| `table` | local in write_constant_block | The stage's table in the uniform buffer (table path). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5185, 5187, 5190 | 3 |
 | `msl_float_constants_version_vertex_` | MetalCommandProcessor member | Version of the cached packed vertex float constants, bumped when rebuilt. | `src/xenia/gpu/metal/metal_command_processor.h` | 916 | 1 |
-| `msl_float_constants_version_vertex_` | MetalCommandProcessor member | Version of the cached packed vertex float constants, bumped when rebuilt. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5252, 5268 | 2 |
+| `msl_float_constants_version_vertex_` | MetalCommandProcessor member | Version of the cached packed vertex float constants, bumped when rebuilt. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5272, 5288 | 2 |
 | `msl_float_constants_version_pixel_` | MetalCommandProcessor member | Version of the cached packed pixel float constants, bumped when rebuilt. | `src/xenia/gpu/metal/metal_command_processor.h` | 917 | 1 |
-| `msl_float_constants_version_pixel_` | MetalCommandProcessor member | Version of the cached packed pixel float constants, bumped when rebuilt. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5259, 5279 | 2 |
+| `msl_float_constants_version_pixel_` | MetalCommandProcessor member | Version of the cached packed pixel float constants, bumped when rebuilt. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5279, 5299 | 2 |
 | `msl_bool_loop_constants_version_` | MetalCommandProcessor member | Version of the cached bool/loop constants, bumped when recopied. | `src/xenia/gpu/metal/metal_command_processor.h` | 918 | 1 |
-| `msl_bool_loop_constants_version_` | MetalCommandProcessor member | Version of the cached bool/loop constants, bumped when recopied. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5289, 5294, 5298 | 3 |
+| `msl_bool_loop_constants_version_` | MetalCommandProcessor member | Version of the cached bool/loop constants, bumped when recopied. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5309, 5314, 5318 | 3 |
 | `msl_fetch_constants_version_` | MetalCommandProcessor member | Version of the cached fetch constants, bumped when recopied. | `src/xenia/gpu/metal/metal_command_processor.h` | 919 | 1 |
-| `msl_fetch_constants_version_` | MetalCommandProcessor member | Version of the cached fetch constants, bumped when recopied. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5309, 5313, 5317 | 3 |
+| `msl_fetch_constants_version_` | MetalCommandProcessor member | Version of the cached fetch constants, bumped when recopied. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5329, 5333, 5337 | 3 |
 | `msl_inline_constants_bound_versions_` | MetalCommandProcessor member | Per constant block slot (11), the version passed with set*Bytes in the current render encoder; 0 for none, cleared with the encoder state. | `src/xenia/gpu/metal/metal_command_processor.h` | 920 | 1 |
-| `msl_inline_constants_bound_versions_` | MetalCommandProcessor member | Per constant block slot (11), the version passed with set*Bytes in the current render encoder; 0 for none, cleared with the encoder state. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5154, 5162, 5435, 7246 | 4 |
+| `msl_inline_constants_bound_versions_` | MetalCommandProcessor member | Per constant block slot (11), the version passed with set*Bytes in the current render encoder; 0 for none, cleared with the encoder state. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5174, 5182, 5455, 7266 | 4 |
 | `metal_log_shader_hashes` | cvar (GPU) | Comma-separated shader ucode hashes whose microcode disassembly and generated MSL are logged when translated ("Shader log" lines), and whose float constants the frame detail log adds per draw. Settings > Metal (generated section). | `src/xenia/gpu/metal/msl_shader.cc` | 53, 255 | 2 |
 | `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/msl_shader.h` | 26 | 1 |
 | `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/msl_shader.cc` | 254, 1210 | 2 |
-| `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5951 | 1 |
+| `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5971 | 1 |
 | `log_shader_lines` | lambda in MslTranslation::CompileToMsl | Logs a text line by line with the shader's stage, hash and modification. | `src/xenia/gpu/metal/msl_shader.cc` | 1213, 1227, 1228 | 3 |
 | `line_begin` | local in log_shader_lines | Start of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1214, 1215, 1216, 1223, 1224 | 6 |
 | `line_end` | local in log_shader_lines | End of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1216, 1217, 1218, 1223, 1224 | 5 |
-| `frame_detail_shader` | loop variable in IssueDrawMsl | The draw's vertex or pixel shader, for its float constants in the frame detail log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5948, 5950, 5951, 5954, 5957, 5972 | 6 |
-| `is_pixel` | local in IssueDrawMsl | frame_detail_shader is the pixel shader. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5954, 5962, 5971 | 3 |
-| `frame_detail_constants` | local in IssueDrawMsl | The shader's float constants for the log line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5955, 5965, 5972 | 3 |
+| `frame_detail_shader` | loop variable in IssueDrawMsl | The draw's vertex or pixel shader, for its float constants in the frame detail log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5968, 5970, 5971, 5974, 5977, 5992 | 6 |
+| `is_pixel` | local in IssueDrawMsl | frame_detail_shader is the pixel shader. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5974, 5982, 5991 | 3 |
+| `frame_detail_constants` | local in IssueDrawMsl | The shader's float constants for the log line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5975, 5985, 5992 | 3 |
 | `MetalResolveProbe` | struct in MetalCommandProcessor | A depth resolve during a frame detail capture, sampled once its command buffer completes. | `src/xenia/gpu/metal/metal_command_processor.h` | 672, 696 | 2 |
-| `MetalResolveProbe` | struct in MetalCommandProcessor | A depth resolve during a frame detail capture, sampled once its command buffer completes. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6428, 7504 | 2 |
+| `MetalResolveProbe` | struct in MetalCommandProcessor | A depth resolve during a frame detail capture, sampled once its command buffer completes. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6448, 7524 | 2 |
 | `resolve_probes_` | MetalCommandProcessor member | Depth resolves waiting to be sampled. | `src/xenia/gpu/metal/metal_command_processor.h` | 198, 696 | 2 |
-| `resolve_probes_` | MetalCommandProcessor member | Depth resolves waiting to be sampled. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6492, 6736, 6745, 6756, 6974, 7554 | 7 |
+| `resolve_probes_` | MetalCommandProcessor member | Depth resolves waiting to be sampled. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6512, 6756, 6765, 6776, 6994, 7575 | 7 |
 | `LogResolveProbes` | MetalCommandProcessor member function | Logs a grid of the values of each completed probe's resolve, read from the shared memory buffer (tiled addressing). | `src/xenia/gpu/metal/metal_command_processor.h` | 200, 671 | 2 |
-| `LogResolveProbes` | MetalCommandProcessor member function | Logs a grid of the values of each completed probe's resolve, read from the shared memory buffer (tiled addressing). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6732, 6735 | 2 |
+| `LogResolveProbes` | MetalCommandProcessor member function | Logs a grid of the values of each completed probe's resolve, read from the shared memory buffer (tiled addressing). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6752, 6755 | 2 |
 | `address` | MetalResolveProbe field | RB_COPY_DEST_BASE. | `src/xenia/gpu/metal/metal_command_processor.h` | 673 | 1 |
-| `address` | MetalResolveProbe field | RB_COPY_DEST_BASE. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6429, 6780, 6790, 6806, 6814, 6894, 6930, 6954 | 8 |
+| `address` | MetalResolveProbe field | RB_COPY_DEST_BASE. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6449, 6800, 6810, 6826, 6834, 6914, 6950, 6974 | 8 |
 | `written_begin` | MetalResolveProbe field | Start of the range the resolve wrote. | `src/xenia/gpu/metal/metal_command_processor.h` | 675 | 1 |
-| `written_begin` | MetalResolveProbe field | Start of the range the resolve wrote. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6430, 6765, 6780, 6792, 6816 | 5 |
+| `written_begin` | MetalResolveProbe field | Start of the range the resolve wrote. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6450, 6785, 6800, 6812, 6836 | 5 |
 | `written_end` | MetalResolveProbe field | End of the range the resolve wrote. | `src/xenia/gpu/metal/metal_command_processor.h` | 676 | 1 |
-| `written_end` | MetalResolveProbe field | End of the range the resolve wrote. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6431, 6780, 6793, 6817 | 4 |
+| `written_end` | MetalResolveProbe field | End of the range the resolve wrote. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6451, 6800, 6813, 6837 | 4 |
 | `width` | MetalResolveProbe field | Destination pitch (RB_COPY_DEST_PITCH). | `src/xenia/gpu/metal/metal_command_processor.h` | 677 | 1 |
-| `width` | MetalResolveProbe field | Destination pitch (RB_COPY_DEST_PITCH). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6432, 6746, 6773, 6781, 6788, 6791, 6815, 6876, 6877, 6878, 6879, 6905, 6910, 6935, 6941, 7509, 7512 | 18 |
+| `width` | MetalResolveProbe field | Destination pitch (RB_COPY_DEST_PITCH). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6452, 6766, 6793, 6801, 6808, 6811, 6835, 6896, 6897, 6898, 6899, 6925, 6930, 6955, 6961, 7529, 7532 | 18 |
 | `height` | MetalResolveProbe field | Destination height (RB_COPY_DEST_PITCH). | `src/xenia/gpu/metal/metal_command_processor.h` | 678 | 1 |
-| `height` | MetalResolveProbe field | Destination height (RB_COPY_DEST_PITCH). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6433, 6467, 6746, 6773, 6781, 6785, 6827, 6828, 7514, 7525 | 10 |
+| `height` | MetalResolveProbe field | Destination height (RB_COPY_DEST_PITCH). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6453, 6487, 6766, 6793, 6801, 6805, 6847, 6848, 7534, 7546 | 10 |
 | `endian` | MetalResolveProbe field | Destination endianness (RB_COPY_DEST_INFO, 32-bit cases). | `src/xenia/gpu/metal/metal_command_processor.h` | 679 | 1 |
-| `endian` | MetalResolveProbe field | Destination endianness (RB_COPY_DEST_INFO, 32-bit cases). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6434, 6801, 6824 | 3 |
+| `endian` | MetalResolveProbe field | Destination endianness (RB_COPY_DEST_INFO, 32-bit cases). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6454, 6821, 6844 | 3 |
 | `is_float` | MetalResolveProbe field | The depth is D24FS8 (20e4) rather than 24-bit unorm. | `src/xenia/gpu/metal/metal_command_processor.h` | 681 | 1 |
-| `is_float` | MetalResolveProbe field | The depth is D24FS8 (20e4) rather than 24-bit unorm. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6436, 6453, 6781, 6803, 6809 | 5 |
+| `is_float` | MetalResolveProbe field | The depth is D24FS8 (20e4) rather than 24-bit unorm. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6456, 6473, 6801, 6823, 6829 | 5 |
 | `draw` | MetalResolveProbe field | frame_detail_draws_ at the resolve. | `src/xenia/gpu/metal/metal_command_processor.h` | 682 | 1 |
-| `draw` | MetalResolveProbe field | frame_detail_draws_ at the resolve. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6438, 6780 | 2 |
+| `draw` | MetalResolveProbe field | frame_detail_draws_ at the resolve. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6458, 6800 | 2 |
 | `submission` | MetalResolveProbe field | The command buffer of the resolve. | `src/xenia/gpu/metal/metal_command_processor.h` | 683 | 1 |
-| `submission` | MetalResolveProbe field | The command buffer of the resolve. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6439, 6746, 6747, 7553 | 4 |
-| `probe` | local in IssueCopy; iterator in LogResolveProbes | The probe being recorded or logged. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6428, 6429, 6430, 6431, 6432, 6433, 6434, 6436, 6438, 6439, 6444, 6446, 6448, 6453, 6460, 6462, 6466, 6467, 6471, 6474, 6477, 6479, 6480, 6482, 6492, 6745, 6746, 6747, 6748, 6750, 6751, 6753, 6754, 6756, 6763, 6764, 6765, 6770, 6773, 6775, 6780, 6781, 6785, 6788, 6790, 6791, 6792, 6793, 6801, 6803, 6806, 6809, 6814, 6815, 6816, 6817, 6824, 6827, 6828, 6839, 6843, 6845, 6846, 6855, 6872, 6876, 6877, 6878, 6879, 6894, 6895, 6905, 6910, 6930, 6935, 6941, 6954, 6958, 6959, 6963, 6968, 6969, 6971, 6972, 6974 | 99 |
-| `dest_pitch` | local in IssueCopy | RB_COPY_DEST_PITCH of the probed resolve. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6425, 6432, 6433 | 3 |
-| `dest_endian` | local in IssueCopy | RB_COPY_DEST_INFO endianness of the probed resolve. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6426, 6435 | 3 |
-| `probe_cols` | local in LogResolveProbes | Grid columns (16). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6768, 6782, 6787, 6788 | 4 |
-| `probe_rows` | local in LogResolveProbes | Grid rows, about square, 1 to 16. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6769, 6782, 6784, 6785 | 4 |
-| `probe_line` | local in LogResolveProbes | One grid row's values for the log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6786, 6795, 6802, 6807 | 4 |
-| `texel_address` | local in LogResolveProbes | Guest address of a sampled texel. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6789, 6792, 6793, 6794, 6799, 6813, 6816, 6817, 6818, 6822 | 10 |
-| `depth24` | local in LogResolveProbes | The texel's 24-bit depth. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6801, 6803, 6804, 6812, 6824, 6829, 6830, 6864, 6869, 6881, 6883, 6888, 6915, 6916, 6919, 6921, 6942, 6943, 6945 | 19 |
-| `ApplyXenosSamplePositions` | member function of MetalRenderTargetCache | Programs the Xenos MSAA sample positions (and the position-independent depth store) on a 2x/4x pass when xenos_sample_positions is on, else resets the defaults. | `src/xenia/gpu/metal/metal_render_target_cache.h` | 164 | 1 |
-| `ApplyXenosSamplePositions` | member function of MetalRenderTargetCache | Programs the Xenos MSAA sample positions (and the position-independent depth store) on a 2x/4x pass when xenos_sample_positions is on, else resets the defaults. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3866, 6166 | 2 |
-| `ApplyXenosSamplePositions` | member function of MetalRenderTargetCache | Programs the Xenos MSAA sample positions (and the position-independent depth store) on a 2x/4x pass when xenos_sample_positions is on, else resets the defaults. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7489 | 1 |
-| `programmable_sample_positions_supported_` | member of MetalRenderTargetCache | MTLDevice areProgrammableSamplePositionsSupported, read at Initialize. | `src/xenia/gpu/metal/metal_render_target_cache.h` | 439 | 1 |
-| `programmable_sample_positions_supported_` | member of MetalRenderTargetCache | MTLDevice areProgrammableSamplePositionsSupported, read at Initialize. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 734, 739, 741, 3891 | 4 |
-| `use_xenos_positions` | local in ApplyXenosSamplePositions | Whether this pass gets the Xenos positions. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3890, 3896, 3900, 3902 | 4 |
+| `submission` | MetalResolveProbe field | The command buffer of the resolve. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6459, 6766, 6767, 7574 | 4 |
+| `probe` | local in IssueCopy; iterator in LogResolveProbes | The probe being recorded or logged. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6448, 6449, 6450, 6451, 6452, 6453, 6454, 6456, 6458, 6459, 6464, 6466, 6468, 6473, 6480, 6482, 6486, 6487, 6491, 6494, 6497, 6499, 6500, 6502, 6512, 6765, 6766, 6767, 6768, 6770, 6771, 6773, 6774, 6776, 6783, 6784, 6785, 6790, 6793, 6795, 6800, 6801, 6805, 6808, 6810, 6811, 6812, 6813, 6821, 6823, 6826, 6829, 6834, 6835, 6836, 6837, 6844, 6847, 6848, 6859, 6863, 6865, 6866, 6875, 6892, 6896, 6897, 6898, 6899, 6914, 6915, 6925, 6930, 6950, 6955, 6961, 6974, 6978, 6979, 6983, 6988, 6989, 6991, 6992, 6994 | 99 |
+| `dest_pitch` | local in IssueCopy | RB_COPY_DEST_PITCH of the probed resolve. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6445, 6452, 6453 | 3 |
+| `dest_endian` | local in IssueCopy | RB_COPY_DEST_INFO endianness of the probed resolve. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6446, 6455 | 3 |
+| `probe_cols` | local in LogResolveProbes | Grid columns (16). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6788, 6802, 6807, 6808 | 4 |
+| `probe_rows` | local in LogResolveProbes | Grid rows, about square, 1 to 16. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6789, 6802, 6804, 6805 | 4 |
+| `probe_line` | local in LogResolveProbes | One grid row's values for the log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6806, 6815, 6822, 6827 | 4 |
+| `texel_address` | local in LogResolveProbes | Guest address of a sampled texel. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6809, 6812, 6813, 6814, 6819, 6833, 6836, 6837, 6838, 6842 | 10 |
+| `depth24` | local in LogResolveProbes | The texel's 24-bit depth. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6821, 6823, 6824, 6832, 6844, 6849, 6850, 6884, 6889, 6901, 6903, 6908, 6935, 6936, 6939, 6941, 6962, 6963, 6965 | 19 |
+| `ApplyXenosSamplePositions` | member function of MetalRenderTargetCache | Programs the Xenos MSAA sample positions (and the position-independent depth store) on a 2x/4x pass when xenos_sample_positions is on, else resets the defaults. | `src/xenia/gpu/metal/metal_render_target_cache.h` | 165 | 1 |
+| `ApplyXenosSamplePositions` | member function of MetalRenderTargetCache | Programs the Xenos MSAA sample positions (and the position-independent depth store) on a 2x/4x pass when xenos_sample_positions is on, else resets the defaults. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3875, 6175 | 2 |
+| `ApplyXenosSamplePositions` | member function of MetalRenderTargetCache | Programs the Xenos MSAA sample positions (and the position-independent depth store) on a 2x/4x pass when xenos_sample_positions is on, else resets the defaults. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7509 | 1 |
+| `programmable_sample_positions_supported_` | member of MetalRenderTargetCache | MTLDevice areProgrammableSamplePositionsSupported, read at Initialize. | `src/xenia/gpu/metal/metal_render_target_cache.h` | 440 | 1 |
+| `programmable_sample_positions_supported_` | member of MetalRenderTargetCache | MTLDevice areProgrammableSamplePositionsSupported, read at Initialize. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 734, 739, 741, 3900 | 4 |
+| `use_xenos_positions` | local in ApplyXenosSamplePositions | Whether this pass gets the Xenos positions. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3899, 3905, 3909, 3911 | 4 |
 | `metal_gpu_ordered_fences` | cvar (Metal) | Publish shader-done fences only once the GPU has completed the work before them (zero-copy shared memory). Default true; Settings > Accuracy. | `src/xenia/gpu/metal/metal_command_processor.cc` | 97, 1971 | 2 |
-| `metal_gpu_ordered_fences` | cvar (Metal) | Publish shader-done fences only once the GPU has completed the work before them (zero-copy shared memory). Default true; Settings > Accuracy. | `src/xenia/ui/windowed_app_main_ios.mm` | 3656 | 1 |
+| `metal_gpu_ordered_fences` | cvar (Metal) | Publish shader-done fences only once the GPU has completed the work before them (zero-copy shared memory). Default true; Settings > Accuracy. | `src/xenia/ui/windowed_app_main_ios.mm` | 3666 | 1 |
 | `AttachShaderDoneFences` | member function of MetalCommandProcessor | Moves pending_shader_done_fences_ into a completion handler of a command buffer about to be committed, which stores them in guest memory. | `src/xenia/gpu/metal/metal_command_processor.h` | 973 | 1 |
-| `AttachShaderDoneFences` | member function of MetalCommandProcessor | Moves pending_shader_done_fences_ into a completion handler of a command buffer about to be committed, which stores them in guest memory. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1991, 1996, 2055, 3030, 6586, 8183 | 6 |
+| `AttachShaderDoneFences` | member function of MetalCommandProcessor | Moves pending_shader_done_fences_ into a completion handler of a command buffer about to be committed, which stores them in guest memory. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1991, 1996, 2055, 3030, 6606, 8204 | 6 |
 | `pending_shader_done_fences_` | member of MetalCommandProcessor | Shader-done fences (physical address, value) waiting for the open command buffer. | `src/xenia/gpu/metal/metal_command_processor.h` | 970 | 1 |
 | `pending_shader_done_fences_` | member of MetalCommandProcessor | Shader-done fences (physical address, value) waiting for the open command buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1964, 1980, 1990, 1998, 2004, 2005 | 6 |
 | `fence_command_buffer` | local in TryWriteShaderDoneFence | Empty command buffer carrying fences when none is open. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1985, 1987, 1991, 1992 | 4 |
 | `fences` | lambda capture in AttachShaderDoneFences | The fences a completion handler stores. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2003, 2007, 2008 | 3 |
-| `read_depth24` | lambda in LogResolveProbes | Reads one 24-bit depth texel of a probed resolve, false if not written. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6812, 6830, 6883, 6962 | 4 |
-| `written_rows` | local in LogResolveProbes | Rows of the probed resolve that were written. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6827, 6831, 6872, 6874, 6875, 6876, 6879, 6901, 6905, 6913, 6933, 6939 | 12 |
-| `kEdgeNames` | local constant in LogResolveProbes | Edge names for the resolve edge lines. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6898, 6930 | 2 |
-| `edge_line` | local in LogResolveProbes | One resolve edge line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6902, 6924, 6930 | 3 |
-| `depth_in` | local in LogResolveProbes | Row or column index counted from the edge (0-7). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6903, 6910, 6913, 6914 | 7 |
-| `not_clear` | local in LogResolveProbes | Texels in that row or column that are not 1.0. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6906, 6920, 6925 | 3 |
-| `min_depth24` | local in LogResolveProbes | Their minimum depth. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6907, 6921, 6925 | 4 |
-| `block_y` | local in LogResolveProbes | Row of 8x8 blocks in the resolve map. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6933, 6938, 6939, 6955 | 6 |
-| `block_x` | local in LogResolveProbes | Column of 8x8 blocks in the resolve map. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6935, 6940, 6941 | 5 |
-| `map_line` | local in LogResolveProbes | One row of the resolve map. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6934, 6949, 6955 | 3 |
+| `read_depth24` | lambda in LogResolveProbes | Reads one 24-bit depth texel of a probed resolve, false if not written. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6832, 6850, 6903, 6982 | 4 |
+| `written_rows` | local in LogResolveProbes | Rows of the probed resolve that were written. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6847, 6851, 6892, 6894, 6895, 6896, 6899, 6921, 6925, 6933, 6953, 6959 | 12 |
+| `kEdgeNames` | local constant in LogResolveProbes | Edge names for the resolve edge lines. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6918, 6950 | 2 |
+| `edge_line` | local in LogResolveProbes | One resolve edge line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6922, 6944, 6950 | 3 |
+| `depth_in` | local in LogResolveProbes | Row or column index counted from the edge (0-7). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6923, 6930, 6933, 6934 | 7 |
+| `not_clear` | local in LogResolveProbes | Texels in that row or column that are not 1.0. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6926, 6940, 6945 | 3 |
+| `min_depth24` | local in LogResolveProbes | Their minimum depth. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6927, 6941, 6945 | 4 |
+| `block_y` | local in LogResolveProbes | Row of 8x8 blocks in the resolve map. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6953, 6958, 6959, 6975 | 6 |
+| `block_x` | local in LogResolveProbes | Column of 8x8 blocks in the resolve map. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6955, 6960, 6961 | 5 |
+| `map_line` | local in LogResolveProbes | One row of the resolve map. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6954, 6969, 6975 | 3 |
 | `snapshot` | MetalResolveProbe field | Copy of the range the resolve wrote, made by a blit right after it (later resolves to the same address overwrite it before completion). | `src/xenia/gpu/metal/metal_command_processor.h` | 688 | 1 |
-| `snapshot` | MetalResolveProbe field | Copy of the range the resolve wrote, made by a blit right after it (later resolves to the same address overwrite it before completion). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6444, 6446, 6448, 6750, 6751, 6763, 6764, 6895, 6968, 6969 | 10 |
+| `snapshot` | MetalResolveProbe field | Copy of the range the resolve wrote, made by a blit right after it (later resolves to the same address overwrite it before completion). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6464, 6466, 6468, 6770, 6771, 6783, 6784, 6915, 6988, 6989 | 10 |
 | `edram_snapshot` | MetalResolveProbe field | Copy of the EDRAM tiles of the 1x depth surface the resolve read (the dumped host render target). | `src/xenia/gpu/metal/metal_command_processor.h` | 687, 689 | 2 |
-| `edram_snapshot` | MetalResolveProbe field | Copy of the EDRAM tiles of the 1x depth surface the resolve read (the dumped host render target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6471, 6474, 6480, 6482, 6753, 6754, 6839, 6846, 6855, 6963, 6971, 6972, 7533, 7537, 7545, 7548, 7555, 7556 | 18 |
+| `edram_snapshot` | MetalResolveProbe field | Copy of the EDRAM tiles of the 1x depth surface the resolve read (the dumped host render target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6491, 6494, 6500, 6502, 6773, 6774, 6859, 6866, 6875, 6983, 6991, 6992, 7554, 7558, 7566, 7569, 7576, 7577 | 18 |
 | `edram_base_tiles` | MetalResolveProbe field | RB_DEPTH_INFO depth base: the first tile in edram_snapshot. | `src/xenia/gpu/metal/metal_command_processor.h` | 687, 690 | 2 |
-| `edram_base_tiles` | MetalResolveProbe field | RB_DEPTH_INFO depth base: the first tile in edram_snapshot. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6460, 6477, 6479, 7506, 7530, 7543, 7545 | 7 |
+| `edram_base_tiles` | MetalResolveProbe field | RB_DEPTH_INFO depth base: the first tile in edram_snapshot. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6480, 6497, 6499, 7526, 7551, 7564, 7566 | 7 |
 | `edram_pitch_tiles` | MetalResolveProbe field | Pitch of the depth surface in EDRAM tiles (RB_SURFACE_INFO). | `src/xenia/gpu/metal/metal_command_processor.h` | 691 | 1 |
-| `edram_pitch_tiles` | MetalResolveProbe field | Pitch of the depth surface in EDRAM tiles (RB_SURFACE_INFO). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6462, 6466, 6843, 6845, 7511, 7524, 7530, 7531 | 9 |
-| `snapshot_blit` | local in IssueCopy (frame detail) | Blit encoder that copies the resolved range and EDRAM tiles into the probe snapshots. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6441, 6443, 6447, 6478, 6482, 6489, 6490 | 7 |
-| `edram` | local in IssueCopy (frame detail) | The render target cache EDRAM buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6451, 6453, 6479, 6482 | 4 |
-| `surface_info` | local in IssueCopy (frame detail) | RB_SURFACE_INFO of the resolve (MSAA, pitch). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6452, 6454, 6463 | 3 |
-| `tile_bytes` | local in IssueCopy (frame detail) | Bytes per EDRAM tile (80x16 32-bit samples). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6457, 6472, 6479, 6480, 6483, 6484 | 6 |
-| `tiles` | local in IssueCopy (frame detail) | EDRAM tiles copied into edram_snapshot. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6465, 6470, 6472, 6477, 6481, 6484 | 6 |
-| `first_tiles` | local in IssueCopy (frame detail) | Tiles copied before the EDRAM end wraps around to tile 0. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6476, 6480, 6481, 6483, 6484 | 5 |
-| `probe_memory` | local in LogResolveProbes | Memory the probe is read from: its snapshot, else the shared memory buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6761, 6764, 6799, 6822 | 4 |
-| `probe_memory_base` | local in LogResolveProbes | Guest address of the first byte of probe_memory (written_begin for a snapshot, else 0). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6762, 6765, 6799, 6822 | 4 |
-| `edram_tile_bytes` | local in LogResolveProbes | Bytes per EDRAM tile. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6835, 6846, 6856 | 3 |
-| `read_edram` | lambda in LogResolveProbes | Reads the EDRAM dword of a depth surface pixel from edram_snapshot (tile halves swapped), false outside it. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6838, 6866, 6885 | 3 |
-| `read_edram_depth24` | lambda in LogResolveProbes | The 24-bit depth of read_edram. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6864, 6960, 6964 | 3 |
-| `tile` | local in read_edram | Tile of the pixel, counted from edram_base_tiles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6842, 6846, 6856 | 3 |
-| `tile_x` | local in read_edram | Sample column within the tile, halves swapped for depth. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6850, 6851, 6859 | 4 |
-| `texels_line` | local in LogResolveProbes | The resolve texels log line (raw values at six border positions). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6873, 6886, 6896 | 3 |
-| `positions` | local constant in LogResolveProbes | The six border positions logged. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6874, 6880 | 2 |
-| `position` | loop variable in LogResolveProbes | One of positions. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6880, 6883, 6885, 6887 | 7 |
-| `edram_texel` | local in LogResolveProbes | The EDRAM dword at the position. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6881, 6885, 6889 | 3 |
-| `in_resolve` | local in LogResolveProbes | The resolve wrote the position. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6882, 6888 | 2 |
-| `in_edram` | local in LogResolveProbes | edram_snapshot holds the position. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6884, 6889 | 2 |
-| `log_coverage` | lambda in LogResolveProbes | Logs the edge and 8x8 map lines for the resolved texels or the EDRAM. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6900, 6959, 6962, 6964 | 4 |
-| `source` | lambda parameter of log_coverage | "resolve" or "edram", in the log lines. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6900, 6930, 6954 | 3 |
-| `read` | lambda parameter of log_coverage | read_depth24 or read_edram_depth24. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6900, 6916, 6943 | 3 |
+| `edram_pitch_tiles` | MetalResolveProbe field | Pitch of the depth surface in EDRAM tiles (RB_SURFACE_INFO). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6482, 6486, 6863, 6865, 7531, 7545, 7551, 7552 | 9 |
+| `snapshot_blit` | local in IssueCopy (frame detail) | Blit encoder that copies the resolved range and EDRAM tiles into the probe snapshots. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6461, 6463, 6467, 6498, 6502, 6509, 6510 | 7 |
+| `edram` | local in IssueCopy (frame detail) | The render target cache EDRAM buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6471, 6473, 6499, 6502 | 4 |
+| `surface_info` | local in IssueCopy (frame detail) | RB_SURFACE_INFO of the resolve (MSAA, pitch). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6472, 6474, 6483 | 3 |
+| `tile_bytes` | local in IssueCopy (frame detail) | Bytes per EDRAM tile (80x16 32-bit samples). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6477, 6492, 6499, 6500, 6503, 6504 | 6 |
+| `tiles` | local in IssueCopy (frame detail) | EDRAM tiles copied into edram_snapshot. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6485, 6490, 6492, 6497, 6501, 6504 | 6 |
+| `first_tiles` | local in IssueCopy (frame detail) | Tiles copied before the EDRAM end wraps around to tile 0. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6496, 6500, 6501, 6503, 6504 | 5 |
+| `probe_memory` | local in LogResolveProbes | Memory the probe is read from: its snapshot, else the shared memory buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6781, 6784, 6819, 6842 | 4 |
+| `probe_memory_base` | local in LogResolveProbes | Guest address of the first byte of probe_memory (written_begin for a snapshot, else 0). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6782, 6785, 6819, 6842 | 4 |
+| `edram_tile_bytes` | local in LogResolveProbes | Bytes per EDRAM tile. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6855, 6866, 6876 | 3 |
+| `read_edram` | lambda in LogResolveProbes | Reads the EDRAM dword of a depth surface pixel from edram_snapshot (tile halves swapped), false outside it. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6858, 6886, 6905 | 3 |
+| `read_edram_depth24` | lambda in LogResolveProbes | The 24-bit depth of read_edram. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6884, 6980, 6984 | 3 |
+| `tile` | local in read_edram | Tile of the pixel, counted from edram_base_tiles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6862, 6866, 6876 | 3 |
+| `tile_x` | local in read_edram | Sample column within the tile, halves swapped for depth. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6870, 6871, 6879 | 4 |
+| `texels_line` | local in LogResolveProbes | The resolve texels log line (raw values at six border positions). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6893, 6906, 6916 | 3 |
+| `positions` | local constant in LogResolveProbes | The six border positions logged. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6894, 6900 | 2 |
+| `position` | loop variable in LogResolveProbes | One of positions. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6900, 6903, 6905, 6907 | 7 |
+| `edram_texel` | local in LogResolveProbes | The EDRAM dword at the position. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6901, 6905, 6909 | 3 |
+| `in_resolve` | local in LogResolveProbes | The resolve wrote the position. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6902, 6908 | 2 |
+| `in_edram` | local in LogResolveProbes | edram_snapshot holds the position. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6904, 6909 | 2 |
+| `log_coverage` | lambda in LogResolveProbes | Logs the edge and 8x8 map lines for the resolved texels or the EDRAM. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6920, 6979, 6982, 6984 | 4 |
+| `source` | lambda parameter of log_coverage | "resolve" or "edram", in the log lines. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6920, 6950, 6974 | 3 |
+| `read` | lambda parameter of log_coverage | read_depth24 or read_edram_depth24. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6920, 6936, 6963 | 3 |
 | `pass` | MetalResolveProbe field | Not 0: an EDRAM probe of a 24-bit unorm depth target at the start of this frame detail pass, not a resolve (width and height in EDRAM samples). | `src/xenia/gpu/metal/metal_command_processor.h` | 692, 694 | 2 |
-| `pass` | MetalResolveProbe field | Not 0: an EDRAM probe of a 24-bit unorm depth target at the start of this frame detail pass, not a resolve (width and height in EDRAM samples). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6770, 6775, 6827, 6828, 6872, 6958, 6959, 7505 | 8 |
-| `depth_info` | local in BeginCommandBuffer (frame detail) | RB_DEPTH_INFO of the pass (24-bit unorm only, base tiles). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7501, 7503, 7506 | 3 |
-| `surface_info` | local in BeginCommandBuffer (frame detail) | RB_SURFACE_INFO of the pass (pitch, MSAA). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7502, 7509, 7510, 7519 | 4 |
-| `probe` | local in BeginCommandBuffer (frame detail) | The pass-start EDRAM probe being recorded. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7504, 7505, 7506, 7509, 7511, 7512, 7514, 7524, 7525, 7530, 7531, 7533, 7537, 7543, 7545, 7548, 7553, 7554, 7555, 7556 | 23 |
-| `tile_bytes` | local in BeginCommandBuffer (frame detail) | Bytes per EDRAM tile. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7520, 7534, 7545, 7546, 7549, 7550 | 6 |
-| `tiles` | local in BeginCommandBuffer (frame detail) | EDRAM tiles dumped and copied. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7523, 7528, 7531, 7534, 7543, 7547, 7550 | 7 |
-| `snapshot_blit` | local in BeginCommandBuffer (frame detail) | Blit encoder copying the dumped EDRAM tiles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7536, 7539, 7544, 7548, 7552 | 5 |
-| `edram` | local in BeginCommandBuffer (frame detail) | The render target cache EDRAM buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7540, 7545, 7548 | 3 |
-| `first_tiles` | local in BeginCommandBuffer (frame detail) | Tiles copied before the EDRAM end wraps around. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7542, 7546, 7547, 7549, 7550 | 5 |
+| `pass` | MetalResolveProbe field | Not 0: an EDRAM probe of a 24-bit unorm depth target at the start of this frame detail pass, not a resolve (width and height in EDRAM samples). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6790, 6795, 6847, 6848, 6892, 6978, 6979, 7525 | 8 |
+| `depth_info` | local in BeginCommandBuffer (frame detail) | RB_DEPTH_INFO of the pass (24-bit unorm only, base tiles). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7521, 7523, 7526 | 3 |
+| `surface_info` | local in BeginCommandBuffer (frame detail) | RB_SURFACE_INFO of the pass (pitch, MSAA). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7522, 7529, 7530, 7539 | 4 |
+| `probe` | local in BeginCommandBuffer (frame detail) | The pass-start EDRAM probe being recorded. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7524, 7525, 7526, 7529, 7531, 7532, 7534, 7545, 7546, 7551, 7552, 7554, 7558, 7564, 7566, 7569, 7574, 7575, 7576, 7577 | 23 |
+| `tile_bytes` | local in BeginCommandBuffer (frame detail) | Bytes per EDRAM tile. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7541, 7555, 7566, 7567, 7570, 7571 | 6 |
+| `tiles` | local in BeginCommandBuffer (frame detail) | EDRAM tiles dumped and copied. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7544, 7549, 7552, 7555, 7564, 7568, 7571 | 7 |
+| `snapshot_blit` | local in BeginCommandBuffer (frame detail) | Blit encoder copying the dumped EDRAM tiles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7557, 7560, 7565, 7569, 7573 | 5 |
+| `edram` | local in BeginCommandBuffer (frame detail) | The render target cache EDRAM buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7561, 7566, 7569 | 3 |
+| `first_tiles` | local in BeginCommandBuffer (frame detail) | Tiles copied before the EDRAM end wraps around. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7563, 7567, 7568, 7570, 7571 | 5 |
 | `KernelCallReadable` | function in xe::kernel::shim (declaration) | Whether a guest memory range is committed and readable. | `src/xenia/kernel/util/shim_utils.h` | 561 | 1 |
 | `LogKernelCallStack` | function in xe::kernel::shim (declaration) | Guest return addresses up the stack from a frame. | `src/xenia/kernel/util/shim_utils.h` | 564 | 1 |
-| `KernelCallReadable` | function in xe::kernel::shim | Checks the guest code around the crash PC is readable. | `src/xenia/emulator.cc` | 1793 | 1 |
-| `LogKernelCallStack` | function in xe::kernel::shim | Guest stack of the crashed thread. | `src/xenia/emulator.cc` | 1789 | 1 |
-| `crash_global` | local in Emulator::ExceptionCallback (crash dump) | The global critical region (try-locked; the page table and the stack walk need it). | `src/xenia/emulator.cc` | 1754, 1755, 1837 | 3 |
-| `crash_locked` | local in Emulator::ExceptionCallback (crash dump) | Whether crash_global was taken. | `src/xenia/emulator.cc` | 1755, 1766, 1786 | 3 |
-| `crash_fault` | local in Emulator::ExceptionCallback (crash dump) | Host fault address. | `src/xenia/emulator.cc` | 1757, 1760, 1761, 1762 | 4 |
-| `crash_virtual` | local in Emulator::ExceptionCallback (crash dump) | Host address of guest virtual address 0. | `src/xenia/emulator.cc` | 1758, 1760, 1761, 1762, 1782 | 5 |
-| `crash_guest` | local in Emulator::ExceptionCallback (crash dump) | Guest address of the fault. | `src/xenia/emulator.cc` | 1762, 1763, 1764, 1767 | 4 |
-| `crash_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding crash_guest. | `src/xenia/emulator.cc` | 1764, 1766, 1767, 1771, 1774 | 5 |
-| `crash_info` | local in Emulator::ExceptionCallback (crash dump) | Region and allocation of crash_guest (state, protection). | `src/xenia/emulator.cc` | 1765, 1767, 1771, 1772, 1773 | 8 |
-| `crash_pc` | local in Emulator::ExceptionCallback (crash dump) | Guest PC of the fault, for the code words around it. | `src/xenia/emulator.cc` | 1790, 1792, 1793, 1794, 1798 | 5 |
-| `kernel_call_wait_objects` | local in LogKernelCallThreads | The handles of a NtWaitForMultipleObjectsEx with their object type and name. | `src/xenia/kernel/util/shim_utils.cc` | 268, 279, 282, 287, 291, 295 | 6 |
-| `kernel_call_handles` | local in LogKernelCallThreads | Guest address of the handle array (r4). | `src/xenia/kernel/util/shim_utils.cc` | 269, 270, 274 | 3 |
-| `kernel_call_wait_handle` | local in LogKernelCallThreads | One handle of the array. | `src/xenia/kernel/util/shim_utils.cc` | 272, 278, 280 | 3 |
-| `kernel_call_wait_object` | local in LogKernelCallThreads | The object of that handle. | `src/xenia/kernel/util/shim_utils.cc` | 276, 281, 284, 285 | 4 |
-| `frame_detail_bindings` | local in IssueDraw (frame detail) | Vertex bindings of the draw's vertex shader, for the small-draw vertex dump. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5913, 5916, 5917 | 3 |
-| `vertex_words` | local in IssueDraw (frame detail) | Words of vertex data dumped (at most 48). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5921, 5927, 5930 | 3 |
-| `frame_detail_vertices` | local in IssueDraw (frame detail) | The dumped vertex data as text. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5926, 5934, 5945 | 3 |
-| `word_float` | local in IssueDraw (frame detail) | One vertex word as a float. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5932, 5933, 5938 | 3 |
-| `OnlyFrameDetailLogChanged` | function | Whether edited settings differ from the stored ones only in metal_frame_detail_log (then saving closes Settings without the alert). | `src/xenia/ui/windowed_app_main_ios.mm` | 3800, 8347 | 2 |
+| `KernelCallReadable` | function in xe::kernel::shim | Checks the guest code around the crash PC is readable. | `src/xenia/emulator.cc` | 1794 | 1 |
+| `LogKernelCallStack` | function in xe::kernel::shim | Guest stack of the crashed thread. | `src/xenia/emulator.cc` | 1790 | 1 |
+| `crash_global` | local in Emulator::ExceptionCallback (crash dump) | The global critical region (try-locked; the page table and the stack walk need it). | `src/xenia/emulator.cc` | 1755, 1756, 1838 | 3 |
+| `crash_locked` | local in Emulator::ExceptionCallback (crash dump) | Whether crash_global was taken. | `src/xenia/emulator.cc` | 1756, 1767, 1787 | 3 |
+| `crash_fault` | local in Emulator::ExceptionCallback (crash dump) | Host fault address. | `src/xenia/emulator.cc` | 1758, 1761, 1762, 1763 | 4 |
+| `crash_virtual` | local in Emulator::ExceptionCallback (crash dump) | Host address of guest virtual address 0. | `src/xenia/emulator.cc` | 1759, 1761, 1762, 1763, 1783 | 5 |
+| `crash_guest` | local in Emulator::ExceptionCallback (crash dump) | Guest address of the fault. | `src/xenia/emulator.cc` | 1763, 1764, 1765, 1768 | 4 |
+| `crash_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding crash_guest. | `src/xenia/emulator.cc` | 1765, 1767, 1768, 1772, 1775 | 5 |
+| `crash_info` | local in Emulator::ExceptionCallback (crash dump) | Region and allocation of crash_guest (state, protection). | `src/xenia/emulator.cc` | 1766, 1768, 1772, 1773, 1774 | 8 |
+| `crash_pc` | local in Emulator::ExceptionCallback (crash dump) | Guest PC of the fault, for the code words around it. | `src/xenia/emulator.cc` | 1791, 1793, 1794, 1795, 1799 | 5 |
+| `kernel_call_wait_objects` | local in LogKernelCallThreads | The handles of a NtWaitForMultipleObjectsEx with their object type and name. | `src/xenia/kernel/util/shim_utils.cc` | 274, 285, 289, 299, 303, 307 | 6 |
+| `kernel_call_handles` | local in LogKernelCallThreads | Guest address of the handle array (r4). | `src/xenia/kernel/util/shim_utils.cc` | 275, 276, 280 | 3 |
+| `kernel_call_wait_handle` | local in LogKernelCallThreads | One handle of the array. | `src/xenia/kernel/util/shim_utils.cc` | 278, 284, 286 | 3 |
+| `kernel_call_wait_object` | local in LogKernelCallThreads | The object of that handle. | `src/xenia/kernel/util/shim_utils.cc` | 282, 287, 291, 292, 293, 295 | 6 |
+| `frame_detail_bindings` | local in IssueDraw (frame detail) | Vertex bindings of the draw's vertex shader, for the small-draw vertex dump. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5933, 5936, 5937 | 3 |
+| `vertex_words` | local in IssueDraw (frame detail) | Words of vertex data dumped (at most 48). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5941, 5947, 5950 | 3 |
+| `frame_detail_vertices` | local in IssueDraw (frame detail) | The dumped vertex data as text. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5946, 5954, 5965 | 3 |
+| `word_float` | local in IssueDraw (frame detail) | One vertex word as a float. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5952, 5953, 5958 | 3 |
+| `OnlyFrameDetailLogChanged` | function | Whether edited settings differ from the stored ones only in metal_frame_detail_log (then saving closes Settings without the alert). | `src/xenia/ui/windowed_app_main_ios.mm` | 3810, 8424 | 2 |
 | `frame_capture` | local in BuildIOSConfigSections | The Frame Capture section, first in Settings. | `src/xenia/ui/windowed_app_main_ios.mm` | 3509, 3510, 3511, 3514, 3531, 3532 | 6 |
-| `frame_detail_changed` | local in OnlyFrameDetailLogChanged | Whether the Frame Detail Log differs. | `src/xenia/ui/windowed_app_main_ios.mm` | 3805, 3826, 3829 | 3 |
-| `only_frame_detail_log` | local in saveTapped: | Result of OnlyFrameDetailLogChanged before the settings are applied. | `src/xenia/ui/windowed_app_main_ios.mm` | 8347, 8351 | 2 |
-| `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/gpu/render_target_cache.cc` | 38, 1636 | 2 |
+| `frame_detail_changed` | local in OnlyFrameDetailLogChanged | Whether the Frame Detail Log differs. | `src/xenia/ui/windowed_app_main_ios.mm` | 3815, 3836, 3839 | 3 |
+| `only_frame_detail_log` | local in saveTapped: | Result of OnlyFrameDetailLogChanged before the settings are applied. | `src/xenia/ui/windowed_app_main_ios.mm` | 8424, 8428 | 2 |
+| `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/gpu/render_target_cache.cc` | 38, 1668 | 2 |
 | `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/gpu/metal/metal_command_processor.cc` | 95, 2981 | 2 |
-| `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/emulator.cc` | 122, 2255 | 2 |
+| `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/emulator.cc` | 122, 2256 | 2 |
 | `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/ui/windowed_app_main_ios.mm` | 3597 | 1 |
-| `TakeUnchangedTransferCounts` | member function of RenderTargetCache | Returns and resets unchanged_transfers_ and skipped_transfers_ for the Metal perf log. | `src/xenia/gpu/render_target_cache.h` | 217 | 1 |
+| `TakeUnchangedTransferCounts` | member function of RenderTargetCache | Returns and resets unchanged_transfers_ and skipped_transfers_ for the Metal perf log. | `src/xenia/gpu/render_target_cache.h` | 229 | 1 |
 | `TakeUnchangedTransferCounts` | member function of RenderTargetCache | Returns and resets unchanged_transfers_ and skipped_transfers_ for the Metal perf log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2974 | 1 |
-| `unchanged_out` | parameter of TakeUnchangedTransferCounts | Receives unchanged_transfers_. | `src/xenia/gpu/render_target_cache.h` | 217, 219 | 2 |
-| `skipped_out` | parameter of TakeUnchangedTransferCounts | Receives skipped_transfers_. | `src/xenia/gpu/render_target_cache.h` | 218, 220 | 2 |
-| `unchanged_transfers_` | member of RenderTargetCache | Ownership ranges given back to a render target whose copy was unchanged. | `src/xenia/gpu/render_target_cache.h` | 219, 221, 746 | 3 |
-| `unchanged_transfers_` | member of RenderTargetCache | Ownership ranges given back to a render target whose copy was unchanged. | `src/xenia/gpu/render_target_cache.cc` | 1635 | 1 |
-| `skipped_transfers_` | member of RenderTargetCache | How many of those skip_unchanged_render_target_transfers skipped. | `src/xenia/gpu/render_target_cache.h` | 220, 222, 747 | 3 |
-| `skipped_transfers_` | member of RenderTargetCache | How many of those skip_unchanged_render_target_transfers skipped. | `src/xenia/gpu/render_target_cache.cc` | 1637 | 1 |
-| `intact_render_target` | member of RenderTargetCache::OwnershipRange | A render target other than the owner whose copy of the range still holds the current contents. | `src/xenia/gpu/render_target_cache.h` | 654, 699 | 3 |
-| `intact_render_target` | member of RenderTargetCache::OwnershipRange | A render target other than the owner whose copy of the range still holds the current contents. | `src/xenia/gpu/render_target_cache.cc` | 557, 558, 1590, 1602, 1603, 1633, 1703 | 7 |
-| `dest_written` | parameter of ChangeOwnership | The destination will be written in the range (draw writing depth, stencil or color; resolve clear), so no other copy stays intact. | `src/xenia/gpu/render_target_cache.h` | 731 | 1 |
-| `dest_written` | parameter of ChangeOwnership | The destination will be written in the range (draw writing depth, stencil or color; resolve clear), so no other copy stays intact. | `src/xenia/gpu/render_target_cache.cc` | 1555, 1587, 1602, 1703 | 4 |
-| `depth_written` | local in Update | The draw writes depth or stencil. | `src/xenia/gpu/render_target_cache.cc` | 892, 894, 901, 922 | 4 |
-| `writes_stencil` | lambda in Update | Whether one face's stencil state can write stencil. | `src/xenia/gpu/render_target_cache.cc` | 895, 902, 907 | 3 |
-| `fail` | parameter of writes_stencil | Stencil op on stencil test failure. | `src/xenia/gpu/render_target_cache.cc` | 895, 897 | 2 |
-| `zpass` | parameter of writes_stencil | Stencil op when both tests pass. | `src/xenia/gpu/render_target_cache.cc` | 896, 898 | 2 |
-| `zfail` | parameter of writes_stencil | Stencil op on depth test failure. | `src/xenia/gpu/render_target_cache.cc` | 896, 899 | 2 |
-| `dest_intact` | local in ChangeOwnership | The destination's copy of the range is unchanged since it last owned it. | `src/xenia/gpu/render_target_cache.cc` | 1631, 1634 | 2 |
-| `previous_owner_matches` | local in ChangeOwnership | The previous owner's copy will match the destination's after this change (transferred, or skipped as unchanged). | `src/xenia/gpu/render_target_cache.cc` | 1625, 1638, 1642, 1669, 1690, 1703 | 6 |
-| `previous_owner` | local in ChangeOwnership | Owner of the range before the claim. | `src/xenia/gpu/render_target_cache.cc` | 1698, 1704 | 2 |
+| `unchanged_out` | parameter of TakeUnchangedTransferCounts | Receives unchanged_transfers_. | `src/xenia/gpu/render_target_cache.h` | 229, 231 | 2 |
+| `skipped_out` | parameter of TakeUnchangedTransferCounts | Receives skipped_transfers_. | `src/xenia/gpu/render_target_cache.h` | 230, 232 | 2 |
+| `unchanged_transfers_` | member of RenderTargetCache | Ownership ranges given back to a render target whose copy was unchanged. | `src/xenia/gpu/render_target_cache.h` | 231, 233, 765 | 3 |
+| `unchanged_transfers_` | member of RenderTargetCache | Ownership ranges given back to a render target whose copy was unchanged. | `src/xenia/gpu/render_target_cache.cc` | 1667 | 1 |
+| `skipped_transfers_` | member of RenderTargetCache | How many of those skip_unchanged_render_target_transfers skipped. | `src/xenia/gpu/render_target_cache.h` | 232, 234, 766 | 3 |
+| `skipped_transfers_` | member of RenderTargetCache | How many of those skip_unchanged_render_target_transfers skipped. | `src/xenia/gpu/render_target_cache.cc` | 1669 | 1 |
+| `intact_render_target` | member of RenderTargetCache::OwnershipRange | A render target other than the owner whose copy of the range still holds the current contents. | `src/xenia/gpu/render_target_cache.h` | 673, 718 | 3 |
+| `intact_render_target` | member of RenderTargetCache::OwnershipRange | A render target other than the owner whose copy of the range still holds the current contents. | `src/xenia/gpu/render_target_cache.cc` | 568, 569, 1622, 1634, 1635, 1665, 1735 | 7 |
+| `dest_written` | parameter of ChangeOwnership | The destination will be written in the range (draw writing depth, stencil or color; resolve clear), so no other copy stays intact. | `src/xenia/gpu/render_target_cache.h` | 750 | 1 |
+| `dest_written` | parameter of ChangeOwnership | The destination will be written in the range (draw writing depth, stencil or color; resolve clear), so no other copy stays intact. | `src/xenia/gpu/render_target_cache.cc` | 1587, 1619, 1634, 1735 | 4 |
+| `depth_written` | local in Update | The draw writes depth or stencil. | `src/xenia/gpu/render_target_cache.cc` | 912, 914, 921, 942 | 4 |
+| `writes_stencil` | lambda in Update | Whether one face's stencil state can write stencil. | `src/xenia/gpu/render_target_cache.cc` | 915, 922, 927 | 3 |
+| `fail` | parameter of writes_stencil | Stencil op on stencil test failure. | `src/xenia/gpu/render_target_cache.cc` | 915, 917 | 2 |
+| `zpass` | parameter of writes_stencil | Stencil op when both tests pass. | `src/xenia/gpu/render_target_cache.cc` | 916, 918 | 2 |
+| `zfail` | parameter of writes_stencil | Stencil op on depth test failure. | `src/xenia/gpu/render_target_cache.cc` | 916, 919 | 2 |
+| `dest_intact` | local in ChangeOwnership | The destination's copy of the range is unchanged since it last owned it. | `src/xenia/gpu/render_target_cache.cc` | 1663, 1666 | 2 |
+| `previous_owner_matches` | local in ChangeOwnership | The previous owner's copy will match the destination's after this change (transferred, or skipped as unchanged). | `src/xenia/gpu/render_target_cache.cc` | 1657, 1670, 1674, 1701, 1722, 1735 | 6 |
+| `previous_owner` | local in ChangeOwnership | Owner of the range before the claim. | `src/xenia/gpu/render_target_cache.cc` | 1730, 1736 | 2 |
 | `unchanged_transfers` | local in the Metal perf log | Value from TakeUnchangedTransferCounts. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2973, 2974, 2980 | 3 |
 | `skipped_transfers` | local in the Metal perf log | Value from TakeUnchangedTransferCounts. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2973, 2975, 2980 | 3 |
 | `UserApcPendingForHostWait` | function (xobject.cc) | Whether an alertable host wait should end at once for a pending guest user APC (POSIX host waits are not woken by one). | `src/xenia/kernel/xobject.cc` | 42, 442, 450, 680, 688, 722, 730 | 7 |
 | `kAlertableWaitPollIntervalIOS` | constant (iOS only) | Slice of an alertable host wait on iOS, so an APC queued by another thread is seen within 10 ms. | `src/xenia/kernel/xobject.cc` | 59, 138 | 2 |
 | `slice` | local in WaitWithTitleStopPollIOS (iOS only) | The next wait slice, capped at kAlertableWaitPollIntervalIOS for alertable waits. | `src/xenia/kernel/xobject.cc` | 136, 138, 140 | 4 |
-| `typed_utf8` | local in the keyboard prompt callback | UTF-8 of the typed text (nil-safe) before the copy is released. | `src/xenia/ui/windowed_app_main_ios.mm` | 11935, 11936 | 3 |
+| `typed_utf8` | local in the keyboard prompt callback | UTF-8 of the typed text (nil-safe) before the copy is released. | `src/xenia/ui/windowed_app_main_ios.mm` | 12012, 12013 | 3 |
 | `ordinal` | member of MetalCommandProcessor::MetalZPDQuery | The query's place among the frame's query ends. | `src/xenia/gpu/metal/metal_command_processor.h` | 486 | 1 |
-| `ordinal` | member of MetalCommandProcessor::MetalZPDQuery | The query's place among the frame's query ends. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7067, 7068, 7069, 7075, 7076, 7086, 7087, 7171, 7172, 7196 | 11 |
+| `ordinal` | member of MetalCommandProcessor::MetalZPDQuery | The query's place among the frame's query ends. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7087, 7088, 7089, 7095, 7096, 7106, 7107, 7191, 7192, 7216 | 11 |
 | `address_guess` | member of MetalCommandProcessor::MetalZPDQuery | What the last count at its address predicted. | `src/xenia/gpu/metal/metal_command_processor.h` | 487 | 1 |
-| `address_guess` | member of MetalCommandProcessor::MetalZPDQuery | What the last count at its address predicted. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7085, 7091, 7164, 7197 | 4 |
+| `address_guess` | member of MetalCommandProcessor::MetalZPDQuery | What the last count at its address predicted. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7105, 7111, 7184, 7217 | 4 |
 | `ordinal_guess` | member of MetalCommandProcessor::MetalZPDQuery | What the last count at its place in the frame predicted (UINT32_MAX: none). | `src/xenia/gpu/metal/metal_command_processor.h` | 488 | 1 |
-| `ordinal_guess` | member of MetalCommandProcessor::MetalZPDQuery | What the last count at its place in the frame predicted (UINT32_MAX: none). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7087, 7089, 7090, 7157, 7163, 7197 | 6 |
+| `ordinal_guess` | member of MetalCommandProcessor::MetalZPDQuery | What the last count at its place in the frame predicted (UINT32_MAX: none). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7107, 7109, 7110, 7177, 7183, 7217 | 6 |
 | `zpd_frame_query_ends_` | member of MetalCommandProcessor | Query ends since the last swap. | `src/xenia/gpu/metal/metal_command_processor.h` | 513 | 1 |
-| `zpd_frame_query_ends_` | member of MetalCommandProcessor | Query ends since the last swap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2804, 7067 | 2 |
+| `zpd_frame_query_ends_` | member of MetalCommandProcessor | Query ends since the last swap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2804, 7087 | 2 |
 | `zpd_results_by_ordinal_` | member of MetalCommandProcessor | Last count per place in the frame (UINT32_MAX: none). | `src/xenia/gpu/metal/metal_command_processor.h` | 514 | 1 |
-| `zpd_results_by_ordinal_` | member of MetalCommandProcessor | Last count per place in the frame (UINT32_MAX: none). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7068, 7069, 7075, 7076, 7086, 7087, 7171, 7172 | 8 |
+| `zpd_results_by_ordinal_` | member of MetalCommandProcessor | Last count per place in the frame (UINT32_MAX: none). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7088, 7089, 7095, 7096, 7106, 7107, 7191, 7192 | 8 |
 | `zpd_ordinal_score_` | member of MetalCommandProcessor | Which guess has been closer lately, -8...8 (above 0: by place in the frame). | `src/xenia/gpu/metal/metal_command_processor.h` | 515 | 1 |
-| `zpd_ordinal_score_` | member of MetalCommandProcessor | Which guess has been closer lately, -8...8 (above 0: by place in the frame). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2995, 2996, 7089, 7166, 7168, 7198 | 8 |
-| `miss` | lambda in ProcessCompletedZPDQueries | Distance of a guess from the count. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7159, 7163, 7164 | 3 |
-| `ordinal_miss` | local in ProcessCompletedZPDQueries | How far the guess by place was. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7162, 7165, 7167 | 3 |
-| `address_miss` | local in ProcessCompletedZPDQueries | How far the guess by address was. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7164, 7165, 7167 | 3 |
+| `zpd_ordinal_score_` | member of MetalCommandProcessor | Which guess has been closer lately, -8...8 (above 0: by place in the frame). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2995, 2996, 7109, 7186, 7188, 7218 | 8 |
+| `miss` | lambda in ProcessCompletedZPDQueries | Distance of a guess from the count. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7179, 7183, 7184 | 3 |
+| `ordinal_miss` | local in ProcessCompletedZPDQueries | How far the guess by place was. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7182, 7185, 7187 | 3 |
+| `address_miss` | local in ProcessCompletedZPDQueries | How far the guess by address was. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7184, 7185, 7187 | 3 |
 | `signin_state_logged` | function-local static in XamUserGetSigninState_entry | The value last logged per user, to log only changes. | `src/xenia/kernel/xam/xam_user.cc` | 104, 106, 107 | 3 |
 | `metal_gpu_trace_frames` | cvar (Metal); iOS settings key | Changed to N during a game: records the GPU commands of the next N frames into a trace under trace_gpu_prefix. Settings > Frame Capture > GPU Trace. | `src/xenia/gpu/metal/metal_command_processor.cc` | 124, 2819, 2820 | 3 |
-| `metal_gpu_trace_frames` | cvar (Metal); iOS settings key | Changed to N during a game: records the GPU commands of the next N frames into a trace under trace_gpu_prefix. Settings > Frame Capture > GPU Trace. | `src/xenia/ui/windowed_app_main_ios.mm` | 3523, 3823 | 2 |
+| `metal_gpu_trace_frames` | cvar (Metal); iOS settings key | Changed to N during a game: records the GPU commands of the next N frames into a trace under trace_gpu_prefix. Settings > Frame Capture > GPU Trace. | `src/xenia/ui/windowed_app_main_ios.mm` | 3523, 3833 | 2 |
 | `gpu_trace_setting_` | member of MetalCommandProcessor | metal_gpu_trace_frames when last seen (a change starts a recording). | `src/xenia/gpu/metal/metal_command_processor.h` | 665 | 1 |
 | `gpu_trace_setting_` | member of MetalCommandProcessor | metal_gpu_trace_frames when last seen (a change starts a recording). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2819, 2820, 2821, 2836 | 4 |
 | `gpu_trace_frames_left_` | member of MetalCommandProcessor | Frames of the current recording still to write. | `src/xenia/gpu/metal/metal_command_processor.h` | 666 | 1 |
@@ -985,10 +985,10 @@ further edits.
 | `trace_local_time` | local in IssueSwap | trace_time in the device time zone. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2829, 2830, 2833 | 3 |
 | `trace_folder` | local in IssueSwap | Folder name from the date and time. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2831, 2832, 2834 | 4 |
 | `LogKernelCallStackCode` | function in xe::kernel::shim | Logs the guest code around the caller and each return address of a stuck thread (first storm report). | `src/xenia/kernel/util/shim_utils.h` | 567 | 1 |
-| `LogKernelCallStackCode` | function in xe::kernel::shim | Logs the guest code around the caller and each return address of a stuck thread (first storm report). | `src/xenia/kernel/util/shim_utils.cc` | 129, 612 | 2 |
-| `kernel_call_returns` | local in LogKernelCallStackCode | The caller and the return addresses up the stack. | `src/xenia/kernel/util/shim_utils.cc` | 138, 152, 159 | 3 |
-| `kernel_call_return` | local in LogKernelCallStackCode | One of them. | `src/xenia/kernel/util/shim_utils.cc` | 159, 160, 161, 162, 177 | 6 |
-| `kernel_call_code_logged` | function-local static in LogKernelCallStackCode | Return addresses already dumped this run. | `src/xenia/kernel/util/shim_utils.cc` | 158, 162 | 2 |
+| `LogKernelCallStackCode` | function in xe::kernel::shim | Logs the guest code around the caller and each return address of a stuck thread (first storm report). | `src/xenia/kernel/util/shim_utils.cc` | 130, 624 | 2 |
+| `kernel_call_returns` | local in LogKernelCallStackCode | The caller and the return addresses up the stack. | `src/xenia/kernel/util/shim_utils.cc` | 139, 153, 160 | 3 |
+| `kernel_call_return` | local in LogKernelCallStackCode | One of them. | `src/xenia/kernel/util/shim_utils.cc` | 160, 161, 162, 163, 178 | 6 |
+| `kernel_call_code_logged` | function-local static in LogKernelCallStackCode | Return addresses already dumped this run. | `src/xenia/kernel/util/shim_utils.cc` | 159, 163 | 2 |
 | `zero_commit` | local in NtAllocateVirtualMemory_entry | The call commits without X_MEM_NOZERO. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.cc` | 230, 248, 280 | 3 |
 | `zero_runs` | local in NtAllocateVirtualMemory_entry | Ranges this call newly commits, to zero. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.cc` | 239, 260, 261, 262, 264, 292, 301 | 8 |
 | `run_address` | local in NtAllocateVirtualMemory_entry | Start of the region being checked. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.cc` | 250, 254, 256, 261, 262, 264, 267 | 9 |
@@ -1004,13 +1004,58 @@ further edits.
 | `RecordVirtualMemoryEvent` | function (xboxkrnl_memory.cc) | Records a call. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.cc` | 86, 320, 421 | 3 |
 | `DescribeVirtualMemoryHistory` | function in xe::kernel::xboxkrnl | The recorded calls whose range holds an address, for the crash dump. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.h` | 63 | 1 |
 | `DescribeVirtualMemoryHistory` | function in xe::kernel::xboxkrnl | The recorded calls whose range holds an address, for the crash dump. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.cc` | 98 | 1 |
-| `DescribeVirtualMemoryHistory` | function in xe::kernel::xboxkrnl | The recorded calls whose range holds an address, for the crash dump. | `src/xenia/emulator.cc` | 1835 | 1 |
-| `crash_reg` | local in Emulator::ExceptionCallback (crash dump) | Register index. | `src/xenia/emulator.cc` | 1805, 1806, 1821 | 5 |
-| `crash_pointer` | local in Emulator::ExceptionCallback (crash dump) | The register as a guest address. | `src/xenia/emulator.cc` | 1806, 1807, 1810, 1813, 1821, 1824, 1835 | 8 |
-| `crash_pointer_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding it. | `src/xenia/emulator.cc` | 1810, 1812, 1813 | 3 |
-| `crash_pointer_info` | local in Emulator::ExceptionCallback (crash dump) | Its allocation. | `src/xenia/emulator.cc` | 1811, 1814, 1815, 1821, 1822, 1823 | 7 |
-| `crash_bytes` | local in Emulator::ExceptionCallback (crash dump) | Start of the 32 bytes dumped around it. | `src/xenia/emulator.cc` | 1824, 1825, 1830 | 3 |
+| `DescribeVirtualMemoryHistory` | function in xe::kernel::xboxkrnl | The recorded calls whose range holds an address, for the crash dump. | `src/xenia/emulator.cc` | 1836 | 1 |
+| `crash_reg` | local in Emulator::ExceptionCallback (crash dump) | Register index. | `src/xenia/emulator.cc` | 1806, 1807, 1822 | 5 |
+| `crash_pointer` | local in Emulator::ExceptionCallback (crash dump) | The register as a guest address. | `src/xenia/emulator.cc` | 1807, 1808, 1811, 1814, 1822, 1825, 1836 | 8 |
+| `crash_pointer_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding it. | `src/xenia/emulator.cc` | 1811, 1813, 1814 | 3 |
+| `crash_pointer_info` | local in Emulator::ExceptionCallback (crash dump) | Its allocation. | `src/xenia/emulator.cc` | 1812, 1815, 1816, 1822, 1823, 1824 | 7 |
+| `crash_bytes` | local in Emulator::ExceptionCallback (crash dump) | Start of the 32 bytes dumped around it. | `src/xenia/emulator.cc` | 1825, 1826, 1831 | 3 |
 | `signed_in_mask` | local in KernelState::RegisterNotifyListener | Users signed in, for the startup XN_SYS_SIGNINCHANGED. | `src/xenia/kernel/kernel_state.cc` | 1219, 1223, 1227 | 3 |
+| `msaa_samples_as_pixels` | cvar; iOS settings key | Keep MSAA render targets as 1x render targets of their samples, drawing to them scaled by the sample grid (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/gpu/render_target_cache.cc` | 48, 617, 1234 | 3 |
+| `msaa_samples_as_pixels` | cvar; iOS settings key | Keep MSAA render targets as 1x render targets of their samples, drawing to them scaled by the sample grid (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/gpu/render_target_cache.h` | 36 | 1 |
+| `msaa_samples_as_pixels` | cvar; iOS settings key | Keep MSAA render targets as 1x render targets of their samples, drawing to them scaled by the sample grid (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/emulator.cc` | 123, 2257 | 2 |
+| `msaa_samples_as_pixels` | cvar; iOS settings key | Keep MSAA render targets as 1x render targets of their samples, drawing to them scaled by the sample grid (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/ui/windowed_app_main_ios.mm` | 3606 | 1 |
+| `last_update_samples_as_pixels_` | member of RenderTargetCache | Guest MSAA of the surface the last Update bound as 1x render targets of its samples, or k1X. | `src/xenia/gpu/render_target_cache.h` | 219, 222, 640 | 3 |
+| `last_update_samples_as_pixels_` | member of RenderTargetCache | Guest MSAA of the surface the last Update bound as 1x render targets of its samples, or k1X. | `src/xenia/gpu/render_target_cache.cc` | 616, 620 | 2 |
+| `last_update_samples_as_pixels_x_log2` | member function of RenderTargetCache | Horizontal draw scale (log2) on top of the resolution scale for msaa_samples_as_pixels: 1 at 4x MSAA. | `src/xenia/gpu/render_target_cache.h` | 218 | 1 |
+| `last_update_samples_as_pixels_x_log2` | member function of RenderTargetCache | Horizontal draw scale (log2) on top of the resolution scale for msaa_samples_as_pixels: 1 at 4x MSAA. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3406, 4982, 8411, 11522, 11617 | 5 |
+| `last_update_samples_as_pixels_y_log2` | member function of RenderTargetCache | Vertical draw scale (log2) on top of the resolution scale for msaa_samples_as_pixels: 1 at 2x and 4x MSAA. | `src/xenia/gpu/render_target_cache.h` | 221 | 1 |
+| `last_update_samples_as_pixels_y_log2` | member function of RenderTargetCache | Vertical draw scale (log2) on top of the resolution scale for msaa_samples_as_pixels: 1 at 2x and 4x MSAA. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3408, 4979, 4984, 7540, 8413, 11525, 11619 | 7 |
+| `SupportsMsaaSamplesAsPixels` | virtual member function of RenderTargetCache | Whether the implementation scales draws by the sample grid (Metal: the SPIRV-Cross path). | `src/xenia/gpu/render_target_cache.h` | 255 | 1 |
+| `SupportsMsaaSamplesAsPixels` | virtual member function of RenderTargetCache | Whether the implementation scales draws by the sample grid (Metal: the SPIRV-Cross path). | `src/xenia/gpu/render_target_cache.cc` | 618, 1234 | 2 |
+| `SupportsMsaaSamplesAsPixels` | virtual member function of RenderTargetCache | Whether the implementation scales draws by the sample grid (Metal: the SPIRV-Cross path). | `src/xenia/gpu/metal/metal_render_target_cache.h` | 140 | 1 |
+| `SupportsMsaaSamplesAsPixels` | virtual member function of RenderTargetCache | Whether the implementation scales draws by the sample grid (Metal: the SPIRV-Cross path). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3175 | 1 |
+| `storage_msaa_samples` | local in Update and PrepareHostRenderTargetsResolveClear | MSAA of the host render target keys: k1X with msaa_samples_as_pixels, else the guest MSAA. | `src/xenia/gpu/render_target_cache.cc` | 615, 619, 771, 861, 985, 1233, 1363, 1379, 1395 | 9 |
+| `samples_as_pixels` | local in IssueDrawMsl | The draw goes to render targets keeping MSAA samples as pixels; its scale and divisors include the sample grid. | `src/xenia/gpu/metal/metal_command_processor.cc` | 4977, 4980, 4989, 4992 | 4 |
+| `kSysFlag_SamplesAsPixelsX_Shift` | enumerator of SpirvShaderTranslator | Bit of kSysFlag_SamplesAsPixelsX. | `src/xenia/gpu/spirv_shader_translator.h` | 157, 199 | 2 |
+| `kSysFlag_SamplesAsPixelsY_Shift` | enumerator of SpirvShaderTranslator | Bit of kSysFlag_SamplesAsPixelsY. | `src/xenia/gpu/spirv_shader_translator.h` | 158, 200 | 2 |
+| `kSysFlag_SamplesAsPixelsX` | enumerator of SpirvShaderTranslator | System flag: a host pixel is half a guest pixel horizontally (msaa_samples_as_pixels at 4x MSAA), for the pixel position parameter. | `src/xenia/gpu/spirv_shader_translator.h` | 199 | 1 |
+| `kSysFlag_SamplesAsPixelsX` | enumerator of SpirvShaderTranslator | System flag: a host pixel is half a guest pixel horizontally (msaa_samples_as_pixels at 4x MSAA), for the pixel position parameter. | `src/xenia/gpu/spirv_shader_translator.cc` | 3429 | 1 |
+| `kSysFlag_SamplesAsPixelsX` | enumerator of SpirvShaderTranslator | System flag: a host pixel is half a guest pixel horizontally (msaa_samples_as_pixels at 4x MSAA), for the pixel position parameter. | `src/xenia/gpu/metal/metal_command_processor.cc` | 11523 | 1 |
+| `kSysFlag_SamplesAsPixelsY` | enumerator of SpirvShaderTranslator | System flag: a host pixel is half a guest pixel vertically (msaa_samples_as_pixels at 2x and 4x MSAA), for the pixel position parameter. | `src/xenia/gpu/spirv_shader_translator.h` | 200 | 1 |
+| `kSysFlag_SamplesAsPixelsY` | enumerator of SpirvShaderTranslator | System flag: a host pixel is half a guest pixel vertically (msaa_samples_as_pixels at 2x and 4x MSAA), for the pixel position parameter. | `src/xenia/gpu/spirv_shader_translator.cc` | 3484 | 1 |
+| `kSysFlag_SamplesAsPixelsY` | enumerator of SpirvShaderTranslator | System flag: a host pixel is half a guest pixel vertically (msaa_samples_as_pixels at 2x and 4x MSAA), for the pixel position parameter. | `src/xenia/gpu/metal/metal_command_processor.cc` | 11526 | 1 |
+| `DescribeLastSignal` | member function of XEvent | Who last set or pulsed the event (guest thread, return address, how long ago, how many times), for the stuck thread report. | `src/xenia/kernel/xevent.h` | 47 | 1 |
+| `DescribeLastSignal` | member function of XEvent | Who last set or pulsed the event (guest thread, return address, how long ago, how many times), for the stuck thread report. | `src/xenia/kernel/xevent.cc` | 78 | 1 |
+| `DescribeLastSignal` | member function of XEvent | Who last set or pulsed the event (guest thread, return address, how long ago, how many times), for the stuck thread report. | `src/xenia/kernel/util/shim_utils.cc` | 258, 296 | 2 |
+| `NoteSignal` | private member function of XEvent | Records the caller of Set and Pulse for DescribeLastSignal. | `src/xenia/kernel/xevent.h` | 57 | 1 |
+| `NoteSignal` | private member function of XEvent | Records the caller of Set and Pulse for DescribeLastSignal. | `src/xenia/kernel/xevent.cc` | 64, 92, 98 | 3 |
+| `last_signal_thread_` | member of XEvent | Handle of the guest thread that last set or pulsed the event (0 for a host thread). | `src/xenia/kernel/xevent.h` | 61 | 1 |
+| `last_signal_thread_` | member of XEvent | Handle of the guest thread that last set or pulsed the event (0 for a host thread). | `src/xenia/kernel/xevent.cc` | 68, 85 | 2 |
+| `last_signal_lr_` | member of XEvent | Guest link register of that call. | `src/xenia/kernel/xevent.h` | 62 | 1 |
+| `last_signal_lr_` | member of XEvent | Guest link register of that call. | `src/xenia/kernel/xevent.cc` | 70, 86 | 2 |
+| `last_signal_ms_` | member of XEvent | Host uptime in milliseconds of that call. | `src/xenia/kernel/xevent.h` | 63 | 1 |
+| `last_signal_ms_` | member of XEvent | Host uptime in milliseconds of that call. | `src/xenia/kernel/xevent.cc` | 73, 88 | 2 |
+| `signal_count_` | member of XEvent | How many times the event was set or pulsed. | `src/xenia/kernel/xevent.h` | 64 | 1 |
+| `signal_count_` | member of XEvent | How many times the event was set or pulsed. | `src/xenia/kernel/xevent.cc` | 75, 79 | 2 |
+| `signal_thread` | local in NoteSignal | The calling guest thread, if any. | `src/xenia/kernel/xevent.cc` | 65, 68 | 3 |
+| `signal_count` | local in DescribeLastSignal | signal_count_ as read once. | `src/xenia/kernel/xevent.cc` | 79, 80, 85 | 3 |
+| `shown_sections_` | ivar of XeniaConfigViewController | Sections the settings search shows, as indices into sections_. | `src/xenia/ui/windowed_app_main_ios.mm` | 7868, 8023, 8044, 8211, 8218, 8222, 8226, 8233, 8236, 8240, 8243 | 11 |
+| `shown_items_` | ivar of XeniaConfigViewController | Per shown section, the items the settings search shows, as indices into its items. | `src/xenia/ui/windowed_app_main_ios.mm` | 7869, 8024, 8045, 8214, 8229 | 5 |
+| `applySettingsSearch` | method of XeniaConfigViewController | Fills shown_sections_ and shown_items_ with the settings matching every word of the search text. | `src/xenia/ui/windowed_app_main_ios.mm` | 7984, 8016, 8051 | 3 |
+| `search_text` | parameter of applySettingsSearch: | The search bar text (nil for none). | `src/xenia/ui/windowed_app_main_ios.mm` | 8016, 8018 | 2 |
+| `filtering` | local in applySettingsSearch: | The search text has a word, so sections without matches are hidden. | `src/xenia/ui/windowed_app_main_ios.mm` | 8019, 8021, 8043 | 4 |
+| `shown` | local in tableView:titleForFooterInSection: | The section shown at that index. | `src/xenia/ui/windowed_app_main_ios.mm` | 8243, 8244 | 3 |
 ## Total references per name
 
 | Name | Total uses in project |
@@ -1206,8 +1251,8 @@ further edits.
 | `guest_arg1` | 3 |
 | `kernel_call_ms` | 3 |
 | `kernel_call_handle` | 3 |
-| `kernel_call_object` | 10 |
-| `kernel_call_xobject` | 3 |
+| `kernel_call_object` | 11 |
+| `kernel_call_xobject` | 5 |
 | `kernel_call_total` | 3 |
 | `kernel_call_history_lr` | 5 |
 | `kernel_call_storm_ms` | 3 |
@@ -1446,8 +1491,8 @@ further edits.
 | `current_render_area_height_` | 5 |
 | `render_area_by_descriptor_` | 3 |
 | `area_scissor` | 6 |
-| `area_scale_x` | 2 |
-| `area_scale_y` | 2 |
+| `area_scale_x` | 3 |
+| `area_scale_y` | 3 |
 | `area_width` | 10 |
 | `area_height` | 8 |
 | `attachments_width` | 6 |
@@ -1673,7 +1718,7 @@ further edits.
 | `kernel_call_wait_objects` | 6 |
 | `kernel_call_handles` | 3 |
 | `kernel_call_wait_handle` | 3 |
-| `kernel_call_wait_object` | 4 |
+| `kernel_call_wait_object` | 6 |
 | `skip_unchanged_render_target_transfers` | 7 |
 | `TakeUnchangedTransferCounts` | 2 |
 | `unchanged_out` | 2 |
@@ -1737,6 +1782,31 @@ further edits.
 | `crash_pointer_info` | 7 |
 | `crash_bytes` | 3 |
 | `signed_in_mask` | 3 |
+| `msaa_samples_as_pixels` | 7 |
+| `last_update_samples_as_pixels_` | 5 |
+| `last_update_samples_as_pixels_x_log2` | 6 |
+| `last_update_samples_as_pixels_y_log2` | 8 |
+| `SupportsMsaaSamplesAsPixels` | 5 |
+| `storage_msaa_samples` | 9 |
+| `samples_as_pixels` | 4 |
+| `kSysFlag_SamplesAsPixelsX_Shift` | 2 |
+| `kSysFlag_SamplesAsPixelsY_Shift` | 2 |
+| `kSysFlag_SamplesAsPixelsX` | 3 |
+| `kSysFlag_SamplesAsPixelsY` | 3 |
+| `DescribeLastSignal` | 4 |
+| `NoteSignal` | 4 |
+| `last_signal_thread_` | 3 |
+| `last_signal_lr_` | 3 |
+| `last_signal_ms_` | 3 |
+| `signal_count_` | 3 |
+| `signal_thread` | 3 |
+| `signal_count` | 3 |
+| `shown_sections_` | 11 |
+| `shown_items_` | 5 |
+| `applySettingsSearch` | 3 |
+| `search_text` | 2 |
+| `filtering` | 4 |
+| `shown` | 3 |
 
 ## Checks
 
@@ -1873,3 +1943,16 @@ further edits.
   `address`, `size`, `type`, `free`) and `user_index` (loop variable in
   RegisterNotifyListener) are generic names with the same roles elsewhere,
   not listed.
+- `EmitPartialVectorStore` (a64 backend, used by STVL/STVR) and its
+  parameters and labels (`dst`, `src`, `count`, `from8`, `from4`, `from2`,
+  `from1`, `done`), as well as `addr` and `s` in the STVL/STVR sequences,
+  have the same names and roles in xenia-edge HEAD
+  (`refs/remotes/xenia-edge-deep/HEAD`), where the fix comes from, so they
+  are not listed.
+- Settings search: `search` (the UISearchBar local in viewDidLoad),
+  `words`, `word`, `items`, `text`, `matches`, `section_index`,
+  `item_index`, `section` and `item` (locals in applySettingsSearch:) and
+  `searchBar` and `searchText` (UIKit's parameter names in the
+  UISearchBarDelegate methods) are generic names with the same role
+  elsewhere, not listed. `thread_state` in XEvent::NoteSignal is the
+  usual name of a `cpu::ThreadState*`, not listed.
