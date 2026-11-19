@@ -1630,6 +1630,40 @@ Assassin's Creed Revelations (14-01-51, debug and frame detail):
   closer of the two lately (zpd_ordinal_score_). The occlusion perf line
   says which guess is in use; frame detail shows both.
 
+Built as 9642 (`xenios_ios_arm64_0.2.9-9642`, commit bb1239c05, CI run 325):
+the occlusion guess by place in the frame and the Spider-Man notification
+logging.
+
+### Depth buffer investigation: GPU trace capture (owner's request, 2026-11-19)
+
+The owner wants to understand the depth buffer as a whole before choosing
+faster routes, without game-specific pattern recognition, and ideally with
+the route picked per situation. Plan agreed: step 3, a GPU trace of a few
+Batman frames, replayed offline through the render target ownership logic
+under different rules (copies skipped when unchanged, stencil-only copy
+back, lazy copies, MSAA samples stored as plain pixels so 1x/2x/4x views
+share a texture, XeniOS HEAD's transfer optimizations), to measure what each
+would remove before writing Metal code. The per-copy rules are cheaper
+whenever they apply, so they need no choosing; only the storage choice
+(samples as pixels against native MSAA) is a trade-off, to pick per buffer
+from recent use, with hysteresis.
+
+- The trace writer was compiled out of Release (NDEBUG). trace_writer.h now
+  keeps it on iOS (XE_OPTION_GPU_TRACE, the XeniOS name; XeniOS sets it from
+  a CMake option). Cost per upstream's comment: 0.4-0.6% CPU.
+- Its packet addresses were the host pointer truncated to 32 bits, which is
+  only right when physical memory starts at a 4 GB boundary (here it is
+  0x...A0000000): ported XeniOS's CommandProcessor::GuestReadPtrOffset.
+- Settings > Frame Capture > GPU Trace (metal_gpu_trace_frames: Off, 2, 4,
+  8 frames): at the next swap, a streaming trace into
+  Documents/scratch/gpu/<date_time>/<title>_stream.xtr, closed after N
+  frames. Log lines "GPU trace: recording...", "writing...", "done".
+- The Metal backend does not record its memory reads (textures, vertex
+  buffers), so the trace cannot be replayed to render; it has every packet
+  and the full register state, which is what the analysis needs.
+- Offline: a parser for the .xtr (header, commands, snappy) and PM4 packets
+  into a per-draw register timeline, then the ownership simulation.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

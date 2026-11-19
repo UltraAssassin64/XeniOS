@@ -3519,6 +3519,15 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
       "1 MB per gameplay frame). For another capture, pick a different number, "
       "or Off and save, then the number again.",
       0, {{"Off", 0}, {"1 frame", 1}, {"4 frames", 4}, {"16 frames", 16}, {"60 frames", 60}});
+  AddChoiceSetting(
+      frame_capture.items, IOSConfigControlType::kChoiceInt32, "metal_gpu_trace_frames",
+      "GPU Trace",
+      "Pick a number of frames during the game and save: the GPU commands of "
+      "those frames are recorded into Documents/scratch/gpu/<date_time>/ "
+      "(an .xtr file, a few MB per frame) for offline analysis. For another "
+      "recording, pick a different number, or Off and save, then the number "
+      "again.",
+      0, {{"Off", 0}, {"2 frames", 2}, {"4 frames", 4}, {"8 frames", 8}});
   if (!frame_capture.items.empty()) {
     sections.push_back(std::move(frame_capture));
   }
@@ -3810,7 +3819,8 @@ bool OnlyFrameDetailLogChanged(const std::vector<IOSConfigSection>& sections) {
       if (!differs) {
         continue;
       }
-      if (edited.key != "metal_frame_detail_log") {
+      if (edited.key != "metal_frame_detail_log" &&
+          edited.key != "metal_gpu_trace_frames") {
         return false;
       }
       frame_detail_changed = true;

@@ -381,7 +381,8 @@ bool COMMAND_PROCESSOR::ExecutePacket() {
   }
   else {
   handle_bad_packet:
-    trace_writer_.WritePacketStart(uint32_t(reader_.read_ptr() - 4), 1);
+    trace_writer_.WritePacketStart(COMMAND_PROCESSOR::GuestReadPtrOffset(-4),
+                                   1);
     trace_writer_.WritePacketEnd();
     return true;
   }
@@ -408,7 +409,8 @@ bool COMMAND_PROCESSOR::ExecutePacketType0(uint32_t packet) XE_RESTRICT {
 
   if (COMMAND_PROCESSOR::GetCurrentRingReadCount() >=
       count * sizeof(uint32_t)) {
-    trace_writer_.WritePacketStart(uint32_t(reader_.read_ptr() - 4), 1 + count);
+    trace_writer_.WritePacketStart(COMMAND_PROCESSOR::GuestReadPtrOffset(-4),
+                                   1 + count);
 
     uint32_t base_index = (packet & 0x7FFF);
     uint32_t write_one_reg = (packet >> 15) & 0x1;
@@ -431,7 +433,7 @@ XE_NOINLINE
 bool COMMAND_PROCESSOR::ExecutePacketType1(uint32_t packet) XE_RESTRICT {
   // Type-1 packet.
   // Contains two registers of data. Type-0 should be more common.
-  trace_writer_.WritePacketStart(uint32_t(reader_.read_ptr() - 4), 3);
+  trace_writer_.WritePacketStart(COMMAND_PROCESSOR::GuestReadPtrOffset(-4), 3);
   uint32_t reg_index_1 = packet & 0x7FF;
   uint32_t reg_index_2 = (packet >> 11) & 0x7FF;
   uint32_t reg_data_1 = reader_.ReadAndSwap<uint32_t>();
@@ -445,7 +447,7 @@ bool COMMAND_PROCESSOR::ExecutePacketType1(uint32_t packet) XE_RESTRICT {
 bool COMMAND_PROCESSOR::ExecutePacketType2(uint32_t packet) XE_RESTRICT {
   // Type-2 packet.
   // No-op. Do nothing.
-  trace_writer_.WritePacketStart(uint32_t(reader_.read_ptr() - 4), 1);
+  trace_writer_.WritePacketStart(COMMAND_PROCESSOR::GuestReadPtrOffset(-4), 1);
   trace_writer_.WritePacketEnd();
   return true;
 }
@@ -473,9 +475,10 @@ bool COMMAND_PROCESSOR::ExecutePacketType3(uint32_t packet) XE_RESTRICT {
       count * sizeof(uint32_t)) {
     // To handle nesting behavior when tracing we special case indirect buffers.
     if (opcode == PM4_INDIRECT_BUFFER) {
-      trace_writer_.WritePacketStart(uint32_t(reader_.read_ptr() - 4), 2);
+      trace_writer_.WritePacketStart(COMMAND_PROCESSOR::GuestReadPtrOffset(-4),
+                                     2);
     } else {
-      trace_writer_.WritePacketStart(uint32_t(reader_.read_ptr() - 4),
+      trace_writer_.WritePacketStart(COMMAND_PROCESSOR::GuestReadPtrOffset(-4),
                                      1 + count);
     }
 
@@ -1660,8 +1663,14 @@ uint32_t COMMAND_PROCESSOR::ExecutePrimaryBuffer(uint32_t read_index,
                             : 0;
     auto file_name = fmt::format("{:08X}_stream.xtr", title_id);
     auto path = trace_stream_path_ / file_name;
-    trace_writer_.Open(path, title_id);
-    InitializeTrace();
+    if (trace_writer_.Open(path, title_id)) {
+      XELOGI("GPU trace: writing {}", xe::path_to_utf8(path));
+      InitializeTrace();
+    } else {
+      // Not again on every primary buffer.
+      XELOGE("GPU trace: could not create {}", xe::path_to_utf8(path));
+      trace_state_ = TraceState::kDisabled;
+    }
   }
 #endif
   // Adjust pointer base.

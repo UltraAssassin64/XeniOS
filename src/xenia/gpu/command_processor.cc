@@ -236,6 +236,17 @@ void CommandProcessor::EndTracing() {
   trace_writer_.Close();
 }
 
+uint32_t CommandProcessor::GuestReadPtrOffset(int32_t offset) const {
+  uintptr_t ptr = reader_.read_ptr() + offset;
+  // Reading the last dword wraps the cursor to the beginning of the ring.
+  // Tracing still needs the address of that dword, including for one-word NOPs.
+  if (ptr < reinterpret_cast<uintptr_t>(reader_.buffer())) {
+    ptr += reader_.capacity();
+  }
+  return uint32_t(ptr -
+                  reinterpret_cast<uintptr_t>(memory_->physical_membase()));
+}
+
 void CommandProcessor::RestoreRegisters(uint32_t first_register,
                                         const uint32_t* register_values,
                                         uint32_t register_count,

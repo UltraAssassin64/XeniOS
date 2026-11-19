@@ -90,6 +90,9 @@ class CommandProcessor {
       reader_;  // chrispy: instead of having ringbuffer on stack, have it near
                 // the start of the class so we can access it via rel8. This
                 // also reduces the number of params we need to pass
+  // Converts the reader's host pointer (+ offset) to a guest physical address.
+  uint32_t GuestReadPtrOffset(int32_t offset = 0) const;
+
  public:
   enum class SwapPostEffect {
     kNone,

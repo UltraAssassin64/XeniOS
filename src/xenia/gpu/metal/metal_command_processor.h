@@ -660,6 +660,10 @@ class MetalCommandProcessor : public CommandProcessor {
   // metal_frame_detail_log: its value when last seen (a change starts a
   // capture), and the passes, draws and draw_stats_ at the frame start.
   int32_t frame_detail_setting_ = 0;
+  // metal_gpu_trace_frames: its value when last seen, and the frames of the
+  // current recording still to write.
+  int32_t gpu_trace_setting_ = 0;
+  uint32_t gpu_trace_frames_left_ = 0;
   uint32_t frame_detail_passes_ = 0;
   uint32_t frame_detail_draws_ = 0;
   DrawStats frame_detail_stats_;

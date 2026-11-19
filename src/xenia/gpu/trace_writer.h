@@ -14,6 +14,7 @@
 #include <set>
 #include <string>
 
+#include "xenia/base/platform.h"
 #include "xenia/gpu/registers.h"
 #include "xenia/gpu/trace_protocol.h"
 
@@ -21,7 +22,12 @@
 // function calls (even if they just immediately return) is 0.40-0.60% cpu time
 // total. with inlining they just bloat the caller and negatively impact
 // register allocation for the caller
-#ifdef NDEBUG
+// XE_OPTION_GPU_TRACE enables it in Release too (as in XeniOS); on iOS it is
+// always on, for Settings > Frame Capture > GPU Trace.
+#if XE_PLATFORM_IOS && !defined(XE_OPTION_GPU_TRACE)
+#define XE_OPTION_GPU_TRACE 1
+#endif
+#if defined(NDEBUG) && !defined(XE_OPTION_GPU_TRACE)
 #define XE_ENABLE_TRACE_WRITER_INSTRUMENTATION 0
 #else
 #define XE_ENABLE_TRACE_WRITER_INSTRUMENTATION 1

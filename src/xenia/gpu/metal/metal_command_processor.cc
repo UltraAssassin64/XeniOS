@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <limits>
 #include <sstream>
@@ -40,6 +41,7 @@
 #include "xenia/base/math.h"
 #include "xenia/base/profiling.h"
 #include "xenia/base/xxhash.h"
+#include "xenia/emulator.h"
 #include "xenia/gpu/draw_util.h"
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/graphics_system.h"
@@ -116,6 +118,13 @@ DEFINE_int32(
     "Changed to N while a game runs: logs every render pass, draw (shaders, "
     "state and texture fetch constants), resolve, render target transfer and "
     "occlusion query of the next N frames. Change it again for another "
+    "capture.",
+    "Metal");
+DEFINE_int32(
+    metal_gpu_trace_frames, 0,
+    "Changed to N while a game runs: records the GPU commands and registers "
+    "of the next N frames into a trace file under trace_gpu_prefix (relative "
+    "to the storage root), for offline analysis. Change it again for another "
     "capture.",
     "Metal");
 DEFINE_bool(
@@ -2793,6 +2802,42 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
   frame_detail_passes_ = 0;
   frame_detail_draws_ = 0;
   zpd_frame_query_ends_ = 0;
+  // metal_gpu_trace_frames: count the recorded frames down, then the start of
+  // a recording when the setting changed. The trace opens at the next primary
+  // buffer.
+  if (gpu_trace_frames_left_) {
+    if (trace_writer_.is_open()) {
+      if (!--gpu_trace_frames_left_) {
+        EndTracing();
+        XELOGI("GPU trace: done");
+      }
+    } else if (trace_state_ != TraceState::kStreaming) {
+      // The file could not be created.
+      gpu_trace_frames_left_ = 0;
+    }
+  }
+  if (cvars::metal_gpu_trace_frames != gpu_trace_setting_) {
+    gpu_trace_setting_ = cvars::metal_gpu_trace_frames;
+    if (gpu_trace_setting_ > 0 && !gpu_trace_frames_left_ &&
+        trace_state_ == TraceState::kDisabled) {
+      std::filesystem::path trace_path = cvars::trace_gpu_prefix;
+      if (trace_path.is_relative() && kernel_state_ &&
+          kernel_state_->emulator()) {
+        trace_path = kernel_state_->emulator()->storage_root() / trace_path;
+      }
+      const std::time_t trace_time = std::time(nullptr);
+      std::tm trace_local_time = {};
+      localtime_r(&trace_time, &trace_local_time);
+      char trace_folder[32];
+      std::strftime(trace_folder, sizeof(trace_folder), "%Y-%m-%d_%H-%M-%S",
+                    &trace_local_time);
+      trace_path /= trace_folder;
+      BeginTracing(trace_path);
+      gpu_trace_frames_left_ = uint32_t(gpu_trace_setting_);
+      XELOGI("GPU trace: recording the next {} frames into {}",
+             gpu_trace_frames_left_, xe::path_to_utf8(trace_path));
+    }
+  }
   frame_detail_stats_ = draw_stats_;
   // Host time between guest swaps, for the perf line below.
   const auto metal_perf_swap_time = std::chrono::steady_clock::now();
