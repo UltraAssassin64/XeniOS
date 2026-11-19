@@ -90,6 +90,7 @@ using BYTE = uint8_t;
 
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
+DECLARE_bool(skip_unchanged_render_target_transfers);
 DEFINE_bool(
     metal_gpu_ordered_fences, true,
     "With shared memory aliasing guest RAM: publish the game's shader-done "
@@ -2922,6 +2923,17 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
               draw_stats_.frames,
           cvars::occlusion_query_enable ? "counted" : "faked as visible",
           take(metal_perf_counters.occlusion_query_events));
+      if (render_target_cache_) {
+        uint64_t unchanged_transfers, skipped_transfers;
+        render_target_cache_->TakeUnchangedTransferCounts(unchanged_transfers,
+                                                          skipped_transfers);
+        XELOGI(
+            "Metal render target transfers over {} frames: {} ranges went "
+            "back to a render target whose copy was unchanged, {} of them "
+            "skipped (skip_unchanged_render_target_transfers {})",
+            draw_stats_.frames, unchanged_transfers, skipped_transfers,
+            cvars::skip_unchanged_render_target_transfers ? "on" : "off");
+      }
       if (cvars::occlusion_query_enable) {
         XELOGI(
             "Metal occlusion queries over {} frames: {} counted ({} with no "

@@ -114,6 +114,12 @@ DEFINE_bool(mount_memory_unit, false, "Enable memory unit (MU) mount",
             "Storage");
 DECLARE_bool(force_mount_devkit);
 
+// Logged at launch: settings the owner's test runs compare.
+DECLARE_bool(context_promote_vec128);
+DECLARE_bool(occlusion_query_enable);
+DECLARE_bool(native_stencil_value_output);
+DECLARE_bool(skip_unchanged_render_target_transfers);
+
 DEFINE_int32(priority_class, 0,
              "Forces Xenia to use different process priority than default one. "
              "It might affect performance and cause unexpected bugs. Possible "
@@ -2201,6 +2207,16 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
     return X_STATUS_PROCESS_IS_TERMINATING;
   }
 #endif  // XE_PLATFORM_IOS
+
+  // The config dump at startup shows the config file as it was then; these
+  // are the values the title starts with, after any change in the app.
+  XELOGI(
+      "Settings at launch: context_promote_vec128 {}, occlusion_query_enable "
+      "{}, native_stencil_value_output {}, "
+      "skip_unchanged_render_target_transfers {}",
+      cvars::context_promote_vec128, cvars::occlusion_query_enable,
+      cvars::native_stencil_value_output,
+      cvars::skip_unchanged_render_target_transfers);
 
   auto main_thread = kernel_state_->LaunchModule(module);
   if (!main_thread) {

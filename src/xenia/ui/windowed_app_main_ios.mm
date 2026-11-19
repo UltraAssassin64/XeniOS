@@ -3585,6 +3585,15 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "memory between render targets (one draw instead of ten). Turn off if "
                  "shadows, decals or masked effects look wrong.",
                  true);
+  AddBoolSetting(performance.items, "skip_unchanged_render_target_transfers",
+                 "Skip Unchanged Render Target Copies",
+                 "When a game switches a buffer (such as depth) between two layouts and "
+                 "back without drawing into it, keeps the first copy instead of "
+                 "copying it back. Can save GPU time (Batman: Arkham Asylum switches "
+                 "its depth buffer about 12 times a frame). Turn off if depth, "
+                 "shadows or effects look wrong. Applies at once. Off by default "
+                 "while it is being tested.",
+                 false);
   AddBoolSetting(performance.items, "context_promote_vec128", "Keep Vector Registers in CPU",
                  "Lets the recompiler keep the Xbox 360's vector registers in host "
                  "registers between instructions instead of storing and reloading them "

@@ -1494,6 +1494,9 @@ context values again" 01dc16a6, reverted 0e1307bd) and fixed:
   those tests never feed constants, which is why they missed it.
 - `context_promote_vec128` now defaults to off here until the device
   confirms the fixes (the owner turns it on to test).
+- Built as 9637 (commit b290a9b5f; CI run 44537599866, after five attempts
+  cancelled without a macOS runner). The owner confirmed the fix: models,
+  loading screen and gameplay are back with the setting on.
 
 Owner's decisions (2026-11-19, after 9623):
 - Include the profiling/stability tools now (crash dump, wait objects);
@@ -1504,6 +1507,64 @@ Owner's decisions (2026-11-19, after 9623):
   DXIL/spirv2air path, shader library cache, VS interpreter stand-ins) for
   performance and to avoid issues with effects such as the rain and
   detective mode. Goal: the intro from ~20 FPS to 28-30 FPS.
+
+### Build 9637 results: promotion fixed, no FPS change; the GPU is the limit
+
+Owner (zip "9637-1", logs 11-56-55, 12-04-14, 12-09-24, 12-12-57; each run
+into gameplay, facing the NPCs, then away, then sweeping the room): the fix
+works, but performance felt worse, not better. Runs 1-2 with Keep Vector
+Registers in CPU on (1 to let shaders compile), run 3 as a reference with
+it off, run 4 also with Real Occlusion Queries on: almost no blackout in the
+loading transition, and 21-22 FPS whether facing the NPCs or not.
+
+Settings actually in effect: the config dump shows the file at app start,
+not later changes in the app. The occlusion log line shows the live value:
+queries were counted in both 12-09-24 and 12-12-57 (runs 3 and 4). The
+next build logs "Settings at launch: ..." just before the title starts.
+
+Steady gameplay windows (no compiles, max under 200 ms; ms per frame):
+| Log | Owner's setup | Facing NPCs | Facing away | Thermal state |
+|---|---|---|---|---|
+| 11-56-55 | promotion on | 51.3 (19.5 FPS) | 47.7 (21.0) | 2 |
+| 12-04-14 | promotion on | 48.5 (20.6) | 42.2 (23.7) | 1 |
+| 12-09-24 | promotion off, queries counted | 47.7 (21.0) | 45.0 (22.2) | 2 |
+| 12-12-57 | promotion off, queries on | 48.6 (20.6) | 42.5 (23.6) | 2 |
+Build 9632 (no promotion, no queries): 46-48 facing NPCs, 42-45 away.
+
+- The differences are within run-to-run noise and follow the phone's
+  thermal state (iOS ProcessInfo: 2 = serious, throttled) more than any
+  setting. The four runs were back to back in 16 minutes; 3 of 4 ran hot.
+- GPU busy 98-112% of the time in every gameplay window (pass times
+  overlap): GPU-bound. The render thread F8000078 also stays at 99% of a
+  core, so a CPU gain (vector promotion) cannot show until the GPU work
+  drops.
+- Per frame: render target transfers 32-37 ms of pass time (~68 passes,
+  ~200 MB loaded and stored), draw passes 19-23 ms, total attachment traffic
+  ~1.2-1.3 GB. The biggest items are depth transfers between the same EDRAM
+  data as 1280x736 1x and as 640x384 4x MSAA (UE3's half-resolution trick):
+  ~12-13 each way per frame, 9-12 ms and 5-9 ms.
+- Real occlusion queries cost nothing measurable (about one draw pass
+  restarted per frame; ~150 queries per frame facing the NPCs, about half
+  with no samples) and fix the transition blackout. Issued draws do not
+  drop with them, so they are an accuracy win, not a speed-up here.
+
+Changes for the next build:
+- `skip_unchanged_render_target_transfers` (Settings > Performance > Skip
+  Unchanged Render Target Copies, default off; applies at once). Ownership
+  ranges remember a render target whose copy is still the current one
+  (`OwnershipRange::intact_render_target`): set when a range changes owner
+  by a transfer and nothing writes it, cleared by any draw writing depth,
+  stencil (non-KEEP op with a write mask) or color to it, and by resolve
+  clears. Taking the range back then needs no transfer. Such render
+  targets are kept by ClearCache.
+- Logged either way: "Metal render target transfers over N frames: X ranges
+  went back to a render target whose copy was unchanged, Y of them
+  skipped". With the setting off X shows how many transfers it would save;
+  if X is 0, the 4x passes write depth or stencil and this does not help.
+- "Settings at launch: ..." log line (vector promotion, occlusion queries,
+  native stencil output, the skip).
+- Asked of the owner: one run with the skip off and one on, same route,
+  starting with the phone cool (thermal state is in every perf line).
 
 ### Async shader compilation backport: first scoping (2026-11-19)
 

@@ -210,6 +210,18 @@ class RenderTargetCache {
   // based on), or 0 if it didn't get to estimate it.
   uint32_t last_update_height_used() const { return last_update_height_used_; }
 
+  // Ownership transfers whose destination still held the range's contents
+  // (nothing written to the range since that render target last owned it),
+  // and how many of them skip_unchanged_render_target_transfers skipped,
+  // since the last call; resets both.
+  void TakeUnchangedTransferCounts(uint64_t& unchanged_out,
+                                   uint64_t& skipped_out) {
+    unchanged_out = unchanged_transfers_;
+    skipped_out = skipped_transfers_;
+    unchanged_transfers_ = 0;
+    skipped_transfers_ = 0;
+  }
+
  protected:
   RenderTargetCache(const RegisterFile& register_file, const Memory& memory,
                     TraceWriter* trace_writer, uint32_t draw_resolution_scale_x,
@@ -635,6 +647,11 @@ class RenderTargetCache {
     // empty too.
     RenderTargetKey host_depth_render_target_unorm24;
     RenderTargetKey host_depth_render_target_float24;
+    // A render target other than render_target whose host copy of this range
+    // still holds the current contents: render_target took the range from it
+    // by a transfer (or a skipped one) and nothing has been written to the
+    // range since. Getting the range back needs no transfer. Empty if none.
+    RenderTargetKey intact_render_target;
     OwnershipRange(uint32_t end_tiles, RenderTargetKey render_target,
                    RenderTargetKey host_depth_render_target_unorm24,
                    RenderTargetKey host_depth_render_target_float24)
@@ -678,7 +695,8 @@ class RenderTargetCache {
              host_depth_render_target_unorm24 ==
                  other_range.host_depth_render_target_unorm24 &&
              host_depth_render_target_float24 ==
-                 other_range.host_depth_render_target_float24;
+                 other_range.host_depth_render_target_float24 &&
+             intact_render_target == other_range.intact_render_target;
     }
   };
 
@@ -703,11 +721,14 @@ class RenderTargetCache {
                                             uint32_t start_tiles_base_relative,
                                             uint32_t length_tiles) const;
   // Updates ownership_ranges_, adds the transfers needed for the ownership
-  // change to transfers_append_out if it's not null.
+  // change to transfers_append_out if it's not null. dest_written: dest's
+  // contents in the range will be modified (a draw writing depth, stencil or
+  // color, or a resolve clear), so no other render target's copy stays intact.
   void ChangeOwnership(
       RenderTargetKey dest, uint32_t start_tiles_base_relative,
       uint32_t length_tiles, std::vector<Transfer>* transfers_append_out,
-      const Transfer::Rectangle* resolve_clear_cutout = nullptr);
+      const Transfer::Rectangle* resolve_clear_cutout = nullptr,
+      bool dest_written = true);
 
   // If failed to create, may contain nullptr to prevent attempting to create a
   // render target twice.
@@ -721,6 +742,9 @@ class RenderTargetCache {
   // since standard containers use dynamic allocation for elements, though
   // changes to this throughout a frame are pretty rare.
   std::map<uint32_t, OwnershipRange> ownership_ranges_;
+  // For TakeUnchangedTransferCounts, counted per ownership range.
+  uint64_t unchanged_transfers_ = 0;
+  uint64_t skipped_transfers_ = 0;
 
   // Render targets actually used by the draw call with the last successful
   // update. 0 is depth, color starting from 1, nullptr if not bound.
