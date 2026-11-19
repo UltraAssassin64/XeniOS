@@ -1690,6 +1690,32 @@ Spider-Man: Web of Shadows (41560815), logs 21-59-42, 22-00-32, 22-04-43:
   the spinning calls are high-frequency and stay out), then compare the
   calls with XeniOS HEAD's I/O.
 
+Spider-Man debug run on build 9637 (log 12-58-05): cause found.
+- Loader thread F8000038 opens D:\packs\game.XEPACK (async handle), then
+  `NtReadFile async F8000094: event 00000000 APC 82B16659 context 829688C0
+  offset 0 length 80000: status 00000000, 80000 bytes`: the read completes
+  inline and its only completion signal is the APC. Bit 0 of the routine
+  asks for a user APC (XAPI's ReadFileEx trampoline, see XeniOS HEAD's
+  QueueIoApc). The thread then waits forever in NtWaitForMultipleObjectsEx
+  on events F8000028 and F8000034, guest lr 82B16D4C, which can only end
+  when the APC runs (alertable wait).
+- The APC is queued (xeNtQueueApcThread, user mode) but never delivered:
+  with guest threads on host threads (guest_scheduler off here, on by
+  default in XeniOS HEAD since 2026-08), a POSIX host wait never returns
+  kUserCallback; the user callback signal xeNtQueueApcThread sends runs a
+  no-op. XeniOS HEAD's cooperative waits check HasPendingUserApc; its host
+  path has the same gap. KeDelayExecutionThread here only delivered APCs
+  pending at entry.
+- Fix (next build): alertable host waits (XObject::Wait, WaitMultiple) end
+  with USER_APC when the thread has a pending user APC, checked before
+  waiting and, on iOS, every 10 ms slice (kAlertableWaitPollIntervalIOS);
+  the alertable KeDelayExecutionThread slices check too. The callers
+  already run xeProcessUserApcs on USER_APC. Risk: user APCs that were
+  never delivered before (in any game) now run at the thread's next
+  alertable wait, as on the console.
+- Not ported: XeniOS HEAD runs an I/O APC without bit 0 as a kernel APC
+  before the service returns; here every I/O APC is a user APC.
+
 ## Owed from the original request
 
 - **Reduce CPU calls scheduling the GPU.** Nothing has been changed yet.

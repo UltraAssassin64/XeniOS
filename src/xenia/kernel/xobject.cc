@@ -9,6 +9,7 @@
 
 #include "xenia/kernel/xobject.h"
 
+#include <algorithm>
 #include <optional>
 
 #include "xenia/base/byte_stream.h"
@@ -31,6 +32,20 @@
 namespace xe {
 namespace kernel {
 
+namespace {
+
+// A POSIX host wait does not end when a guest APC is queued (the host user
+// callback xeNtQueueApcThread sends only runs a no-op), so an alertable host
+// wait checks for a pending guest user APC itself: before waiting, and on iOS
+// between slices. Without it, an async read whose completion is a user APC
+// queued inline (ReadFileEx) leaves the alertable wait for it hanging.
+bool UserApcPendingForHostWait(uint32_t alertable) {
+  return alertable && XThread::IsInThread() &&
+         XThread::GetCurrentThread()->HasPendingUserApc();
+}
+
+}  // namespace
+
 #if XE_PLATFORM_IOS
 namespace {
 
@@ -39,6 +54,9 @@ namespace {
 // so this only bounds title-stop detection latency (not normal wait latency).
 // Kept generous to minimize per-thread wakeup/clock churn while idle.
 constexpr std::chrono::milliseconds kTitleStopWaitPollIntervalIOS(50);
+// Slices of an alertable wait, to see an APC another thread queues (as the
+// alertable KeDelayExecutionThread slices on iOS).
+constexpr std::chrono::milliseconds kAlertableWaitPollIntervalIOS(10);
 
 XThread* CurrentXThreadIOS() {
   if (!XThread::IsInThread()) {
@@ -101,7 +119,7 @@ bool TitleStopWaitTimedOutIOS(
 template <typename WaitCall>
 auto WaitWithTitleStopPollIOS(KernelState* kernel_state,
                               std::chrono::milliseconds timeout,
-                              WaitCall wait_call) {
+                              WaitCall wait_call, bool alertable = false) {
   if (!ShouldPollTitleStopIOS(kernel_state) ||
       timeout == std::chrono::milliseconds::zero()) {
     return wait_call(timeout);
@@ -115,7 +133,11 @@ auto WaitWithTitleStopPollIOS(KernelState* kernel_state,
   while (true) {
     ExitCurrentTitleStopThreadIfRequestedIOS(kernel_state);
 
-    auto result = wait_call(TitleStopWaitSliceIOS(infinite_timeout, deadline));
+    auto slice = TitleStopWaitSliceIOS(infinite_timeout, deadline);
+    if (alertable) {
+      slice = std::min(slice, kAlertableWaitPollIntervalIOS);
+    }
+    auto result = wait_call(slice);
     if (!TitleStopWaitTimedOutIOS(result)) {
       return result;
     }
@@ -417,11 +439,18 @@ X_STATUS XObject::Wait(uint32_t wait_reason, uint32_t processor_mode,
       WaitWithTitleStopPollIOS(
           kernel_state_, timeout_ms,
           [wait_handle, alertable](std::chrono::milliseconds wait_timeout) {
+            if (UserApcPendingForHostWait(alertable)) {
+              return xe::threading::WaitResult::kUserCallback;
+            }
             return xe::threading::Wait(wait_handle, alertable ? true : false,
                                        wait_timeout);
-          });
+          },
+          alertable != 0);
 #else
-      xe::threading::Wait(wait_handle, alertable ? true : false, timeout_ms);
+      UserApcPendingForHostWait(alertable)
+          ? xe::threading::WaitResult::kUserCallback
+          : xe::threading::Wait(wait_handle, alertable ? true : false,
+                                timeout_ms);
 #endif  // XE_PLATFORM_IOS
 
   switch (result) {
@@ -644,15 +673,23 @@ X_STATUS XObject::WaitMultiple(uint32_t count, XObject** objects,
   if (wait_type) {
     auto result =
 #if XE_PLATFORM_IOS
-        WaitWithTitleStopPollIOS(wait_kernel_state, timeout_ms,
-                                 [&](std::chrono::milliseconds wait_timeout) {
-                                   return xe::threading::WaitAny(
-                                       wait_handles, count,
-                                       alertable ? true : false, wait_timeout);
-                                 });
+        WaitWithTitleStopPollIOS(
+            wait_kernel_state, timeout_ms,
+            [&](std::chrono::milliseconds wait_timeout)
+                -> std::pair<xe::threading::WaitResult, size_t> {
+              if (UserApcPendingForHostWait(alertable)) {
+                return {xe::threading::WaitResult::kUserCallback, 0};
+              }
+              return xe::threading::WaitAny(
+                  wait_handles, count, alertable ? true : false, wait_timeout);
+            },
+            alertable != 0);
 #else
-        xe::threading::WaitAny(wait_handles, count, alertable ? true : false,
-                               timeout_ms);
+        UserApcPendingForHostWait(alertable)
+            ? std::make_pair(xe::threading::WaitResult::kUserCallback,
+                             size_t(0))
+            : xe::threading::WaitAny(wait_handles, count,
+                                     alertable ? true : false, timeout_ms);
 #endif  // XE_PLATFORM_IOS
     switch (result.first) {
       case xe::threading::WaitResult::kSuccess:
@@ -678,15 +715,22 @@ X_STATUS XObject::WaitMultiple(uint32_t count, XObject** objects,
   } else {
     auto result =
 #if XE_PLATFORM_IOS
-        WaitWithTitleStopPollIOS(wait_kernel_state, timeout_ms,
-                                 [&](std::chrono::milliseconds wait_timeout) {
-                                   return xe::threading::WaitAll(
-                                       wait_handles, count,
-                                       alertable ? true : false, wait_timeout);
-                                 });
+        WaitWithTitleStopPollIOS(
+            wait_kernel_state, timeout_ms,
+            [&](std::chrono::milliseconds wait_timeout)
+                -> xe::threading::WaitResult {
+              if (UserApcPendingForHostWait(alertable)) {
+                return xe::threading::WaitResult::kUserCallback;
+              }
+              return xe::threading::WaitAll(
+                  wait_handles, count, alertable ? true : false, wait_timeout);
+            },
+            alertable != 0);
 #else
-        xe::threading::WaitAll(wait_handles, count, alertable ? true : false,
-                               timeout_ms);
+        UserApcPendingForHostWait(alertable)
+            ? xe::threading::WaitResult::kUserCallback
+            : xe::threading::WaitAll(wait_handles, count,
+                                     alertable ? true : false, timeout_ms);
 #endif  // XE_PLATFORM_IOS
     switch (result) {
       case xe::threading::WaitResult::kSuccess:

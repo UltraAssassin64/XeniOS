@@ -1237,7 +1237,9 @@ X_STATUS XThread::Delay(uint32_t processor_mode, uint32_t alertable,
         const uint32_t slice_ms = std::min<uint32_t>(remaining_ms, 10);
         auto result =
             xe::threading::AlertableSleep(std::chrono::milliseconds(slice_ms));
-        if (result == xe::threading::SleepResult::kAlerted) {
+        // POSIX sleeps are not alerted by a queued guest APC: look for one.
+        if (result == xe::threading::SleepResult::kAlerted ||
+            HasPendingUserApc()) {
           return X_STATUS_USER_APC;
         }
         exit_if_title_stop_requested();

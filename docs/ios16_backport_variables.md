@@ -954,6 +954,9 @@ further edits.
 | `previous_owner` | local in ChangeOwnership | Owner of the range before the claim. | `src/xenia/gpu/render_target_cache.cc` | 1698, 1704 | 2 |
 | `unchanged_transfers` | local in the Metal perf log | Value from TakeUnchangedTransferCounts. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2927, 2928, 2934 | 3 |
 | `skipped_transfers` | local in the Metal perf log | Value from TakeUnchangedTransferCounts. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2927, 2929, 2934 | 3 |
+| `UserApcPendingForHostWait` | function (xobject.cc) | Whether an alertable host wait should end at once for a pending guest user APC (POSIX host waits are not woken by one). | `src/xenia/kernel/xobject.cc` | 42, 442, 450, 680, 688, 722, 730 | 7 |
+| `kAlertableWaitPollIntervalIOS` | constant (iOS only) | Slice of an alertable host wait on iOS, so an APC queued by another thread is seen within 10 ms. | `src/xenia/kernel/xobject.cc` | 59, 138 | 2 |
+| `slice` | local in WaitWithTitleStopPollIOS (iOS only) | The next wait slice, capped at kAlertableWaitPollIntervalIOS for alertable waits. | `src/xenia/kernel/xobject.cc` | 136, 138, 140 | 4 |
 ## Total references per name
 
 | Name | Total uses in project |
@@ -1635,6 +1638,9 @@ further edits.
 | `previous_owner` | 2 |
 | `unchanged_transfers` | 3 |
 | `skipped_transfers` | 3 |
+| `UserApcPendingForHostWait` | 7 |
+| `kAlertableWaitPollIntervalIOS` | 2 |
+| `slice` | 4 |
 
 ## Checks
 
