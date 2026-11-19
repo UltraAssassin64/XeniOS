@@ -3591,8 +3591,8 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "every time, which speeds up games' math-heavy code (rendering threads "
                  "with many characters on screen). Turn off if models disappear or "
                  "geometry goes wrong; applies to code compiled after the change, so "
-                 "restart the game.",
-                 true);
+                 "restart the game. Off by default while it is being tested.",
+                 false);
   AddBoolSetting(performance.items, "metal_render_pass_area_from_scissor", "Limit Render Pass Area",
                  "Each draw and render target copy pass only loads and stores the part of "
                  "the render target it touches, instead of the whole 1280x2048 surface, "

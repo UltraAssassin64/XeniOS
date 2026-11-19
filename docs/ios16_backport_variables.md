@@ -1594,6 +1594,21 @@ further edits.
 
 ## Checks
 
+- `src/xenia/cpu/testing/util.h`: `RequireFoldMatchesBackend`,
+  `RequireVectorFoldMatchesBackend`, `RequireConstantOperandsMatchRegisters`
+  and `RequireScalarFoldMatchesBackend` are copied from xenia-edge
+  (`has207/xenia-edge`, testing helpers added with its fold-vs-backend tests),
+  so they are not listed. `constant_operand_test.cc` is a new test file built
+  only into `xenia-cpu-tests`; its names (`Ops`, `values`, `amounts`, `value`,
+  `shift`, `vec`, `build`, `mask`, `value1`, `value2`, `type`, `i`) are locals
+  of its test cases, used nowhere else.
+- The a64 backend and HIR fixes for constant operands (`VECTOR_ROTATE_LEFT_V128`,
+  `VECTOR_DENORMFLUSH`, `SHL_V128`, `SHR_V128`, `DOT_PRODUCT_3/4_V128`,
+  `SELECT_V128_V128`, `Value::Extract`, `Value::VectorCompareEQ`,
+  `SameValueOrEqualConstant`, the `OPCODE_ROUND` fold) follow xenia-edge
+  commits e6a86116f, ef4b3a466, 5ce7c336d, 920f35c93, eddcd8f31 and
+  378c95215, and add no names. `STVL_V128`/`STVR_V128` only reorder two
+  existing lines.
 - Ported verbatim from XeniOS `77cc1358`, so not listed: the range-keyed
   `ContextPromotionPass` (`context_promote_vec128`, `LookupTrackedValue`,
   `TrackValue`, `InvalidateTrackedRange`, `context_value_size_`,

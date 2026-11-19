@@ -26,8 +26,11 @@ DEFINE_bool(full_optimization_even_with_debug, false,
             "not intended for actual debugging of the code",
             "CPU");
 
+// Off here until checked on device: on this branch's a64 backend it exposed
+// constant-operand bugs (missing title screen geometry in Batman: Arkham
+// Asylum, build 9635.2) that XeniOS and xenia-edge had fixed.
 DEFINE_bool(
-    context_promote_vec128, true,
+    context_promote_vec128, false,
     "Promote VMX (VEC128) context loads/stores to SSA values and strip dead "
     "VEC128 context stores, letting the backend keep vectors in host "
     "registers. This restores upstream behavior from before 2026-01-25, when "

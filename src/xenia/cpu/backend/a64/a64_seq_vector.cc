@@ -763,8 +763,9 @@ struct VECTOR_ROTATE_LEFT_V128
     : Sequence<VECTOR_ROTATE_LEFT_V128,
                I<OPCODE_VECTOR_ROTATE_LEFT, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s1 = SrcVReg(e, i.src1, 0);
-    int s2 = SrcVReg(e, i.src2, 1);
+    // v0 is rebuilt after src2's last read but before src1's.
+    int s1 = SrcVReg(e, i.src1, 1);
+    int s2 = SrcVReg(e, i.src2, 0);
     int d = i.dest.reg().getIdx();
     // rotate = (src << amt) | (src >> (width - amt))
     switch (i.instr->flags) {
@@ -862,7 +863,8 @@ struct VECTOR_DENORMFLUSH
     : Sequence<VECTOR_DENORMFLUSH,
                I<OPCODE_VECTOR_DENORMFLUSH, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
-    int s = SrcVReg(e, i.src1, 0);
+    // src is read after v0 and v1 are rebuilt, so a constant lands in v3.
+    int s = SrcVReg(e, i.src1, 3);
     int d = i.dest.reg().getIdx();
     // Extract exponent bits; if exponent == 0 and mantissa != 0, it's denormal.
     // Replace with signed zero (keep sign bit).
@@ -1918,8 +1920,10 @@ struct STVL_V128 : Sequence<STVL_V128, I<OPCODE_STVL, VoidOp, I64Op, V128Op>> {
     // ctrl[i] = 16 + (i - offset) (from rev32(src)) where i >= offset.
     // This equals: ctrl = identity + (mask & delta)
     //   where mask = (i >= offset), delta = (16 - offset).
-    auto addr = ComputeMemoryAddress(e, i.src1);
+    // A constant source first: LoadV128Const may use x0 as its GPR scratch,
+    // and ComputeMemoryAddress returns the address in x0.
     int s = SrcVReg(e, i.src2, 2);
+    auto addr = ComputeMemoryAddress(e, i.src1);
 
     // x0 = host address, w17 = offset, x16 = aligned address (saved).
     e.add(e.x0, e.GetMembaseReg(), addr);
@@ -1978,8 +1982,10 @@ struct STVR_V128 : Sequence<STVR_V128, I<OPCODE_STVR, VoidOp, I64Op, V128Op>> {
     //   where mask = (i < offset), delta = (32 - offset).
     // When offset == 0, no bytes are written (mask is all-zero → identity →
     // load and store back the same memory, effectively a no-op).
-    auto addr = ComputeMemoryAddress(e, i.src1);
+    // A constant source first: LoadV128Const may use x0 as its GPR scratch,
+    // and ComputeMemoryAddress returns the address in x0.
     int s = SrcVReg(e, i.src2, 2);
+    auto addr = ComputeMemoryAddress(e, i.src1);
 
     // x0 = host address, w17 = offset, x16 = aligned address (saved).
     e.add(e.x0, e.GetMembaseReg(), addr);

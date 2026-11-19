@@ -1925,6 +1925,11 @@ struct SHL_V128 : Sequence<SHL_V128, I<OPCODE_SHL, V128Op, V128Op, I8Op>> {
     //   lane[i] = (lane[i] << N) | (lane[i+1] >> (32-N))
     int s = SrcVReg(e, i.src1, 0);
     int d = i.dest.reg().getIdx();
+    if (s < 4) {
+      // A constant landed in the scratch bank the shifts below clobber.
+      e.mov(VReg(3).b16, VReg(s).b16);
+      s = 3;
+    }
     if (i.src2.is_constant) {
       uint8_t sh = i.src2.constant() & 0x7;
       if (sh == 0) {
@@ -2052,6 +2057,11 @@ struct SHR_V128 : Sequence<SHR_V128, I<OPCODE_SHR, V128Op, V128Op, I8Op>> {
     //   lane[i] = (lane[i] >> N) | (lane[i-1] << (32-N))
     int s = SrcVReg(e, i.src1, 0);
     int d = i.dest.reg().getIdx();
+    if (s < 4) {
+      // A constant landed in the scratch bank the shifts below clobber.
+      e.mov(VReg(3).b16, VReg(s).b16);
+      s = 3;
+    }
     if (i.src2.is_constant) {
       uint8_t sh = i.src2.constant() & 0x7;
       if (sh == 0) {
@@ -2781,20 +2791,11 @@ struct SELECT_V128_V128
       // dest already holds the mask. BSL is safe here.
       e.bsl(VReg(d).b16, VReg(s3).b16, VReg(s2).b16);
     } else if (d == s3) {
-      // dest holds the mask=1 value. BIT inserts mask=1 bits from s3, keeps
-      // dest (=s2-candidate) where mask=0... no, dest=s3 not s2.
-      // Use: copy s2 to scratch, then BIT(scratch, s3, mask), move to dest.
-      // Or: copy mask to scratch v0, copy s2 to dest, BIT(dest, s3_orig, v0).
-      // Simplest: use scratch v0 for mask, then BSL.
-      e.orr(VReg(0).b16, VReg(s1).b16, VReg(s1).b16);  // v0 = mask
-      e.bsl(VReg(0).b16, VReg(s3).b16, VReg(s2).b16);  // v0 = result
-      e.orr(VReg(d).b16, VReg(0).b16, VReg(0).b16);    // dest = result
+      // dest holds the mask=1 value: insert s2 where the mask is clear.
+      e.bif(VReg(d).b16, VReg(s2).b16, VReg(s1).b16);
     } else if (d == s2) {
-      // dest holds the mask=0 value. BIF inserts ~mask bits from s2,
-      // but dest=s2... Use scratch for mask.
-      e.orr(VReg(0).b16, VReg(s1).b16, VReg(s1).b16);  // v0 = mask
-      e.bsl(VReg(0).b16, VReg(s3).b16, VReg(s2).b16);  // v0 = result
-      e.orr(VReg(d).b16, VReg(0).b16, VReg(0).b16);    // dest = result
+      // dest holds the mask=0 value: insert s3 where the mask is set.
+      e.bit(VReg(d).b16, VReg(s3).b16, VReg(s1).b16);
     } else {
       // No aliasing — copy mask to dest, then BSL.
       e.orr(VReg(d).b16, VReg(s1).b16, VReg(s1).b16);
@@ -4246,14 +4247,14 @@ struct DOT_PRODUCT_3_V128
       int s1 = SrcVReg(e, i.src1, 0);
       int s2 = SrcVReg(e, i.src2, 1);
       int d = i.dest.reg().getIdx();
+      // High lanes first: the low widen overwrites a constant source in v0/v1.
+      e.fcvtl2(VReg(2).d2, VReg(s1).s4);           // v2 = {s1[2], s1[3]} as f64
+      e.fcvtl2(VReg(3).d2, VReg(s2).s4);           // v3 = {s2[2], s2[3]} as f64
+      e.fmul(VReg(2).d2, VReg(2).d2, VReg(3).d2);  // v2 = {a2*b2, a3*b3}
       // Widen low 2 floats of each source to double.
       e.fcvtl(VReg(0).d2, VReg(s1).s2);            // v0 = {s1[0], s1[1]} as f64
       e.fcvtl(VReg(1).d2, VReg(s2).s2);            // v1 = {s2[0], s2[1]} as f64
       e.fmul(VReg(0).d2, VReg(0).d2, VReg(1).d2);  // v0 = {a0*b0, a1*b1}
-      // Widen high 2 floats (elements 2,3) to double.
-      e.fcvtl2(VReg(2).d2, VReg(s1).s4);           // v2 = {s1[2], s1[3]} as f64
-      e.fcvtl2(VReg(3).d2, VReg(s2).s4);           // v3 = {s2[2], s2[3]} as f64
-      e.fmul(VReg(2).d2, VReg(2).d2, VReg(3).d2);  // v2 = {a2*b2, a3*b3}
       // Sum: d0 = v0[0] + v0[1] + v2[0] (skip v2[1] = element 3).
       e.faddp(DReg(1), VReg(0).d2);
       e.fadd(DReg(1), DReg(1), DReg(2));
@@ -4288,14 +4289,14 @@ struct DOT_PRODUCT_4_V128
       int s1 = SrcVReg(e, i.src1, 0);
       int s2 = SrcVReg(e, i.src2, 1);
       int d = i.dest.reg().getIdx();
+      // High lanes first: the low widen overwrites a constant source in v0/v1.
+      e.fcvtl2(VReg(2).d2, VReg(s1).s4);
+      e.fcvtl2(VReg(3).d2, VReg(s2).s4);
+      e.fmul(VReg(2).d2, VReg(2).d2, VReg(3).d2);
       // Widen low 2 floats to double, multiply.
       e.fcvtl(VReg(0).d2, VReg(s1).s2);
       e.fcvtl(VReg(1).d2, VReg(s2).s2);
       e.fmul(VReg(0).d2, VReg(0).d2, VReg(1).d2);
-      // Widen high 2 floats to double, multiply.
-      e.fcvtl2(VReg(2).d2, VReg(s1).s4);
-      e.fcvtl2(VReg(3).d2, VReg(s2).s4);
-      e.fmul(VReg(2).d2, VReg(2).d2, VReg(3).d2);
       // Sum all 4 products: v0 = {a0*b0+a2*b2, a1*b1+a3*b3}
       e.fadd(VReg(0).d2, VReg(0).d2, VReg(2).d2);
       e.faddp(DReg(1), VReg(0).d2);

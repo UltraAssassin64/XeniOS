@@ -1456,6 +1456,45 @@ Changes for the next build:
   a runner). This workflow has no CPU test job, so the new pass is only
   checked on the device.
 
+### Build 9635.2 results: vector promotion breaks Batman; cause and fixes
+
+Owner (zip "Vector_promotion_broke", logs 08-00-44, 08-01-51, 08-27-53):
+with Keep Vector Registers in CPU on, the title screen's 3D models are
+gone (about 10k vertices per frame instead of about 1M), the loading screen
+misses its tip text and Loading/Skip icons, and gameplay is a black screen
+with a stuck looping sound while the music plays. Off (run 2) everything
+works. The config dumps at the top of the logs do not show the in-app value.
+
+Cause, from xenia-edge's history (fetched deeper: has207/xenia-edge, 9459
+commits; this branch's a64 sequences match its 74f34818e/7eb0c7671 of late
+May 2026): turning VEC128 promotion on lets constant propagation see
+through vector registers, so ops receive constant vector operands they never
+got before. xenia-edge hit the same in September 2026 ("Promote VEC128
+context values again" 01dc16a6, reverted 0e1307bd) and fixed:
+- HIR folds: Extract read the wrong lane (no VEC128_B/W flip;
+  5ce7c336d, "fixes rendering issues in FIFA games and State of Decay caused
+  by enabling context_promote_vec128"); float VectorCompareEQ folded bitwise
+  (920f35c93); the int16 vperm fold half (63ea6e272, already right here).
+- a64 sequences that load a constant operand into scratch v0-v3 and then
+  overwrite that scratch before the last read (e6a86116f): DOT_PRODUCT_3/4
+  (vmsum3fp/vmsum4fp, the vertex transforms), VECTOR_ROTATE_LEFT,
+  VECTOR_DENORMFLUSH, SHL_V128/SHR_V128.
+- Also found here by an audit script (scratchpad tools/scratchaudit.py):
+  STVL/STVR computed the address in x0 and then loaded a constant source,
+  whose LoadV128Const uses x0 as its GPR scratch: a store to a wrong
+  address. The constant is now loaded first.
+- Taken too: SELECT_V128 with dest aliasing a data operand uses BIT/BIF
+  (ef4b3a466), compare merging compares constants by raw bits (eddcd8f31),
+  and ROUND in the dynamic mode is no longer constant-folded.
+- CPU tests: `src/xenia/cpu/testing/constant_operand_test.cc` (with
+  xenia-edge's RequireFoldMatchesBackend helpers in util.h) runs each fixed
+  op with constant operands against the same op on registers; the CPU tests
+  workflow (cpu-tests.yml, macOS ARM64) runs them on push. The earlier run
+  for cf82827 (promotion on) passed all 249 HIR tests and 141,712 PPC cases:
+  those tests never feed constants, which is why they missed it.
+- `context_promote_vec128` now defaults to off here until the device
+  confirms the fixes (the owner turns it on to test).
+
 Owner's decisions (2026-11-19, after 9623):
 - Include the profiling/stability tools now (crash dump, wait objects);
   the owner sends logs of the other games when possible.
