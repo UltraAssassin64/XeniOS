@@ -1145,6 +1145,68 @@ almost black.
   moves UE3 decal depth bias into the pixel shader to stop coplanar
   z-fighting; a candidate if decals still flicker.
 
+### Build 9618 results (owner, zips "9618_logs-1", "9618_pics", plus "9611-1" re-uploaded) and the next build
+
+Owner: the MSAA sample positions fixed the character shading (knees, faceted
+triangles). The shadow box remains. New: left in the pause menu long enough,
+the menu backdrop's vertices explode and the scene behind turns to rainbow
+bands (photos image, image1 = normal, image2). Owner also stresses that Real
+Occlusion Queries fix the cutscene-to-gameplay transition; with them off,
+parts of the scene keep flickering in and out after loading.
+
+Shadow box, narrowed down:
+- PS 6C76CC934779C668 (disassembly in 9611-1, log 17-54-07): rebuilds the
+  receiver from scene depth (tf0, Z = 1/(d*c2.z - c2.w)), shadow position =
+  c3*xZ + c4*yZ + c5*Z + c6 (xy divided by w, z not), 4 PCF taps on tf2
+  rotated by the 64x64 noise tf3 (offsets c7-c14, about 2 texels), 16 more
+  in the penumbra, lit = mean(map > min(z, 0.999)); distance fade to the
+  shadow colour c16 (light at c17); out = lerp(shadowColor, 1, lit^3). A lit
+  receiver gives exactly 1.0, and out-of-range UV/z all read as lit, so a
+  line can only come from map texels that are not 1.0.
+- Contrast-enhanced 9615 photos: the box is a thin shadow-coloured line along
+  the shadow frustum's edges; inside the box is as bright as outside. So the
+  PCF taps at the frustum edge read non-1.0 texels in the 5-texel border
+  (casters are drawn at viewport 5..507 x 5..339 of 512x344; the clear covers
+  all of it). The 9615 probe grid (every 32 texels from 16) never sampled
+  the border.
+- Lead, unproven: the 4x-alias fast clear's ownership range transfers back
+  8-9 rows short of the shadow viewport (tiles 1440-1587 = 336 of 344 rows;
+  1440-1636 = 448 of 457), so the bottom rows keep the 1x clear or older
+  EDRAM contents. That explains one edge, not the L-shaped line seen.
+- Next build logs, during a frame capture, for every 24-bit depth resolve:
+  per edge, for the 8 outermost rows/columns, how many texels are not 1.0
+  and their minimum ("Frame detail resolve edge"), and an 8x8-block map
+  ("Frame detail resolve map": '#' all 1.0, '.' none, '+' some, '-' not
+  written); and for draws of 12 vertices or fewer, the vertex data of the
+  first binding ("Frame detail draw N vertices"), which shows the clear
+  rectangles.
+
+Pause menu corruption, cause found by reading (not yet confirmed on device):
+- Shared memory is zero-copy on iOS (`metal_shared_memory_zero_copy`, the
+  GPU reads guest RAM directly). The game learns the GPU is done with memory
+  from EVENT_WRITE_SHD fences, which this branch stored on the CPU as soon as
+  the command processor read the packet. Since 9583 nothing waits for the GPU
+  in the frame loop, so the GPU can run up to the queue's in-flight limit
+  behind (about 2 frames), and the game rewrites dynamic vertex buffers and
+  textures the GPU has yet to draw with. Worst when GPU-bound with an idle
+  CPU: the pause menu.
+- Upstream XeniOS has exactly this fix (`TryWriteShaderDoneFence`, fences
+  copied on the GPU timeline in zero-copy mode, `SubmitBeforeShortMemoryPoll`;
+  also `CopyToBufferGpuOrdered` for the non-zero-copy upload path, and a
+  held-signal system for interrupts). Ported the essentials: in zero-copy
+  mode the fence is queued on the open command buffer and stored by its
+  completion handler (or an empty command buffer committed at once when none
+  is open); a short-delay WAIT_REG_MEM memory poll commits the open buffer if
+  fences wait on it; ring-empty waits commit as before. Option
+  `metal_gpu_ordered_fences` (Settings > Accuracy > Wait for the GPU at Game
+  Fences, default on, applies at once). Not ported: the non-zero-copy path's
+  GPU-ordered uploads (that path still memcpys into the live buffer) and the
+  held interrupts. Risk: fewer frames in flight could cost some FPS where the
+  game waits on a fence mid-frame.
+
+Settings: "Frame Capture" is now the first section (Frame Detail Log); saving
+when only it changed closes Settings without the "Settings Saved" alert.
+
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
 

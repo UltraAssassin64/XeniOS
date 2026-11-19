@@ -852,6 +852,7 @@ bool COMMAND_PROCESSOR::ExecutePacketType3_WAIT_REG_MEM(
                 : register_file_->values[poll_reg_addr];
 
   bool matched = false;
+  bool submitted_memory_producers = false;
 
   do {
     uint32_t value = value_ref;
@@ -869,6 +870,13 @@ bool COMMAND_PROCESSOR::ExecutePacketType3_WAIT_REG_MEM(
     matched = MatchValueAndRef(value & mask, ref, wait_info);
 
     if (!matched) {
+      // A short-delay memory poll must also submit queued GPU producers (long
+      // waits do in PrepareForWait), as in XeniOS.
+      if (is_memory && wait < 0x100 && !submitted_memory_producers) {
+        submitted_memory_producers = true;
+        COMMAND_PROCESSOR::SubmitBeforeShortMemoryPoll();
+        continue;
+      }
       // Wait using the duration specified by the guest.
       if (wait >= 0x100) {
         PrepareForWait();
@@ -1086,17 +1094,29 @@ bool COMMAND_PROCESSOR::ExecutePacketType3_EVENT_WRITE_SHD(
   address &= ~0x3;
   data_value = GpuSwap(data_value, endianness);
   uint8_t* write_destination = memory_->TranslatePhysical(address);
+  uint32_t write_physical_address = address;
   if (address > 0x1FFFFFFF) {
     uint32_t writeback_base =
         register_file_->values[XE_GPU_REG_WRITEBACK_START];
     uint32_t writeback_size = register_file_->values[XE_GPU_REG_WRITEBACK_SIZE];
     uint32_t writeback_offset = address - writeback_base;
     // check whether the guest has written writeback base. if they haven't, skip
-    // the offset check
-    if (writeback_base != 0 && writeback_offset < writeback_size) {
+    // the offset check. The 0x7F window is 16 MiB, mapping physical memory
+    // from byte zero, so the offset is also the physical address written (as
+    // in XeniOS).
+    if (writeback_base != 0 && writeback_offset < writeback_size &&
+        writeback_offset < 0x01000000) {
       write_destination =
           memory_->TranslateVirtual(0x7F000000 + writeback_offset);
+      write_physical_address = writeback_offset;
     }
+  }
+  // The guest treats this fence as "the GPU is done": a backend can publish it
+  // once the GPU has done the work ahead of it (as in XeniOS).
+  if (COMMAND_PROCESSOR::TryWriteShaderDoneFence(
+          CpuToGpu(write_physical_address), data_value)) {
+    trace_writer_.WriteMemoryWrite(CpuToGpu(address), 4);
+    return true;
   }
   xe::store(write_destination, data_value);
   trace_writer_.WriteMemoryWrite(CpuToGpu(address), 4);

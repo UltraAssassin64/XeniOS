@@ -278,6 +278,16 @@ class CommandProcessor {
   virtual void MakeCoherent();
   virtual void PrepareForWait();
   virtual void ReturnFromWait();
+  // Before the first poll of an unsatisfied short-delay WAIT_REG_MEM on
+  // memory, for backends that hold GPU work that may produce the value in an
+  // unsubmitted batch (as in XeniOS).
+  virtual void SubmitBeforeShortMemoryPoll() {}
+  // Shadowed by backends that publish shader-done writes on the GPU timeline.
+  // False leaves publication to the CPU store in the packet handler (as in
+  // XeniOS).
+  bool TryWriteShaderDoneFence(uint32_t address, uint32_t value) {
+    return false;
+  }
 
   virtual void OnPrimaryBufferEnd() {}
 

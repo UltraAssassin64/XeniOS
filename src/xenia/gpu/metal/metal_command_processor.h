@@ -130,6 +130,15 @@ class MetalCommandProcessor : public CommandProcessor {
   // the autorelease pool is drained, preventing hangs from deferred
   // deallocation.
   void PrepareForWait() override;
+  // Commits the open command buffer if shader-done fences wait on it (as in
+  // XeniOS, which commits it whatever it holds).
+  void SubmitBeforeShortMemoryPoll() override;
+  // With shared memory aliasing guest RAM, a shader-done fence
+  // (EVENT_WRITE_SHD) reaches guest memory only once the GPU has completed the
+  // work recorded before it: the guest reuses memory the fence says the GPU is
+  // done with. Same name and role as XeniOS's; there the value is copied on the
+  // GPU timeline, here the command buffer's completion handler stores it.
+  bool TryWriteShaderDoneFence(uint32_t address, uint32_t value);
 
   // Use base class WriteRegister - don't override with empty implementation!
   // The base class stores values in register_file_->values[] which we need.
@@ -926,6 +935,12 @@ class MetalCommandProcessor : public CommandProcessor {
 
   std::atomic<uint64_t> completed_command_buffers_{0};
   std::atomic<uint32_t> pending_completion_handlers_{0};
+  // Shader-done fences (guest physical address, value as stored) waiting for
+  // the open command buffer, stored by its completion handler.
+  std::vector<std::pair<uint32_t, uint32_t>> pending_shader_done_fences_;
+  // Adds the completion handler storing pending_shader_done_fences_ to a
+  // command buffer about to be committed.
+  void AttachShaderDoneFences(MTL::CommandBuffer* command_buffer);
   uint64_t submission_current_ = 0;
   uint64_t submission_completed_processed_ = 0;
 

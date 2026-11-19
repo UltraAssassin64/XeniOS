@@ -30,6 +30,8 @@ class MetalSharedMemory : public SharedMemory {
   void ClearCache() override;
 
   MTL::Buffer* GetBuffer() const { return buffer_; }
+  // The buffer aliases guest RAM (as in XeniOS).
+  bool is_zero_copy() const { return use_zero_copy_; }
   const uint8_t* GetXboxRamBase() const {
     return static_cast<const uint8_t*>(memory().TranslatePhysical(0));
   }

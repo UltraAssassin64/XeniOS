@@ -91,6 +91,13 @@ using BYTE = uint8_t;
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
 DEFINE_bool(
+    metal_gpu_ordered_fences, true,
+    "With shared memory aliasing guest RAM: publish the game's shader-done "
+    "fences only once the GPU has finished the work before them, so the game "
+    "does not reuse vertex, texture or command memory the GPU has yet to "
+    "read (exploding geometry, garbage textures when the GPU lags behind).",
+    "Metal");
+DEFINE_bool(
     metal_inline_shader_constants, true,
     "SPIRV-Cross path: pass each draw's shader constants with "
     "setVertexBytes/setFragmentBytes when they change, instead of through "
@@ -1943,6 +1950,59 @@ void MetalCommandProcessor::PrepareForWait() {
   CommandProcessor::PrepareForWait();
 }
 
+void MetalCommandProcessor::SubmitBeforeShortMemoryPoll() {
+  if (!pending_shader_done_fences_.empty()) {
+    EndCommandBuffer();
+  }
+}
+
+bool MetalCommandProcessor::TryWriteShaderDoneFence(uint32_t address,
+                                                    uint32_t value) {
+  if (!cvars::metal_gpu_ordered_fences || !shared_memory_ ||
+      !shared_memory_->is_zero_copy() || trace_writer_.is_open() ||
+      (address & 3) || address > SharedMemory::kBufferSize - sizeof(value)) {
+    return false;
+  }
+  if (current_command_buffer_) {
+    // Stored when the command buffer completes. If the guest waits for it, the
+    // ring runs empty and PrepareForWait commits it, or a short memory poll
+    // does (SubmitBeforeShortMemoryPoll).
+    pending_shader_done_fences_.emplace_back(address, value);
+    return true;
+  }
+  // Nothing open: everything before the fence is in committed command
+  // buffers. An empty one completes after them, the queue running in order.
+  MTL::CommandBuffer* fence_command_buffer =
+      command_queue_ ? command_queue_->commandBuffer() : nullptr;
+  if (!fence_command_buffer) {
+    return false;
+  }
+  pending_shader_done_fences_.emplace_back(address, value);
+  AttachShaderDoneFences(fence_command_buffer);
+  fence_command_buffer->commit();
+  return true;
+}
+
+void MetalCommandProcessor::AttachShaderDoneFences(
+    MTL::CommandBuffer* command_buffer) {
+  if (pending_shader_done_fences_.empty() || !command_buffer) {
+    return;
+  }
+  pending_completion_handlers_.fetch_add(1, std::memory_order_relaxed);
+  Memory* memory = memory_;
+  std::vector<std::pair<uint32_t, uint32_t>> fences =
+      std::move(pending_shader_done_fences_);
+  pending_shader_done_fences_.clear();
+  command_buffer->addCompletedHandler(
+      [this, memory, fences](MTL::CommandBuffer*) {
+        for (const auto& fence : fences) {
+          xe::store(memory->TranslatePhysical(fence.first), fence.second);
+        }
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        pending_completion_handlers_.fetch_sub(1, std::memory_order_relaxed);
+      });
+}
+
 void MetalCommandProcessor::WaitForPendingCompletionHandlers() {
   constexpr auto kMaxWait = std::chrono::seconds(5);
   const auto wait_start = std::chrono::steady_clock::now();
@@ -1982,6 +2042,7 @@ void MetalCommandProcessor::ShutdownContext() {
     }
 #endif
     ScheduleSpirvArgumentBufferRelease(current_command_buffer_);
+    AttachShaderDoneFences(current_command_buffer_);
     current_command_buffer_->commit();
     if (wait_shared_event_) {
       // Bounded so a GPU that has stopped (in the background) can't hold up
@@ -2906,6 +2967,7 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
     }
 #endif
     ScheduleSpirvArgumentBufferRelease(current_command_buffer_);
+    AttachShaderDoneFences(current_command_buffer_);
     current_command_buffer_->commit();
     current_command_buffer_->release();
     current_command_buffer_ = nullptr;
@@ -5754,6 +5816,42 @@ bool MetalCommandProcessor::IssueDrawMsl(
         regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_YOFFSET),
         regs.Get<float>(XE_GPU_REG_PA_CL_VPORT_ZOFFSET), zpd_query_active_,
         frame_detail_textures);
+    // Small draws (clears, full-screen rectangles): the vertex data of their
+    // vertex shader's first binding, as floats.
+    const auto& frame_detail_bindings =
+        vertex_translation->shader().vertex_bindings();
+    if (primitive_processing_result.guest_draw_vertex_count <= 12 &&
+        !frame_detail_bindings.empty()) {
+      const auto& binding = frame_detail_bindings.front();
+      xenos::xe_gpu_vertex_fetch_t vertex_fetch =
+          regs.GetVertexFetch(binding.fetch_constant);
+      const uint32_t vertex_address = vertex_fetch.address << 2;
+      const uint32_t vertex_words = std::min<uint32_t>(
+          {uint32_t(vertex_fetch.size),
+           primitive_processing_result.guest_draw_vertex_count *
+               binding.stride_words,
+           48});
+      std::string frame_detail_vertices;
+      if (vertex_address <= SharedMemory::kBufferSize - vertex_words * 4) {
+        const uint32_t* words =
+            memory_->TranslatePhysical<const uint32_t*>(vertex_address);
+        for (uint32_t i = 0; i < vertex_words; ++i) {
+          const uint32_t word = xenos::GpuSwap(words[i], vertex_fetch.endian);
+          float word_float;
+          std::memcpy(&word_float, &word, sizeof(word_float));
+          fmt::format_to(std::back_inserter(frame_detail_vertices), "{}{}",
+                         (binding.stride_words && i % binding.stride_words == 0)
+                             ? " |"
+                             : " ",
+                         word_float);
+        }
+      }
+      XELOGI(
+          "Frame detail draw {} vertices (fetch constant {} at {:08X}, stride "
+          "{} words):{}",
+          frame_detail_draws_, binding.fetch_constant, vertex_address,
+          binding.stride_words, frame_detail_vertices);
+    }
     // The float constants of shaders listed in metal_log_shader_hashes.
     for (MslShader* frame_detail_shader :
          {msl_vertex_shader, msl_pixel_shader}) {
@@ -6341,6 +6439,7 @@ bool MetalCommandProcessor::IssueCopy() {
     ScheduleSpirvUniformBufferRelease(copy_command_buffer);
   }
 #endif
+  AttachShaderDoneFences(copy_command_buffer);
   copy_command_buffer->commit();
   copy_command_buffer->release();
   current_command_buffer_ = nullptr;
@@ -6542,6 +6641,88 @@ void MetalCommandProcessor::LogResolveProbes() {
       }
       XELOGI("Frame detail resolve probe {:08X} y {}:{}", probe->address, y,
              probe_line);
+    }
+    if (!probe->is_float) {
+      // Unorm depth (shadow maps): where the clear value (1.0) is missing, to
+      // the texel at the edges, which the grid above skips.
+      auto read_depth24 = [&](uint32_t x, uint32_t y, uint32_t& depth24) {
+        const uint32_t texel_address =
+            probe->address + uint32_t(texture_util::GetTiledOffset2D(
+                                 int32_t(x), int32_t(y), probe->width, 2));
+        if (texel_address < probe->written_begin ||
+            texel_address + 4 > probe->written_end ||
+            texel_address + 4 > SharedMemory::kBufferSize) {
+          return false;
+        }
+        uint32_t texel;
+        std::memcpy(&texel, memory + texel_address, sizeof(texel));
+        depth24 = xenos::GpuSwap(texel, probe->endian) >> 8;
+        return true;
+      };
+      uint32_t written_rows = 0;
+      for (uint32_t y = 0; y < probe->height; ++y) {
+        uint32_t depth24;
+        if (read_depth24(0, y, depth24)) {
+          written_rows = y + 1;
+        }
+      }
+      static const char* const kEdgeNames[] = {"left", "right", "top",
+                                               "bottom"};
+      for (uint32_t edge = 0; edge < 4 && written_rows; ++edge) {
+        std::string edge_line;
+        for (uint32_t depth_in = 0; depth_in < 8; ++depth_in) {
+          const bool vertical = edge < 2;
+          const uint32_t length = vertical ? written_rows : probe->width;
+          uint32_t not_clear = 0;
+          uint32_t min_depth24 = 0xFFFFFF;
+          for (uint32_t i = 0; i < length; ++i) {
+            uint32_t x =
+                vertical ? (edge ? probe->width - 1 - depth_in : depth_in) : i;
+            uint32_t y =
+                vertical ? i
+                         : (edge == 3 ? written_rows - 1 - depth_in : depth_in);
+            uint32_t depth24;
+            if (!read_depth24(x, y, depth24)) {
+              continue;
+            }
+            if (depth24 != 0xFFFFFF) {
+              ++not_clear;
+              min_depth24 = std::min(min_depth24, depth24);
+            }
+          }
+          fmt::format_to(std::back_inserter(edge_line), " {}/{} min {:.4f};",
+                         not_clear, length, float(min_depth24) / 16777215.0f);
+        }
+        XELOGI(
+            "Frame detail resolve edge {:08X} {} (8 rows or columns in, "
+            "texels not 1.0 / all):{}",
+            probe->address, kEdgeNames[edge], edge_line);
+      }
+      // 8x8 blocks: '#' all 1.0, '.' none, '+' some, '-' not written.
+      for (uint32_t block_y = 0; block_y * 8 < written_rows; ++block_y) {
+        std::string map_line;
+        for (uint32_t block_x = 0; block_x * 8 < probe->width; ++block_x) {
+          uint32_t clear = 0;
+          uint32_t written = 0;
+          for (uint32_t y = block_y * 8;
+               y < std::min(block_y * 8 + 8, written_rows); ++y) {
+            for (uint32_t x = block_x * 8;
+                 x < std::min(block_x * 8 + 8, probe->width); ++x) {
+              uint32_t depth24;
+              if (read_depth24(x, y, depth24)) {
+                ++written;
+                clear += depth24 == 0xFFFFFF;
+              }
+            }
+          }
+          map_line += !written           ? '-'
+                      : clear == written ? '#'
+                      : !clear           ? '.'
+                                         : '+';
+        }
+        XELOGI("Frame detail resolve map {:08X} y {}: {}", probe->address,
+               block_y * 8, map_line);
+      }
     }
     probe = resolve_probes_.erase(probe);
   }
@@ -7648,6 +7829,7 @@ void MetalCommandProcessor::EndCommandBuffer() {
     }
 #endif
     ScheduleSpirvArgumentBufferRelease(current_command_buffer_);
+    AttachShaderDoneFences(current_command_buffer_);
     current_command_buffer_->commit();
     current_command_buffer_->release();
     current_command_buffer_ = nullptr;

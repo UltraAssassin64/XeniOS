@@ -3505,6 +3505,24 @@ bool BuildDiscoveredGameFromPath(const std::filesystem::path& path, IOSDiscovere
 std::vector<IOSConfigSection> BuildIOSConfigSections() {
   std::vector<IOSConfigSection> sections;
 
+  // First, so a capture is a tap away during the game.
+  IOSConfigSection frame_capture;
+  frame_capture.title = "Frame Capture";
+  frame_capture.footer =
+      "Saving only this setting closes Settings at once, without the saved message.";
+  AddChoiceSetting(
+      frame_capture.items, IOSConfigControlType::kChoiceInt32, "metal_frame_detail_log",
+      "Frame Detail Log",
+      "Pick a number of frames during the game (In-Game Menu > Settings) and "
+      "save: those frames are logged pass by pass and draw by draw, with "
+      "textures, resolves and occlusion queries (\"Frame detail\" lines, about "
+      "1 MB per gameplay frame). For another capture, pick a different number, "
+      "or Off and save, then the number again.",
+      0, {{"Off", 0}, {"1 frame", 1}, {"4 frames", 4}, {"16 frames", 16}, {"60 frames", 60}});
+  if (!frame_capture.items.empty()) {
+    sections.push_back(std::move(frame_capture));
+  }
+
   IOSConfigSection display;
   display.title = "Display";
   display.footer = "These settings affect frame pacing and the Metal presenter output.";
@@ -3608,6 +3626,12 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "games rely on it when they copy the scene depth back after drawing it with "
                  "anti-aliasing: without it, characters show dark or unlit triangles and "
                  "shadows show the edges of their box. Applies at once.",
+                 true);
+  AddBoolSetting(accuracy.items, "metal_gpu_ordered_fences", "Wait for the GPU at Game Fences",
+                 "Tells the game the GPU has finished its work only once it really has, "
+                 "so the game doesn't overwrite geometry or textures the GPU is still "
+                 "drawing with (exploding menus, rainbow-coloured scenery after a while "
+                 "in the pause menu). Applies at once.",
                  true);
   AddBoolSetting(accuracy.items, "occlusion_query_enable", "Real Occlusion Queries",
                  "Experimental. Counts what the game's visibility tests really draw "
@@ -3732,15 +3756,6 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "the busy ones spend their time (\"Guest thread hotspots\" lines). Adds "
                  "a ~20 ms pause each time.",
                  true);
-  AddChoiceSetting(
-      diagnostics.items, IOSConfigControlType::kChoiceInt32, "metal_frame_detail_log",
-      "Frame Detail Log",
-      "Pick a number of frames during the game (In-Game Menu > Settings) and "
-      "save: those frames are logged pass by pass and draw by draw, with "
-      "textures, resolves and occlusion queries (\"Frame detail\" lines, about "
-      "1 MB per gameplay frame). For another capture, pick a different number, "
-      "or Off and save, then the number again.",
-      0, {{"Off", 0}, {"1 frame", 1}, {"4 frames", 4}, {"16 frames", 16}, {"60 frames", 60}});
   AddActionSetting(diagnostics.items, IOSConfigAction::kViewRecentLog, "View Live Log",
                    "Open a live-updating xenia.log viewer so you can capture boot failures "
                    "without Xcode.");
@@ -3751,6 +3766,40 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
   AddAllConfigVarSettings(sections);
 
   return sections;
+}
+
+// Whether the edited sections differ from the stored settings only in the
+// Frame Detail Log (the sections are rebuilt from the stored settings in the
+// same order).
+bool OnlyFrameDetailLogChanged(const std::vector<IOSConfigSection>& sections) {
+  std::vector<IOSConfigSection> stored = BuildIOSConfigSections();
+  if (stored.size() != sections.size()) {
+    return false;
+  }
+  bool frame_detail_changed = false;
+  for (size_t i = 0; i < sections.size(); ++i) {
+    if (stored[i].items.size() != sections[i].items.size()) {
+      return false;
+    }
+    for (size_t j = 0; j < sections[i].items.size(); ++j) {
+      const IOSConfigItem& edited = sections[i].items[j];
+      const IOSConfigItem& saved = stored[i].items[j];
+      if (edited.key != saved.key) {
+        return false;
+      }
+      bool differs = edited.bool_value != saved.bool_value ||
+                     edited.choice_value != saved.choice_value ||
+                     edited.string_value != saved.string_value;
+      if (!differs) {
+        continue;
+      }
+      if (edited.key != "metal_frame_detail_log") {
+        return false;
+      }
+      frame_detail_changed = true;
+    }
+  }
+  return frame_detail_changed;
 }
 
 bool ApplyIOSConfigSections(const std::vector<IOSConfigSection>& sections) {
@@ -8268,9 +8317,14 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 }
 
 - (void)saveTapped:(id)sender {
+  BOOL only_frame_detail_log = OnlyFrameDetailLogChanged(sections_) ? YES : NO;
   BOOL saved = ApplyIOSConfigSections(sections_) ? YES : NO;
   hasPendingChanges_ = NO;
   saveButton_.enabled = NO;
+  if (saved && only_frame_detail_log) {
+    [self dismissViewControllerAnimated:YES completion:nil];
+    return;
+  }
 
   NSString* title = saved ? @"Settings Saved" : @"Save Completed With Warnings";
   NSString* message = saved ? @"Saved to XeniOS settings.\n\nFor reliable results, change "
