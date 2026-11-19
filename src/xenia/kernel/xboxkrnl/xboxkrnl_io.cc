@@ -164,6 +164,16 @@ dword_result_t NtReadFile_entry(dword_t file_handle, dword_t event_handle,
         }
       }
 
+      if (!file->is_synchronous()) {
+        // Async handles (debug log): how each read completes.
+        XELOGD(
+            "NtReadFile async {:08X}: event {:08X} APC {:08X} context {:08X} "
+            "offset {:X} length {:X}: status {:08X}, {:X} bytes",
+            uint32_t(file_handle), uint32_t(event_handle),
+            uint32_t(apc_routine_ptr), uint32_t(apc_context),
+            byte_offset_ptr ? uint64_t(*byte_offset_ptr) : ~uint64_t(0),
+            uint32_t(buffer_length), result, bytes_read);
+      }
       if (!file->is_synchronous() && result != X_STATUS_END_OF_FILE) {
         result = X_STATUS_PENDING;
       }
@@ -248,6 +258,14 @@ dword_result_t NtReadFileScatter_entry(
       }
 
       if (!file->is_synchronous()) {
+        // Async handles (debug log): how each read completes.
+        XELOGD(
+            "NtReadFileScatter async {:08X}: event {:08X} APC {:08X} context "
+            "{:08X} offset {:X} length {:X}: status {:08X}, {:X} bytes",
+            uint32_t(file_handle), uint32_t(event_handle),
+            uint32_t(apc_routine_ptr), uint32_t(apc_context),
+            byte_offset_ptr ? uint64_t(*byte_offset_ptr) : ~uint64_t(0),
+            uint32_t(length), result, bytes_read);
         result = X_STATUS_PENDING;
       }
 

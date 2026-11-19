@@ -556,6 +556,12 @@ void LogKernelCallThreads();
 // each one that isn't only waiting spends its time (log_guest_thread_hotspots;
 // Apple ARM64 only).
 void LogGuestThreadHotspots();
+// Whether guest memory [address, address + size) is committed and readable.
+// The caller holds the global critical region.
+bool KernelCallReadable(uint32_t address, uint32_t size);
+// Guest return addresses up the stack from the frame at |kernel_call_frame|
+// (a guest r1), 12 at most, each with a leading space.
+std::string LogKernelCallStack(uint32_t kernel_call_frame);
 
 template <typename F, typename Tuple, std::size_t... I>
 XE_FORCEINLINE static auto KernelTrampoline(F&& f, Tuple&& t,

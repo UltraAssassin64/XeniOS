@@ -1340,6 +1340,49 @@ request and has not been confirmed to work on iOS 16.
 - `SPIRV-Cross: uniforms pool busy; waiting for an in-flight command buffer to
   retire` appears repeatedly: the CPU is blocking on the GPU.
 
+### Build 9623 results (owner, zip "9623": Batman logs 00-12-48 and 00-15-41, Spider-Man debug log 00-17-27) and the next build
+
+- Shadow box: the EDRAM the resolve read already has 00000000 (depth 0,
+  stencil 0) in the border, so the dump and the resolve are faithful; the
+  border is lost before. Per shadow map, 1.0 survives exactly inside the
+  casters' scissor (e.g. (5,5)-(507,282)); in the part the 4x alias rectangle
+  cleared, rows/columns 5-7 are lost too. Elsewhere the values are left over
+  from the scene colour that the colour-to-depth transfer (from the
+  k_2_10_10_10_FLOAT target at 1024t, "host depth") put there (00000000,
+  45D9E400, 40BCD400 ...). So the game's depth clears (draws 460/461:
+  rectangle lists, VS 1E6883FCCDE1F688, no pixel shader, colour mask 0,
+  DEPTHCONTROL 00000076, Z = 1) do not land, or do not survive, outside the
+  casters' scissor. Not found by reading: render areas are 32-aligned and
+  cover the border; the draw scissor is set per draw.
+- Next build: during a frame detail capture each 24-bit unorm depth pass
+  (shadow maps) is dumped to EDRAM as it starts (after its transfers) and
+  logged ("Frame detail pass N start edram edge/map", EDRAM sample
+  coordinates = 1x pixels): pass 12 start shows the 1x clear rectangles
+  (through the 1x->4x transfer), pass 13 start the 4x clear (through the
+  4x->1x transfer), the resolve the casters.
+- Spider-Man (debug log): the loader thread opens D:\packs\game.XEPACK with
+  create options 0x48 (FILE_NON_DIRECTORY_FILE | FILE_NO_INTERMEDIATE_
+  BUFFERING, no synchronous flag: an async handle; earlier files used 0x64,
+  synchronous), queries it (class 0x22) and waits forever. Reads are not in
+  the log (NtReadFile is high-frequency). Our NtReadFile completes async
+  reads inline, returns PENDING, signals the event and queues the completion
+  routine as a user APC, which runs only in an alertable wait. XeniOS HEAD
+  queues it as a kernel APC that runs before the service returns (bit 0 of
+  the routine asks for a user APC), via `QueueIoApc`/`xeProcessKernelApcs`,
+  plus its request queue. Likely cause: a completion routine that never runs.
+  Next build logs every async NtReadFile/NtReadFileScatter at debug level
+  (event, APC, context, offset, length, status, bytes) to confirm.
+
+Owner's decisions (2026-11-19, after 9623):
+- Include the profiling/stability tools now (crash dump, wait objects);
+  the owner sends logs of the other games when possible.
+- Main focus stays Batman: Arkham Asylum's major bugs and performance until
+  past the intro into the next cutscene (then clear until the open map).
+- Aim high: try a backport of XeniOS HEAD's async shader compilation (its
+  DXIL/spirv2air path, shader library cache, VS interpreter stand-ins) for
+  performance and to avoid issues with effects such as the rain and
+  detective mode. Goal: the intro from ~20 FPS to 28-30 FPS.
+
 ## Profiler and stability tools (owner's request 2026-11-19, outline only)
 
 Owner: two other games are unstable, one with an access violation, one stuck
@@ -1367,7 +1410,10 @@ Upstream: MicroProfile zones (`XENIA_ENABLE_PROFILER`, off by default,
 covers host code only); a crash reporter extension (iOS 27, unusable here)
 and `ios_diagnostics*`, which upload to an endpoint (not wanted).
 
-Proposed, in this order:
+Proposed, in this order (items 1 and 2 partly in the build after 9623:
+crash dump with guest address, page region, LR, guest stack and code; the
+handles of a NtWaitForMultipleObjectsEx in the thread report; async reads
+logged at debug level):
 1. Crash dump: guest fault address (host address minus the membase), the
    page's heap, state and protection, guest code words around the PC, the
    thread's guest stack and last kernel calls (from the existing reports),

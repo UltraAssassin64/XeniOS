@@ -6674,15 +6674,21 @@ void MetalCommandProcessor::LogResolveProbes() {
     }
     // A 16-wide grid, as many rows as keep it about square.
     const uint32_t probe_cols = 16;
-    const uint32_t probe_rows = std::clamp<uint32_t>(
-        (16 * probe->height + probe->width / 2) / probe->width, 1, 16);
-    XELOGI(
-        "Frame detail resolve probe after draw {}: {:08X} ({:08X} to {:08X} "
-        "written), {}x{} {} depth, {}x{} samples ('-' outside what was "
-        "written):",
-        probe->draw, probe->address, probe->written_begin, probe->written_end,
-        probe->width, probe->height, probe->is_float ? "20e4 float" : "unorm",
-        probe_cols, probe_rows);
+    const uint32_t probe_rows =
+        probe->pass
+            ? 0
+            : std::clamp<uint32_t>(
+                  (16 * probe->height + probe->width / 2) / probe->width, 1,
+                  16);
+    if (!probe->pass) {
+      XELOGI(
+          "Frame detail resolve probe after draw {}: {:08X} ({:08X} to {:08X} "
+          "written), {}x{} {} depth, {}x{} samples ('-' outside what was "
+          "written):",
+          probe->draw, probe->address, probe->written_begin, probe->written_end,
+          probe->width, probe->height, probe->is_float ? "20e4 float" : "unorm",
+          probe_cols, probe_rows);
+    }
     for (uint32_t row = 0; row < probe_rows; ++row) {
       const uint32_t y = (2 * row + 1) * probe->height / (2 * probe_rows);
       std::string probe_line;
@@ -6726,8 +6732,8 @@ void MetalCommandProcessor::LogResolveProbes() {
         depth24 = xenos::GpuSwap(texel, probe->endian) >> 8;
         return true;
       };
-      uint32_t written_rows = 0;
-      for (uint32_t y = 0; y < probe->height; ++y) {
+      uint32_t written_rows = probe->pass ? probe->height : 0;
+      for (uint32_t y = 0; y < probe->height && !probe->pass; ++y) {
         uint32_t depth24;
         if (read_depth24(0, y, depth24)) {
           written_rows = y + 1;
@@ -6771,7 +6777,7 @@ void MetalCommandProcessor::LogResolveProbes() {
         depth24 = texel >> 8;
         return true;
       };
-      if (written_rows) {
+      if (written_rows && !probe->pass) {
         std::string texels_line;
         const uint32_t positions[][2] = {{2, written_rows / 2},
                                          {6, written_rows / 2},
@@ -6857,9 +6863,14 @@ void MetalCommandProcessor::LogResolveProbes() {
                  block_y * 8, map_line);
         }
       };
-      log_coverage("resolve", read_depth24);
-      if (probe->edram_snapshot) {
-        log_coverage("edram", read_edram_depth24);
+      if (probe->pass) {
+        log_coverage(fmt::format("pass {} start edram", probe->pass).c_str(),
+                     read_edram_depth24);
+      } else {
+        log_coverage("resolve", read_depth24);
+        if (probe->edram_snapshot) {
+          log_coverage("edram", read_edram_depth24);
+        }
       }
     }
     if (probe->snapshot) {
@@ -7349,6 +7360,75 @@ void MetalCommandProcessor::BeginCommandBuffer() {
     }
     if (render_target_cache_) {
       render_target_cache_->ApplyXenosSamplePositions(pass_descriptor);
+    }
+    // Frame detail: 24-bit unorm depth (shadow maps) as the pass starts, after
+    // its render target transfers: dumped to EDRAM and copied for the log.
+    if (metal_perf_counters.frame_detail_frames.load(
+            std::memory_order_relaxed) &&
+        register_file_ && render_target_cache_ &&
+        render_target_cache_->GetEdramBuffer() &&
+        pass_descriptor->depthAttachment() &&
+        pass_descriptor->depthAttachment()->texture() && texture_cache_ &&
+        texture_cache_->draw_resolution_scale_x() == 1 &&
+        texture_cache_->draw_resolution_scale_y() == 1) {
+      const auto depth_info = register_file_->Get<reg::RB_DEPTH_INFO>();
+      const auto surface_info = register_file_->Get<reg::RB_SURFACE_INFO>();
+      if (depth_info.depth_format == xenos::DepthRenderTargetFormat::kD24S8) {
+        MetalResolveProbe probe;
+        probe.pass = frame_detail_passes_ + 1;
+        probe.edram_base_tiles = depth_info.depth_base;
+        // EDRAM samples, which match 1x pixels: 2x and 4x double the rows,
+        // 4x the columns.
+        probe.width = surface_info.surface_pitch << uint32_t(
+                          surface_info.msaa_samples >= xenos::MsaaSamples::k4X);
+        probe.edram_pitch_tiles =
+            (probe.width + xenos::kEdramTileWidthSamples - 1) /
+            xenos::kEdramTileWidthSamples;
+        probe.height =
+            (area_height
+                 ? area_height
+                 : uint32_t(
+                       pass_descriptor->depthAttachment()->texture()->height()))
+            << uint32_t(surface_info.msaa_samples >= xenos::MsaaSamples::k2X);
+        const uint32_t tile_bytes = xenos::kEdramTileWidthSamples *
+                                    xenos::kEdramTileHeightSamples *
+                                    sizeof(uint32_t);
+        const uint32_t tiles =
+            std::min(probe.edram_pitch_tiles *
+                         ((probe.height + xenos::kEdramTileHeightSamples - 1) /
+                          xenos::kEdramTileHeightSamples),
+                     xenos::kEdramTileCount);
+        if (tiles) {
+          render_target_cache_->DumpRenderTargets(
+              probe.edram_base_tiles, probe.edram_pitch_tiles,
+              tiles / probe.edram_pitch_tiles, probe.edram_pitch_tiles,
+              current_command_buffer_);
+          probe.edram_snapshot = device_->newBuffer(
+              tiles * tile_bytes, MTL::ResourceStorageModeShared);
+        }
+        MTL::BlitCommandEncoder* snapshot_blit =
+            probe.edram_snapshot ? current_command_buffer_->blitCommandEncoder()
+                                 : nullptr;
+        if (snapshot_blit) {
+          MTL::Buffer* edram = render_target_cache_->GetEdramBuffer();
+          // EDRAM addressing wraps around.
+          const uint32_t first_tiles =
+              std::min(tiles, xenos::kEdramTileCount - probe.edram_base_tiles);
+          snapshot_blit->copyFromBuffer(
+              edram, probe.edram_base_tiles * tile_bytes, probe.edram_snapshot,
+              0, first_tiles * tile_bytes);
+          if (tiles > first_tiles) {
+            snapshot_blit->copyFromBuffer(edram, 0, probe.edram_snapshot,
+                                          first_tiles * tile_bytes,
+                                          (tiles - first_tiles) * tile_bytes);
+          }
+          snapshot_blit->endEncoding();
+          probe.submission = GetCurrentSubmission();
+          resolve_probes_.push_back(probe);
+        } else if (probe.edram_snapshot) {
+          probe.edram_snapshot->release();
+        }
+      }
     }
     // Note: renderCommandEncoder() returns an autoreleased object, we must
     // retain it.

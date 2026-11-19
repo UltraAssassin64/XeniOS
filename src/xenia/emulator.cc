@@ -42,6 +42,7 @@
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/title_id_utils.h"
 #include "xenia/kernel/user_module.h"
+#include "xenia/kernel/util/shim_utils.h"
 #include "xenia/kernel/xam/achievement_manager.h"
 #include "xenia/kernel/xam/ui/disc_swap_ui.h"
 #include "xenia/kernel/xam/xam_module.h"
@@ -1739,6 +1740,60 @@ bool Emulator::ExceptionCallback(Exception* ex) {
                                  ex->fault_address()));
   } else if (ex->code() == Exception::Code::kIllegalInstruction) {
     crash_msg.append("Illegal Instruction\n");
+  }
+  // The guest address of the fault and its pages, and the guest stack and
+  // code (the registers below may be stale in JIT code).
+  {
+    auto& crash_global = xe::global_critical_region::mutex();
+    const bool crash_locked = crash_global.try_lock();
+    if (ex->code() == Exception::Code::kAccessViolation) {
+      const uint64_t crash_fault = ex->fault_address();
+      const uint64_t crash_virtual =
+          reinterpret_cast<uint64_t>(memory_->virtual_membase());
+      if (crash_fault >= crash_virtual &&
+          crash_fault - crash_virtual < 0x100000000ull) {
+        const uint32_t crash_guest = uint32_t(crash_fault - crash_virtual);
+        crash_msg.append(fmt::format("Guest address: 0x{:08X}", crash_guest));
+        BaseHeap* crash_heap = memory_->LookupHeap(crash_guest);
+        HeapAllocationInfo crash_info = {};
+        if (crash_locked && crash_heap &&
+            crash_heap->QueryRegionInfo(crash_guest, &crash_info)) {
+          crash_msg.append(fmt::format(
+              ", heap 0x{:08X}, region 0x{:08X} size 0x{:X} state 0x{:X} "
+              "protect 0x{:X}, allocation 0x{:08X} size 0x{:X}",
+              crash_heap->heap_base(), crash_info.base_address,
+              crash_info.region_size, crash_info.state, crash_info.protect,
+              crash_info.allocation_base, crash_info.allocation_size));
+        } else if (!crash_heap) {
+          crash_msg.append(", no heap");
+        }
+        crash_msg.append("\n");
+      } else {
+        crash_msg.append(
+            fmt::format("Host address outside guest virtual memory (base "
+                        "0x{:016X})\n",
+                        crash_virtual));
+      }
+    }
+    crash_msg.append(fmt::format("LR: 0x{:08X}\n", uint32_t(context->lr)));
+    if (crash_locked) {
+      crash_msg.append(fmt::format(
+          "Guest stack:{}\n",
+          kernel::shim::LogKernelCallStack(uint32_t(context->r[1]))));
+      const uint32_t crash_pc =
+          guest_function->MapMachineCodeToGuestAddress(ex->pc());
+      if (crash_pc >= 32 &&
+          kernel::shim::KernelCallReadable(crash_pc - 32, 64)) {
+        crash_msg.append(fmt::format("Code at 0x{:08X}:", crash_pc - 32));
+        for (uint32_t i = 0; i < 16; ++i) {
+          crash_msg.append(fmt::format(
+              " {:08X}", xe::load_and_swap<uint32_t>(memory_->TranslateVirtual(
+                             crash_pc - 32 + i * 4))));
+        }
+        crash_msg.append("\n");
+      }
+      crash_global.unlock();
+    }
   }
   crash_msg.append("Registers:\n");
   for (int i = 0; i < 32; i++) {

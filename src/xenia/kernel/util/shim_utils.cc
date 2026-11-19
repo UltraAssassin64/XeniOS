@@ -72,6 +72,8 @@ std::mutex kernel_call_threads_mutex;
 std::vector<KernelCallThreadState*> kernel_call_threads;
 thread_local KernelCallThreadState* kernel_call_this_thread = nullptr;
 
+}  // namespace
+
 // Guest return addresses up the stack from a frame: the back chain is at
 // 0(r1) and each function saves its return address at -8 from its caller's
 // frame.
@@ -122,6 +124,8 @@ std::string LogKernelCallStack(uint32_t kernel_call_frame) {
   kernel_call_global.unlock();
   return kernel_call_stack;
 }
+
+namespace {
 
 // The host program counter of another thread, read while it is stopped for
 // a moment; nothing that could take a lock runs while it is stopped. Apple
@@ -200,6 +204,40 @@ void LogKernelCallThreads() {
              kernel_call_state->handle.load(), kernel_call_handle,
              kernel_call_object, kernel_call_state->guest_arg1.load(),
              LogKernelCallStack(kernel_call_state->guest_stack_pointer));
+      // NtWaitForMultipleObjectsEx: r3 is the count, r4 the handle array.
+      if (kernel_call_last &&
+          !std::strcmp(kernel_call_last->name, "NtWaitForMultipleObjectsEx") &&
+          kernel_call_handle && kernel_call_handle <= 64 &&
+          kernel_call_global.try_lock()) {
+        std::string kernel_call_wait_objects;
+        const uint32_t kernel_call_handles = kernel_call_state->guest_arg1;
+        if (KernelCallReadable(kernel_call_handles, kernel_call_handle * 4)) {
+          for (uint32_t i = 0; i < kernel_call_handle; ++i) {
+            const uint32_t kernel_call_wait_handle =
+                xe::load_and_swap<uint32_t>(
+                    kernel_memory()->TranslateVirtual(kernel_call_handles) +
+                    i * 4);
+            auto kernel_call_wait_object =
+                kernel_state()->object_table()->LookupObject<XObject>(
+                    kernel_call_wait_handle, true);
+            fmt::format_to(std::back_inserter(kernel_call_wait_objects),
+                           " {:08X} ", kernel_call_wait_handle);
+            if (kernel_call_wait_object) {
+              fmt::format_to(std::back_inserter(kernel_call_wait_objects),
+                             "(type {} name \"{}\")",
+                             uint32_t(kernel_call_wait_object->type()),
+                             kernel_call_wait_object->name());
+            } else {
+              kernel_call_wait_objects += "(no object)";
+            }
+          }
+        } else {
+          kernel_call_wait_objects = " (array unreadable)";
+        }
+        kernel_call_global.unlock();
+        XELOGW("Kernel thread {:08X}: waits on{}",
+               kernel_call_state->handle.load(), kernel_call_wait_objects);
+      }
     }
   }
 

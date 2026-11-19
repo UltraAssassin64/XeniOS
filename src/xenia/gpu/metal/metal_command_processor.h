@@ -670,6 +670,9 @@ class MetalCommandProcessor : public CommandProcessor {
     MTL::Buffer* edram_snapshot = nullptr;
     uint32_t edram_base_tiles = 0;
     uint32_t edram_pitch_tiles = 0;
+    // Not 0: not a resolve but the EDRAM of a 24-bit unorm depth target at the
+    // start of this frame detail pass (width and height in EDRAM samples).
+    uint32_t pass = 0;
   };
   std::vector<MetalResolveProbe> resolve_probes_;
   std::chrono::steady_clock::time_point metal_perf_last_swap_{};

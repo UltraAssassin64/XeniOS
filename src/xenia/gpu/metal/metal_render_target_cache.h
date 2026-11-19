@@ -191,6 +191,12 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
 
   MTL::Buffer* GetEdramBuffer() const { return edram_buffer_; }
 
+  // Writes contents of host render targets within rectangles from
+  // ResolveInfo::GetCopyEdramTileSpan to edram_buffer_.
+  void DumpRenderTargets(uint32_t dump_base, uint32_t dump_row_length_used,
+                         uint32_t dump_rows, uint32_t dump_pitch,
+                         MTL::CommandBuffer* command_buffer = nullptr);
+
   // Resolve (copy) render targets to shared memory
   bool Resolve(Memory& memory, uint32_t& written_address,
                uint32_t& written_length,
@@ -534,11 +540,6 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
       const Transfer::Rectangle* resolve_clear_rectangle = nullptr,
       MTL::CommandBuffer* command_buffer = nullptr);
 
-  // Writes contents of host render targets within rectangles from
-  // ResolveInfo::GetCopyEdramTileSpan to edram_buffer_.
-  void DumpRenderTargets(uint32_t dump_base, uint32_t dump_row_length_used,
-                         uint32_t dump_rows, uint32_t dump_pitch,
-                         MTL::CommandBuffer* command_buffer = nullptr);
 };
 
 }  // namespace metal
