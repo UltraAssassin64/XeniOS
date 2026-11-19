@@ -1277,7 +1277,8 @@ Owner's decisions (2026-11-19):
   border/inner positions, resolved and EDRAM), and "Frame detail edram
   edge/map" next to "resolve edge/map". If EDRAM has 1.0 in the border and the
   resolve doesn't, the resolve is wrong; if EDRAM lacks it too, the clears or
-  the 1x/4x transfers are.
+  the 1x/4x transfers are. Built as 9623 (`xenios_ios_arm64_0.2.9-9623`,
+  commit 4868e78, CI run 317 passed).
 
 Not ported: `ios_guest_threads_user_initiated_qos` is defined in
 `xthread.cc` here but never read; in XeniOS it is only a settings entry.
