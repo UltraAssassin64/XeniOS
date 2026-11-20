@@ -189,7 +189,7 @@ jobs:
       matrix:
         include:
           - label: "iOS arm64"
-            runner: "macos-15"
+            runner: "macos-26"
             artifact_name: "xenios_ios_iphone_ipad"
             artifact_path: "scratch/artifacts/xenios_ios_iphone_ipad.ipa"
             script_args: "--skip-macos-arm64 --skip-macos-x86_64"
