@@ -406,16 +406,22 @@ jobs:
 
           gh release upload "${RELEASE_TAG}" \
             artifacts/ios/xenios_ios_iphone_ipad.ipa \
-            artifacts/macos-arm64/xenios_macos_apple_silicon.dmg \
-            artifacts/macos-x86_64/xenios_macos_intel.dmg \
             --clobber
-
+            
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" > release.json
 
           echo "html_url=$(jq -r '.html_url' release.json)" >> "$GITHUB_OUTPUT"
           echo "ios_download_url=$(jq -r '.assets[] | select(.name == \"xenios_ios_iphone_ipad.ipa\") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
-          echo "macos_arm64_download_url=$(jq -r '.assets[] | select(.name == \"xenios_macos_apple_silicon.dmg\") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
-          echo "macos_x86_64_download_url=$(jq -r '.assets[] | select(.name == \"xenios_macos_intel.dmg\") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
+      #   echo "macos_arm64_download_url=$(jq -r '.assets[] | select(.name == \"xenios_macos_apple_silicon.dmg\") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
+      #   echo "macos_x86_64_download_url=$(jq -r '.assets[] | select(.name == \"xenios_macos_intel.dmg\") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
+
+      #   gh release upload "${RELEASE_TAG}" \
+      #     artifacts/ios/xenios_ios_iphone_ipad.ipa \
+      #     artifacts/macos-arm64/xenios_macos_apple_silicon.dmg \
+      #     artifacts/macos-x86_64/xenios_macos_intel.dmg \
+      #     --clobber
+
+          
 
      # - name: Check out xenios.jp
         #uses: actions/checkout@v4
