@@ -154,17 +154,17 @@ void LogKernelCallStackCode(uint32_t kernel_call_lr,
         kernel_call_memory->TranslateVirtual(kernel_call_caller_frame - 8)));
     kernel_call_frame = kernel_call_caller_frame;
   }
-  // 64 words before each return address and 8 after, each address once per
+  // 128 words before each return address and 8 after, each address once per
   // run, so a stuck loop's condition can be disassembled from the log.
   static std::unordered_set<uint32_t> kernel_call_code_logged;
   for (uint32_t kernel_call_return : kernel_call_returns) {
-    const uint32_t kernel_call_code = (kernel_call_return - 0x100) & ~3u;
+    const uint32_t kernel_call_code = (kernel_call_return - 0x200) & ~3u;
     if (kernel_call_return < 0x80000000u || kernel_call_return >= 0xF0000000u ||
         !kernel_call_code_logged.insert(kernel_call_return).second ||
-        !KernelCallReadable(kernel_call_code, 0x120)) {
+        !KernelCallReadable(kernel_call_code, 0x220)) {
       continue;
     }
-    for (uint32_t kernel_call_line = 0; kernel_call_line < 72;
+    for (uint32_t kernel_call_line = 0; kernel_call_line < 136;
          kernel_call_line += 8) {
       std::string kernel_call_words;
       for (uint32_t kernel_call_word = kernel_call_line;
@@ -429,6 +429,12 @@ void LogKernelCallThreads() {
         kernel_call_context
             ? LogKernelCallStack(uint32_t(kernel_call_context->r[1]))
             : std::string());
+    // The code of its call stack too (a thread running guest code may be the
+    // one others wait for: Spider-Man: Web of Shadows' loading-screen job).
+    if (kernel_call_context) {
+      LogKernelCallStackCode(uint32_t(kernel_call_context->lr),
+                             uint32_t(kernel_call_context->r[1]));
+    }
     // The game code around the first sample, to disassemble the loop.
     if (kernel_call_guest_pc && kernel_call_global.try_lock()) {
       Memory* kernel_call_memory = kernel_memory();

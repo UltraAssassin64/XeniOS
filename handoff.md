@@ -1990,6 +1990,27 @@ the owner's Actions were briefly disabled, hence an extra comment commit).
   Master's job wait, the music worker's waits and 82A23390/82A18710
   (tools/dis_storm.py reads these lines).
 
+### Build 9651 results (owner, zip "SpideyWoS_logs_1": 23-03-41, 23-04-41, stuck 154 s)
+
+- Music worker F8000064 (82A25CE8): `wait(event at this+0x4C, INFINITE);
+  while (!byte this+0x50) { process queue (82A25B50); wait again }`. Idle,
+  as designed. Game Master posts to it through 82A231F0 (from 82A18710,
+  which then waits for the reply at 82A181E0); 82A2338C sets the event.
+  Not the deadlock.
+- Game Master: 82962D70 with r26 = -1 loops (up to 10000 times, then
+  again) while the job system's pending + active counters (0x82F718C8
+  +0x48 / +0x4C) are non-zero, trying to run a job itself (82962FE8) and
+  sleeping (82B13248 -> KeDelayExecutionThread) when there is none.
+  Nothing is pending, so one job is active: JQ worker 1 (F8000018) runs
+  the loading-screen render job (stack 82ABA2F8 829258C4 829636A0), sitting
+  most of the time in D3D's GPU fence wait (82ABA2F0: until the value at
+  *(device+0x2A90) reaches the target, 82AC0C10 spinning) - ordinary frame
+  pacing, frames do come out at 30 FPS. So the question is what ends that
+  render job (or what Game Master's wait expects to end it).
+- Next build: the report also dumps the code of each running guest
+  thread's stack (829258C4 etc.), and dumps are 128 words before each
+  return address (was 64). tools/dis_storm.py must start 0x200 before.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own
