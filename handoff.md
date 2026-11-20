@@ -2161,6 +2161,36 @@ quit flag, 0x82F718BC idle-worker count.
 - The job-system, music and fence investigations above were not the cause;
   their diagnostics (debug watch, code dump, report code dumps) stay.
 
+### Batman: Arkham City first look (owner, zip "Batman_Arkham_City", build 9658, logs 08-33-33, 08-37-04, 08-39-09 + 6 traces)
+
+- Menus and intros: 33.3 ms (30 FPS cap). Gameplay: 45-65 ms (15-22 FPS),
+  spikes of 100-1800 ms.
+- Hitches (scripted camera moments): shader compiles, 50-60 per 120 frames
+  at ~300-400 ms of compile time each (20.8 s per window), draws waiting
+  for them 91-109 times (~1.2-1.5 s per window, async compile with
+  metal_async_compile_wait_ms = 16), and 1.1-1.7 GB uploaded per window.
+- Steady gameplay is GPU bound (busy 90-105%): per frame ~57 ms of GPU,
+  draws 29.1 ms in 66 passes (770 draws), rt transfer 8.7 ms, texture load
+  6.0, edram dump 5.2 and resolve 4.5 (50 resolves), texture upload blit
+  3.7. The main 1280x736 target is drawn in ~16.7 passes per frame, each
+  loading and storing it: 785 MB of attachment traffic per frame. Cutting
+  pass breaks (most from the resolves) is the lever, for both Batman games.
+- Traces not analysed yet (tools/xtr_parse.py + edram_sim.py work on them).
+
+### Per-game settings and copy/paste (owner's request, 2026-11-20)
+
+- Long-press a game > "Game Settings" (above Compatibility): the settings
+  screen for that title. Rows start from the global values with the game's
+  config/<title id>.config.toml overrides on top (the file
+  config::LoadGameConfigForFile already loads at launch); rows that differ
+  say "Changed for this game"; Save writes only the rows that differ from
+  global (removing the others' overrides, keeping overrides of settings not
+  on screen), or deletes the file when none differ; "Use Global" deletes it.
+  App-level (user default) rows and actions are not per game.
+- Text settings' editor: Copy (left) and Paste (right) buttons in the
+  field, since its edit menu doesn't show (cause not found in the app; no
+  canPerformAction or first-responder overrides).
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

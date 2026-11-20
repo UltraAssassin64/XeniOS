@@ -33,6 +33,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -3954,6 +3955,134 @@ bool ApplyIOSConfigSections(const std::vector<IOSConfigSection>& sections) {
   }
   config::SaveConfig();
   return ok;
+}
+
+// Per-game settings: the rows of a game's settings screen start from the
+// global values, with the game's overrides (config/<title id>.config.toml)
+// applied on top; saving writes the rows that differ from the global value.
+
+// Whether two items of the same setting hold different values.
+bool IOSConfigItemValuesDiffer(const IOSConfigItem& item, const IOSConfigItem& global_item) {
+  switch (item.control_type) {
+    case IOSConfigControlType::kToggle:
+      return item.bool_value != global_item.bool_value;
+    case IOSConfigControlType::kChoiceInt32:
+    case IOSConfigControlType::kChoiceUInt64:
+    case IOSConfigControlType::kChoiceString:
+      return item.choice_value != global_item.choice_value;
+    case IOSConfigControlType::kText:
+      return item.string_value != global_item.string_value;
+    default:
+      return false;
+  }
+}
+
+void ApplyGameConfigToSections(std::vector<IOSConfigSection>& sections,
+                               const toml::table& game_config) {
+  for (IOSConfigSection& section : sections) {
+    for (IOSConfigItem& item : section.items) {
+      cvar::IConfigVar* var = GetConfigVar(item.key);
+      if (!var || item.storage != IOSConfigStorage::kConfigVar) {
+        continue;
+      }
+      const auto node = game_config.at_path(var->category() + "." + var->name());
+      if (!node) {
+        continue;
+      }
+      std::ostringstream text_stream;
+      text_stream << node;
+      const std::string text = TrimAscii(text_stream.str());
+      switch (item.control_type) {
+        case IOSConfigControlType::kToggle:
+          if (auto value = node.value<bool>()) {
+            item.bool_value = *value;
+          }
+          break;
+        case IOSConfigControlType::kChoiceInt32:
+        case IOSConfigControlType::kChoiceUInt64:
+          if (auto value = node.value<int64_t>()) {
+            item.choice_value = *value;
+          }
+          break;
+        case IOSConfigControlType::kChoiceString:
+          if (auto value = node.value<std::string>()) {
+            for (size_t i = 0; i < item.choice_string_values.size(); ++i) {
+              if (item.choice_string_values[i] == *value) {
+                item.choice_value = static_cast<int64_t>(i);
+                item.string_value = *value;
+              }
+            }
+          }
+          break;
+        case IOSConfigControlType::kText:
+          item.string_value = text;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+}
+
+// The game's config with every row on screen that differs from the global
+// value written, and every other row's override removed; overrides of
+// settings not on screen are kept.
+toml::table BuildGameConfigTable(const std::vector<IOSConfigSection>& sections,
+                                 const std::vector<IOSConfigSection>& global_sections,
+                                 toml::table game_config) {
+  for (size_t s = 0; s < sections.size() && s < global_sections.size(); ++s) {
+    for (size_t i = 0; i < sections[s].items.size() && i < global_sections[s].items.size(); ++i) {
+      const IOSConfigItem& item = sections[s].items[i];
+      cvar::IConfigVar* var = GetConfigVar(item.key);
+      if (!var || item.storage != IOSConfigStorage::kConfigVar) {
+        continue;
+      }
+      toml::table* category = game_config[var->category()].as_table();
+      if (!IOSConfigItemValuesDiffer(item, global_sections[s].items[i])) {
+        if (category) {
+          category->erase(var->name());
+          if (category->empty()) {
+            game_config.erase(var->category());
+          }
+        }
+        continue;
+      }
+      if (!category) {
+        game_config.insert_or_assign(var->category(), toml::table{});
+        category = game_config[var->category()].as_table();
+      }
+      switch (item.control_type) {
+        case IOSConfigControlType::kToggle:
+          category->insert_or_assign(var->name(), item.bool_value);
+          break;
+        case IOSConfigControlType::kChoiceInt32:
+        case IOSConfigControlType::kChoiceUInt64:
+          category->insert_or_assign(var->name(), item.choice_value);
+          break;
+        case IOSConfigControlType::kChoiceString:
+          if (item.choice_value >= 0 &&
+              item.choice_value < static_cast<int64_t>(item.choice_string_values.size())) {
+            category->insert_or_assign(
+                var->name(), item.choice_string_values[static_cast<size_t>(item.choice_value)]);
+          }
+          break;
+        case IOSConfigControlType::kText:
+          // As the global save parses it: TOML text, else an unquoted string.
+          try {
+            toml::parse_result parsed = toml::parse("value = " + item.string_value);
+            if (toml::node* value = parsed.get("value")) {
+              category->insert_or_assign(var->name(), *value);
+            }
+          } catch (const toml::parse_error&) {
+            category->insert_or_assign(var->name(), item.string_value);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  return game_config;
 }
 
 }  // namespace
@@ -7891,6 +8020,8 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 @end
 
 @interface XeniaConfigViewController () <UISearchBarDelegate>
+// The settings of one game (its config/<title id>.config.toml overrides).
+- (instancetype)initWithGameTitleId:(uint32_t)title_id title:(NSString*)title;
 @end
 
 @implementation XeniaConfigViewController {
@@ -7901,6 +8032,40 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
   std::vector<std::vector<size_t>> shown_items_;
   BOOL hasPendingChanges_;
   UIBarButtonItem* saveButton_;
+  // Per-game settings: the game (0 for the global settings), its name, and
+  // the global values of the rows, to save only what differs.
+  uint32_t game_title_id_;
+  NSString* game_title_;
+  std::vector<IOSConfigSection> global_sections_;
+}
+
+- (instancetype)initWithGameTitleId:(uint32_t)title_id title:(NSString*)title {
+  self = [super initWithStyle:UITableViewStyleInsetGrouped];
+  if (self) {
+    game_title_id_ = title_id;
+    game_title_ = [title copy];
+  }
+  return self;
+}
+
+// In a game's settings, whether the row at the index path differs from the
+// global value (shown on the row).
+- (BOOL)isGameOverrideAtIndexPath:(NSIndexPath*)indexPath {
+  if (!game_title_id_ || indexPath.section < 0 ||
+      indexPath.section >= static_cast<NSInteger>(shown_sections_.size())) {
+    return NO;
+  }
+  const size_t section_index = shown_sections_[indexPath.section];
+  const std::vector<size_t>& items = shown_items_[indexPath.section];
+  if (indexPath.row < 0 || indexPath.row >= static_cast<NSInteger>(items.size()) ||
+      section_index >= global_sections_.size() ||
+      items[indexPath.row] >= global_sections_[section_index].items.size()) {
+    return NO;
+  }
+  return IOSConfigItemValuesDiffer(sections_[section_index].items[items[indexPath.row]],
+                                   global_sections_[section_index].items[items[indexPath.row]])
+             ? YES
+             : NO;
 }
 
 - (UIView*)restartNoticeHeaderView {
@@ -8013,6 +8178,27 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
     self.tableView.sectionHeaderTopPadding = 0;
   }
   sections_ = BuildIOSConfigSections();
+  if (game_title_id_) {
+    // Only config variables can be set per game; the rows start from the
+    // global values with the game's overrides on top.
+    for (IOSConfigSection& section : sections_) {
+      section.items.erase(std::remove_if(section.items.begin(), section.items.end(),
+                                         [](const IOSConfigItem& item) {
+                                           return item.storage != IOSConfigStorage::kConfigVar ||
+                                                  item.control_type ==
+                                                      IOSConfigControlType::kAction;
+                                         }),
+                          section.items.end());
+    }
+    sections_.erase(
+        std::remove_if(sections_.begin(), sections_.end(),
+                       [](const IOSConfigSection& section) { return section.items.empty(); }),
+        sections_.end());
+    global_sections_ = sections_;
+    ApplyGameConfigToSections(sections_, config::LoadGameConfig(game_title_id_));
+    self.navigationItem.prompt =
+        [NSString stringWithFormat:@"%@ - settings for this game", game_title_ ?: @"Game"];
+  }
   [self applySettingsSearch:nil];
   hasPendingChanges_ = NO;
   self.tableView.tableHeaderView = [self restartNoticeHeaderView];
@@ -8029,6 +8215,14 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
                                                 action:@selector(saveTapped:)];
   saveButton_.enabled = NO;
   self.navigationItem.rightBarButtonItem = saveButton_;
+  if (game_title_id_) {
+    UIBarButtonItem* use_global =
+        [[[UIBarButtonItem alloc] initWithTitle:@"Use Global"
+                                          style:UIBarButtonItemStylePlain
+                                         target:self
+                                         action:@selector(useGlobalSettingsTapped:)] autorelease];
+    self.navigationItem.rightBarButtonItems = @[ saveButton_, use_global ];
+  }
 
   // A plain search bar rather than a UISearchController, which would be
   // presented by this controller while active and block its alerts.
@@ -8307,6 +8501,10 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 
   if (item->control_type == IOSConfigControlType::kToggle) {
     content.secondaryText = ToNSString(item->subtitle);
+    if ([self isGameOverrideAtIndexPath:indexPath]) {
+      content.secondaryText =
+          [@"Changed for this game · " stringByAppendingString:content.secondaryText ?: @""];
+    }
     UISwitch* toggle = [[[UISwitch alloc] init] autorelease];
     toggle.on = item->bool_value;
     [toggle addTarget:self
@@ -8332,6 +8530,10 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
       content.secondaryText = ToNSString(value_title + " · " + subtitle);
     } else {
       content.secondaryText = ToNSString(subtitle);
+    }
+    if ([self isGameOverrideAtIndexPath:indexPath]) {
+      content.secondaryText =
+          [@"Changed for this game · " stringByAppendingString:content.secondaryText ?: @""];
     }
     cell.contentConfiguration = content;
     cell.accessoryView = nil;
@@ -8390,6 +8592,36 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
       text_field.autocorrectionType = UITextAutocorrectionTypeNo;
       text_field.autocapitalizationType = UITextAutocapitalizationTypeNone;
       text_field.clearButtonMode = UITextFieldViewModeWhileEditing;
+      // Copy and paste buttons in the field, for addresses and the like: the
+      // edit menu doesn't show for this field. __block: the buttons' handlers
+      // must not retain the field that holds them (no ARC here).
+      __block UITextField* field = text_field;
+      UIButton* copy_button = [UIButton buttonWithType:UIButtonTypeSystem];
+      [copy_button setImage:[UIImage systemImageNamed:@"doc.on.doc"] forState:UIControlStateNormal];
+      copy_button.frame = CGRectMake(0, 0, 30, 28);
+      copy_button.accessibilityLabel = @"Copy";
+      [copy_button addAction:[UIAction actionWithHandler:^(__unused UIAction* action) {
+                     [UIPasteboard generalPasteboard].string = field.text ?: @"";
+                   }]
+            forControlEvents:UIControlEventTouchUpInside];
+      text_field.leftView = copy_button;
+      text_field.leftViewMode = UITextFieldViewModeAlways;
+      UIButton* paste_button = [UIButton buttonWithType:UIButtonTypeSystem];
+      [paste_button setImage:[UIImage systemImageNamed:@"doc.on.clipboard"]
+                    forState:UIControlStateNormal];
+      paste_button.frame = CGRectMake(0, 0, 30, 28);
+      paste_button.accessibilityLabel = @"Paste";
+      [paste_button addAction:[UIAction actionWithHandler:^(__unused UIAction* action) {
+                      NSString* pasted = [UIPasteboard generalPasteboard].string;
+                      if (pasted) {
+                        field.text = [pasted
+                            stringByTrimmingCharactersInSet:[NSCharacterSet
+                                                                whitespaceAndNewlineCharacterSet]];
+                      }
+                    }]
+             forControlEvents:UIControlEventTouchUpInside];
+      text_field.rightView = paste_button;
+      text_field.rightViewMode = UITextFieldViewModeAlways;
     }];
     [editor addAction:[UIAlertAction actionWithTitle:@"Cancel"
                                                style:UIAlertActionStyleCancel
@@ -8430,6 +8662,26 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
   [tableView deselectRowAtIndexPath:indexPath animated:YES];
 }
 
+// Removes the game's overrides, so it uses the global settings again.
+- (void)useGlobalSettingsTapped:(id)sender {
+  UIAlertController* confirm = [UIAlertController
+      alertControllerWithTitle:@"Use Global Settings?"
+                       message:[NSString stringWithFormat:@"Removes every setting changed for %@.",
+                                                          game_title_ ?: @"this game"]
+                preferredStyle:UIAlertControllerStyleAlert];
+  [confirm addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+  [confirm addAction:[UIAlertAction actionWithTitle:@"Use Global"
+                                              style:UIAlertActionStyleDestructive
+                                            handler:^(__unused UIAlertAction* action) {
+                                              config::DeleteGameConfig(self->game_title_id_);
+                                              [self dismissViewControllerAnimated:YES
+                                                                       completion:nil];
+                                            }]];
+  [self presentViewController:confirm animated:YES completion:nil];
+}
+
 - (void)cancelTapped:(id)sender {
   if (!hasPendingChanges_) {
     [self dismissViewControllerAnimated:YES completion:nil];
@@ -8453,6 +8705,41 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 }
 
 - (void)saveTapped:(id)sender {
+  if (game_title_id_) {
+    toml::table game_config =
+        BuildGameConfigTable(sections_, global_sections_, config::LoadGameConfig(game_title_id_));
+    BOOL game_saved = YES;
+    try {
+      if (game_config.empty()) {
+        game_saved = config::DeleteGameConfig(game_title_id_) ? YES : NO;
+      } else {
+        config::SaveGameConfig(game_title_id_, game_config);
+      }
+    } catch (const std::exception&) {
+      game_saved = NO;
+    }
+    hasPendingChanges_ = NO;
+    saveButton_.enabled = NO;
+    UIAlertController* game_alert = [UIAlertController
+        alertControllerWithTitle:game_saved ? @"Game Settings Saved" : @"Could Not Save"
+                         message:game_saved
+                                     ? [NSString
+                                           stringWithFormat:@"Saved for %@. They apply the next "
+                                                            @"time the game starts; other games "
+                                                            @"keep the global settings.",
+                                                            game_title_ ?: @"this game"]
+                                     : @"The game's settings could not be written. Check "
+                                       @"xenia.log."
+                  preferredStyle:UIAlertControllerStyleAlert];
+    [game_alert addAction:[UIAlertAction actionWithTitle:@"Done"
+                                                   style:UIAlertActionStyleDefault
+                                                 handler:^(__unused UIAlertAction* action) {
+                                                   [self dismissViewControllerAnimated:YES
+                                                                            completion:nil];
+                                                 }]];
+    [self presentViewController:game_alert animated:YES completion:nil];
+    return;
+  }
   BOOL only_frame_detail_log = OnlyFrameDetailLogChanged(sections_) ? YES : NO;
   BOOL saved = ApplyIOSConfigSections(sections_) ? YES : NO;
   hasPendingChanges_ = NO;
@@ -11663,6 +11950,16 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
                                  handler:^(__unused UIAction* action) {
                                    [self launchGameAtPath:game_path displayName:game_title];
                                  }];
+                     UIAction* game_settings_action =
+                         [UIAction actionWithTitle:@"Game Settings"
+                                             image:[UIImage systemImageNamed:@"slider.horizontal.3"]
+                                        identifier:nil
+                                           handler:^(__unused UIAction* action) {
+                                             [self presentGameSettingsForIndex:game_index];
+                                           }];
+                     if (game.title_id == 0) {
+                       game_settings_action.attributes = UIMenuElementAttributesDisabled;
+                     }
                      UIAction* compatibility_action =
                          [UIAction actionWithTitle:@"Compatibility"
                                              image:[UIImage systemImageNamed:@"checkmark.shield"]
@@ -11695,8 +11992,8 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
                      }
                      return [UIMenu menuWithTitle:@""
                                          children:@[
-                                           play_action, compatibility_action, content_action,
-                                           copy_launch_url_action
+                                           play_action, game_settings_action, compatibility_action,
+                                           content_action, copy_launch_url_action
                                          ]];
                    }];
 }
@@ -11784,8 +12081,22 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 
 - (void)openSettingsTapped:(UIButton*)sender {
   (void)sender;
-  XeniaConfigViewController* settings_vc =
-      [[XeniaConfigViewController alloc] initWithStyle:UITableViewStyleInsetGrouped];
+  [self presentSettingsController:[[XeniaConfigViewController alloc]
+                                      initWithStyle:UITableViewStyleInsetGrouped]];
+}
+
+// The settings of one game (long-press menu > Game Settings).
+- (void)presentGameSettingsForIndex:(size_t)game_index {
+  if (game_index >= discovered_games_.size() || !discovered_games_[game_index].title_id) {
+    return;
+  }
+  const IOSDiscoveredGame& game = discovered_games_[game_index];
+  [self presentSettingsController:[[XeniaConfigViewController alloc]
+                                      initWithGameTitleId:game.title_id
+                                                    title:ToNSString(game.title)]];
+}
+
+- (void)presentSettingsController:(XeniaConfigViewController*)settings_vc {
   XeniaLandscapeNavigationController* nav =
       [[XeniaLandscapeNavigationController alloc] initWithRootViewController:settings_vc];
   BOOL landscape_presentation =
