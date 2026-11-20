@@ -46,14 +46,14 @@ DEFINE_bool(
     "GPU");
 DEFINE_bool(
     msaa_samples_as_pixels, false,
-    "With host render targets, keep each MSAA render target as a 1x render "
-    "target of its samples (2x2 pixels per pixel at 4x MSAA, 1x2 at 2x), "
-    "drawing to it scaled by that grid. The guest's 1x and MSAA views of the "
-    "same EDRAM data then share one render target, with no copies between "
-    "them. Shading and coverage become per-sample (like supersampling), so "
-    "games that really use MSAA shade 2x to 4x as many pixels, and alpha to "
-    "coverage becomes an on / off threshold. Supported by the Metal "
-    "SPIRV-Cross path only.",
+    "With host render targets, draw MSAA clears and other rectangle lists "
+    "(whose result doesn't depend on where the samples are) into the 1x "
+    "render target of the same EDRAM, whose pixels are the samples (2x2 per "
+    "pixel at 4x MSAA, 1x2 at 2x), scaled by that grid, instead of copying "
+    "the data to a host MSAA render target and back. Kept on host MSAA: other "
+    "draws (real geometry, which games may place relative to the Xbox 360 "
+    "sample positions), and rectangle lists while the host MSAA render target "
+    "holds the data. Supported by the Metal SPIRV-Cross path only.",
     "GPU");
 // Lossless round trip: 545407F2.
 // Lossy round trip with the "greater or equal" test afterwards: 4D530919.
@@ -590,6 +590,16 @@ void RenderTargetCache::ClearCache() {
 
 void RenderTargetCache::BeginFrame() { ResetAccumulatedRenderTargets(); }
 
+bool RenderTargetCache::IsEdramTileOwnedBy(uint32_t tile,
+                                           RenderTargetKey key) const {
+  auto it = ownership_ranges_.upper_bound(tile);
+  if (it == ownership_ranges_.cbegin()) {
+    return false;
+  }
+  --it;
+  return it->second.end_tiles > tile && it->second.render_target == key;
+}
+
 bool RenderTargetCache::Update(bool is_rasterization_done,
                                reg::RB_DEPTHCONTROL normalized_depth_control,
                                uint32_t normalized_color_mask,
@@ -597,6 +607,7 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
   const RegisterFile& regs = register_file();
   bool interlock_barrier_only = GetPath() == Path::kPixelShaderInterlock;
   last_update_height_used_ = 0;
+  last_update_samples_as_pixels_ = xenos::MsaaSamples::k1X;
 
   auto rb_surface_info = regs.Get<reg::RB_SURFACE_INFO>();
   xenos::MsaaSamples msaa_samples = rb_surface_info.msaa_samples;
@@ -610,15 +621,6 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
   }
   uint32_t msaa_samples_x_log2 =
       uint32_t(msaa_samples >= xenos::MsaaSamples::k4X);
-  // msaa_samples_as_pixels: the render targets of an MSAA surface are the 1x
-  // render targets of the same EDRAM, whose pixels are its samples.
-  xenos::MsaaSamples storage_msaa_samples = msaa_samples;
-  last_update_samples_as_pixels_ = xenos::MsaaSamples::k1X;
-  if (!interlock_barrier_only && cvars::msaa_samples_as_pixels &&
-      SupportsMsaaSamplesAsPixels()) {
-    storage_msaa_samples = xenos::MsaaSamples::k1X;
-    last_update_samples_as_pixels_ = msaa_samples;
-  }
   uint32_t pitch_pixels = rb_surface_info.surface_pitch;
   // surface_pitch 0 should be handled in disabling rasterization (hopefully
   // it's safe to assume that).
@@ -743,6 +745,35 @@ bool RenderTargetCache::Update(bool is_rasterization_done,
       if (edram_bases[rt_other_index] == edram_base) {
         depth_and_color_rts_used_bits &= ~(uint32_t(1) << rt_other_index);
       }
+    }
+  }
+
+  // msaa_samples_as_pixels: for a rectangle list (clears and screen-space
+  // passes: whole pixels are covered alike wherever the samples are), the
+  // render targets of an MSAA surface are the 1x render targets of the same
+  // EDRAM, whose pixels are its samples - unless the host MSAA render target
+  // holds that EDRAM now, which then keeps it (no transfer either way).
+  // Other draws keep host MSAA and its sample positions, which games may
+  // depend on: UE3 shifts its 2x passes so that Xenos sample 0 is at the 1x
+  // pixel centre, and depth restored from it must match the 1x passes
+  // (Batman: Arkham Asylum's shading broke when its 2x passes were drawn to
+  // samples as pixels).
+  xenos::MsaaSamples storage_msaa_samples = msaa_samples;
+  uint32_t first_rt_index;
+  if (msaa_samples != xenos::MsaaSamples::k1X && !interlock_barrier_only &&
+      cvars::msaa_samples_as_pixels && SupportsMsaaSamplesAsPixels() &&
+      regs.Get<reg::VGT_DRAW_INITIATOR>().prim_type ==
+          xenos::PrimitiveType::kRectangleList &&
+      xe::bit_scan_forward(depth_and_color_rts_used_bits, &first_rt_index)) {
+    RenderTargetKey msaa_key;
+    msaa_key.base_tiles = edram_bases[first_rt_index];
+    msaa_key.pitch_tiles_at_32bpp = pitch_tiles_at_32bpp;
+    msaa_key.msaa_samples = msaa_samples;
+    msaa_key.is_depth = first_rt_index == 0;
+    msaa_key.resource_format = resource_formats[first_rt_index];
+    if (!IsEdramTileOwnedBy(msaa_key.base_tiles, msaa_key)) {
+      storage_msaa_samples = xenos::MsaaSamples::k1X;
+      last_update_samples_as_pixels_ = msaa_samples;
     }
   }
 
@@ -1229,11 +1260,6 @@ bool RenderTargetCache::PrepareHostRenderTargetsResolveClear(
       uint32_t(msaa_samples >= xenos::MsaaSamples::k4X);
   uint32_t msaa_samples_y_log2 =
       uint32_t(msaa_samples >= xenos::MsaaSamples::k2X);
-  // msaa_samples_as_pixels, as in Update.
-  xenos::MsaaSamples storage_msaa_samples =
-      cvars::msaa_samples_as_pixels && SupportsMsaaSamplesAsPixels()
-          ? xenos::MsaaSamples::k1X
-          : msaa_samples;
   if (pitch_tiles_at_32bpp >
       ((xenos::kTexture2DCubeMaxWidthHeight << msaa_samples_x_log2) +
        (xenos::kEdramTileWidthSamples - 1)) /
@@ -1353,6 +1379,37 @@ bool RenderTargetCache::PrepareHostRenderTargetsResolveClear(
              ? xenos::kEdramTileCount
              : 0) +
             depth_clear_start_tiles_wrapped - color_clear_start_tiles_wrapped);
+  }
+
+  // msaa_samples_as_pixels: a clear covers whole pixels wherever the samples
+  // are, so as for a rectangle list in Update, the 1x render targets of the
+  // samples, unless the host MSAA render target holds the EDRAM now.
+  xenos::MsaaSamples storage_msaa_samples = msaa_samples;
+  if (msaa_samples != xenos::MsaaSamples::k1X &&
+      cvars::msaa_samples_as_pixels && SupportsMsaaSamplesAsPixels() &&
+      (depth_clear_length_tiles || color_clear_length_tiles)) {
+    RenderTargetKey msaa_key;
+    msaa_key.pitch_tiles_at_32bpp = pitch_tiles_at_32bpp;
+    msaa_key.msaa_samples = msaa_samples;
+    uint32_t clear_first_tile;
+    if (depth_clear_length_tiles) {
+      msaa_key.base_tiles = resolve_info.depth_original_base;
+      msaa_key.is_depth = 1;
+      msaa_key.resource_format = resolve_info.depth_edram_info.format;
+      clear_first_tile = resolve_info.depth_original_base +
+                         depth_clear_start_tiles_base_relative;
+    } else {
+      msaa_key.base_tiles = resolve_info.color_original_base;
+      msaa_key.resource_format =
+          uint32_t(GetColorResourceFormat(xenos::ColorRenderTargetFormat(
+              resolve_info.color_edram_info.format)));
+      clear_first_tile = resolve_info.color_original_base +
+                         color_clear_start_tiles_base_relative;
+    }
+    if (!IsEdramTileOwnedBy(clear_first_tile & (xenos::kEdramTileCount - 1),
+                            msaa_key)) {
+      storage_msaa_samples = xenos::MsaaSamples::k1X;
+    }
   }
 
   RenderTargetKey depth_render_target_key;

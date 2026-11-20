@@ -1854,7 +1854,10 @@ switch the cheaper way. Needs per-surface draw/transfer counts (the
 transfer log already has totals) before the rule can be chosen. To test in
 the next build: Batman with the setting off and on (FPS, transfers per
 frame in the log, shadows/lighting correct), and one real-MSAA game on and
-off for looks.
+off for looks. Update after 9648: the setting now applies by draw type and
+current owner (rectangle lists while host MSAA does not hold the data, see
+"Build 9648 results"); still to come for full Auto: choosing by measured
+cost, and the setting on by default once it has been checked in more games.
 
 Settings search (owner's request, same build): a search bar in the
 navigation bar of Settings (a plain UISearchBar as the title view; a
@@ -1864,6 +1867,105 @@ filters every row, including the generated per-category ones, by section,
 title, description and config name; all words must match, ignoring case and
 accents. Edits made while filtered go to the same items. Dragging the list
 hides the keyboard.
+
+Built as 9648 (`xenios_ios_arm64_0.2.9-9648`, commit d2530fc43, CI run
+328). CPU tests ran on this commit for the first time on the branch (macOS
+ARM64 runner): 258/258 HIR, 141,712 PowerPC cases, 0 failures, including
+stvl/stvr/stvlx128/stvrx128.
+
+### Build 9648 results (owner, zip "9648_logs_and_dumps": 8 logs, 10 GPU traces)
+
+Runs: Batman 18-59-50 and 19-03-06 (samples as pixels off), 19-06-09 (on),
+19-21-51 (on, skip unchanged off); AC 19-09-00 (off, real queries),
+19-28-09 (protect_on_release on), 19-30-02 (queries off, samples as pixels
+on); Spider-Man 19-48-17. Owner: settings search works.
+
+Batman, samples as pixels (msaa_samples_as_pixels):
+- Faster: frame avg 41.5 / 37.9 ms on against 57.6 / 60.7 ms off; rt
+  transfer passes 89.9 -> 19.9 per frame, 43.3 -> 23.4 ms.
+- But Batman's shading regressed ("more triangles shaded", the 9615
+  facets) and the floodlights showed through him. Cause, from traces
+  19-25-21 and 19-26-13: some scenes have UE3's 2x predicated-tiling base
+  pass (336 colour + 124 depth draws per frame, viewport transform on, 4
+  tiles resolved with clears). UE3 shifts it so Xenos sample 0 (-0.25,
+  +0.25) lands on the 1x pixel centre; drawn as samples-as-pixels, sample 0
+  is the top row pixel at (0, -0.25), (0.25, 0.5) px off, so the restored
+  depth disagrees with the 1x light passes again. No single scale and shift
+  maps the samples-as-pixels grid onto the Xenos positions (4x: (-2,-2),
+  (2,2), (-6,6), (6,-6) in 1/16 px, stored TL, BL, TR, BR). The occlusion
+  queries are 1x depth-only draws against that same depth at base 0, which
+  fits the floodlights.
+- The gameplay trace (19-08-22) has only 4x rectangle lists with the
+  viewport transform off (per-light stencil clears, shadow map depth
+  clears), exact as samples as pixels.
+- Fix (next build): samples as pixels only for rectangle lists (and resolve
+  clears), and only while the host MSAA render target does not hold the
+  EDRAM (RenderTargetCache::IsEdramTileOwnedBy on the first render
+  target's base tile), so real MSAA geometry keeps host MSAA with Xenos
+  sample positions and a real-MSAA game's clears don't bounce its data
+  between the two. Model (tools/edram_auto.py): gameplay trace 35.2
+  transfers per frame, the same as all-MSAA-as-pixels and against 103.5
+  off; 2x scenes within 1% of all-as-pixels. This is the first step of the
+  owner's "automatic" choice: by draw type and current owner, not by game.
+- To check: shading and floodlights correct with the setting on; FPS as
+  in 19-06-09.
+
+Assassin's Creed Revelations:
+- The a64 STVL/STVR fix works: no crash with protect_on_release off, and
+  the prologue -> chapter 1 transition now works (queries off run). The
+  owner got further than in any XeniOS or xenia-edge build.
+- protect_on_release on (19-28-09): the GPU command thread (01000010)
+  faults 12 million times at host pc 0x103102B30 on a protected page: the
+  game frees physical memory the GPU still reads, and PhysicalHeap::Release
+  also protects the parent (physical) heap, the view the GPU reads through.
+  The console GPU reads physical memory whatever the CPU mapping, so this
+  option can't work for AC; leave it off. (An unhandled host fault on a
+  host thread retries forever instead of stopping; not addressed.)
+- Real queries on (19-09-00): flicker of the whole environment. Chapter 1
+  ends ~100-400 queries per frame (98-400 begin/end pairs in the traces;
+  the prologue had 5), so the game culls objects and lights with them.
+  98% of our guesses get corrected (e.g. 8130 of 8322; 82% count 0), and
+  the game reads some before the correction. Queries off (19-30-02): no
+  flicker, but lights that should be culled underground show through the
+  scenery: every query reads as visible. AC's own MSAA draws are 4x point
+  lists (18-24 per frame) and a few rectangle lists, not the cause.
+- Next for AC (owner: back burner, performance later): a strict mode like
+  XeniOS HEAD's `occlusion_query = strict`: leave the report's ZPass lanes
+  at 0xFFFFFEED until the GPU count is in, commit the command buffer when
+  the ring runs empty (PrepareForWait does) and process completed queries
+  while idle (the base wait loop needs a hook; XeniOS calls PrepareForWait
+  again in its 2 ms waits while a report is owed), with a guess for
+  inexact queries so the game never waits forever.
+
+Spider-Man (19-48-17, ~1 minute on "Please Wait"):
+- Event F8000060, which worker F8000064 (start 82A25CE8) waits on, was set
+  7 times in the whole run, last by Game Master (F8000008) through the
+  game's SetEvent wrapper (guest lr 82B16C5C, the same lr sets F8000030),
+  ~11 s before. The worker's 96,471 waits are the kernel32-style
+  WaitForSingleObjectEx wrapper at 82B22A8C (which retries on 0x101 when
+  alertable), not signals, so the 9643 reading "signaled ~96,000 times"
+  was wrong. Its first waits are at stack 82A25D10, the final one at
+  82A25D30.
+- Next build: XEvent::NoteSignal also records two return addresses up the
+  guest stack (last_signal_callers_, read within the thread's stack), so
+  the report names the code that called the wrapper.
+
+Owner request (2026-11-20): Metal Performance HUD toggles, to show thermal
+state and the iOS version. Apple's HUD has a `thermal` element
+(MTL_HUD_ELEMENTS) but no OS version element, and Apple's pages don't say
+from which iOS element choice works (the customization pages are newer than
+iOS 16). Next build, Settings > Display:
+- Metal Performance HUD (metal_hud, default on: the layer's
+  developerHUDProperties mode, and MTL_HUD_ENABLED unset when off),
+  HUD Contents (metal_hud_elements -> MTL_HUD_ELEMENTS: Apple default,
+  default + thermal, compact, detailed) and HUD Position
+  (metal_hud_alignment -> MTL_HUD_ALIGNMENT), set after the config is read
+  (xenia_main_ios.mm) and before Metal starts; relaunch to apply.
+- Device Status (ios_device_status, default off, applies at once): our own
+  label, top left while a game runs, "iOS <version> · Thermal: <state>"
+  from NSProcessInfo.thermalState (Nominal/Fair/Serious/Critical; iOS has
+  no temperature API), coloured by state. Works on iOS 16 whatever the HUD
+  supports.
 
 ### Async shader compilation backport: first scoping (2026-11-19)
 

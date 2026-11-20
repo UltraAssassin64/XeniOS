@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -76,6 +77,9 @@ DEFINE_string(gpu, "metal", "Graphics system. Use: [metal]", "GPU");
 // CVar normally defined in windowed_app_main_qt.cc (excluded on iOS).
 DEFINE_transient_path(target, "", "Specifies the target file to run.",
                       "General");
+DECLARE_bool(metal_hud);
+DECLARE_string(metal_hud_alignment);
+DECLARE_string(metal_hud_elements);
 DECLARE_string(launch_module);
 DECLARE_uint32(launch_flags);
 DECLARE_string(launch_data);
@@ -173,6 +177,20 @@ bool EmulatorAppIOS::OnInitialize() {
   XELOGI("iOS: Storage root: {}", storage_root);
 
   config::SetupConfig(storage_root);
+
+  // Metal performance HUD options (Settings > Display), for Metal to read when
+  // it starts, which is later than this. main() turned the HUD on before the
+  // config was read.
+  if (cvars::metal_hud) {
+    if (!cvars::metal_hud_elements.empty()) {
+      setenv("MTL_HUD_ELEMENTS", cvars::metal_hud_elements.c_str(), 1);
+    }
+    if (!cvars::metal_hud_alignment.empty()) {
+      setenv("MTL_HUD_ALIGNMENT", cvars::metal_hud_alignment.c_str(), 1);
+    }
+  } else {
+    unsetenv("MTL_HUD_ENABLED");
+  }
 
   std::filesystem::path content_root = cvars::content_root;
   if (content_root.empty()) {

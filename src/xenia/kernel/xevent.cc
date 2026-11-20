@@ -70,6 +70,30 @@ void XEvent::NoteSignal() {
   last_signal_lr_.store(
       thread_state ? uint32_t(thread_state->context()->lr) : 0,
       std::memory_order_relaxed);
+  // Two return addresses further up the guest stack: games set events through
+  // a wrapper (SetEvent), whose own address says little. Read only within the
+  // thread's stack, which stays mapped while it runs.
+  uint32_t callers[2] = {};
+  if (signal_thread && thread_state &&
+      signal_thread->stack_base() > signal_thread->stack_limit()) {
+    uint32_t frame = uint32_t(thread_state->context()->r[1]);
+    for (uint32_t& caller : callers) {
+      if (frame < signal_thread->stack_limit() ||
+          frame > signal_thread->stack_base() - 4) {
+        break;
+      }
+      uint32_t caller_frame =
+          xe::load_and_swap<uint32_t>(memory()->TranslateVirtual(frame));
+      if (caller_frame <= frame || caller_frame > signal_thread->stack_base()) {
+        break;
+      }
+      caller = xe::load_and_swap<uint32_t>(
+          memory()->TranslateVirtual(caller_frame - 8));
+      frame = caller_frame;
+    }
+  }
+  last_signal_callers_[0].store(callers[0], std::memory_order_relaxed);
+  last_signal_callers_[1].store(callers[1], std::memory_order_relaxed);
   last_signal_ms_.store(Clock::QueryHostUptimeMillis(),
                         std::memory_order_relaxed);
   signal_count_.fetch_add(1, std::memory_order_relaxed);
@@ -81,9 +105,12 @@ std::string XEvent::DescribeLastSignal() const {
     return "never set";
   }
   return fmt::format(
-      "set {} times, last by thread {:08X} at guest lr {:08X} {} ms ago",
+      "set {} times, last by thread {:08X} at guest lr {:08X} (called from "
+      "{:08X} {:08X}) {} ms ago",
       signal_count, last_signal_thread_.load(std::memory_order_relaxed),
       last_signal_lr_.load(std::memory_order_relaxed),
+      last_signal_callers_[0].load(std::memory_order_relaxed),
+      last_signal_callers_[1].load(std::memory_order_relaxed),
       Clock::QueryHostUptimeMillis() -
           last_signal_ms_.load(std::memory_order_relaxed));
 }

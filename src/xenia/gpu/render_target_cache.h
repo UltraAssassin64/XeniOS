@@ -761,6 +761,8 @@ class RenderTargetCache {
   // since standard containers use dynamic allocation for elements, though
   // changes to this throughout a frame are pretty rare.
   std::map<uint32_t, OwnershipRange> ownership_ranges_;
+  // Whether the render target with the key last used the EDRAM tile.
+  bool IsEdramTileOwnedBy(uint32_t tile, RenderTargetKey key) const;
   // For TakeUnchangedTransferCounts, counted per ownership range.
   uint64_t unchanged_transfers_ = 0;
   uint64_t skipped_transfers_ = 0;

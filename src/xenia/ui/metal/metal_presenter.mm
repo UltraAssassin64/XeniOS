@@ -46,6 +46,24 @@
 #endif
 #import <QuartzCore/CAMetalLayer.h>
 
+#if XE_PLATFORM_IOS
+DEFINE_bool(metal_hud, true,
+            "Show Apple's Metal performance HUD over the game (iOS 16 and "
+            "later). Takes effect on the next launch.",
+            "GPU");
+DEFINE_string(metal_hud_elements, "",
+              "Metrics the Metal performance HUD shows, as MTL_HUD_ELEMENTS: "
+              "comma-separated, for example fps,gputime,memory,thermal. Empty "
+              "for Apple's default. iOS versions without HUD customization "
+              "keep the default. Takes effect on the next launch.",
+              "GPU");
+DEFINE_string(metal_hud_alignment, "topright",
+              "Where the Metal performance HUD sits, as MTL_HUD_ALIGNMENT: "
+              "topleft, topcenter, topright, centerleft, centered, "
+              "centerright, bottomleft, bottomcenter, bottomright. Takes "
+              "effect on the next launch.",
+              "GPU");
+#endif  // XE_PLATFORM_IOS
 DEFINE_bool(metal_presenter_force_10bpc, true,
             "Force RGB10A2 guest output for presenter (reduces gamma conversion cost).", "GPU");
 DEFINE_int32(metal_presenter_gamma_debug, 0,
@@ -889,9 +907,11 @@ MetalPresenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
   // checking the layer has the property, so the build does not depend on the
   // SDK declaring it.
   if ([metal_layer respondsToSelector:NSSelectorFromString(@"setDeveloperHUDProperties:")]) {
-    [metal_layer setValue:@{@"mode" : @"default", @"logging" : @"default"}
-                   forKey:@"developerHUDProperties"];
-    XELOGI("Metal presenter: requested the Metal performance HUD");
+    [metal_layer
+        setValue:@{@"mode" : cvars::metal_hud ? @"default" : @"disabled", @"logging" : @"default"}
+          forKey:@"developerHUDProperties"];
+    XELOGI("Metal presenter: Metal performance HUD {}",
+           cvars::metal_hud ? "requested" : "turned off");
   } else {
     XELOGW("Metal presenter: this system's CAMetalLayer has no "
            "developerHUDProperties; the Metal performance HUD is unavailable");

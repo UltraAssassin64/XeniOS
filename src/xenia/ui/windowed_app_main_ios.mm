@@ -66,6 +66,10 @@
 #include "xenia/xbox.h"
 
 DECLARE_path(log_file);
+DEFINE_bool(ios_device_status, false,
+            "Show the iOS version and the device's thermal state in the "
+            "top-left corner while a game runs.",
+            "UI");
 
 // Forward declarations of the Objective-C classes.
 @class XeniaAppDelegate;
@@ -3535,6 +3539,35 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
   IOSConfigSection display;
   display.title = "Display";
   display.footer = "These settings affect frame pacing and the Metal presenter output.";
+  AddBoolSetting(display.items, "metal_hud", "Metal Performance HUD",
+                 "Apple's overlay with the frame rate, GPU time and memory. Takes "
+                 "effect after relaunching XeniOS.",
+                 true);
+  AddStringChoiceSetting(
+      display.items, "metal_hud_elements", "HUD Contents",
+      "Which metrics the Metal HUD shows. Choosing them (and the thermal state) "
+      "needs an iOS version with HUD customization; others keep Apple's "
+      "default. Takes effect after relaunching XeniOS.",
+      "",
+      {{"Apple default", ""},
+       {"Default + thermal state",
+        "device,layersize,memory,fps,frameinterval,gputime,thermal,frameintervalgraph"},
+       {"Compact: FPS, GPU time, thermal", "fps,gputime,thermal"},
+       {"Detailed", "device,layersize,layerscale,memory,fps,frameinterval,gputime,thermal,"
+                    "frameintervalgraph,presentdelay,metalcpu,shaders,framenumber,disk"}});
+  AddStringChoiceSetting(display.items, "metal_hud_alignment", "HUD Position",
+                         "Where the Metal HUD sits. Takes effect after relaunching XeniOS.",
+                         "topright",
+                         {{"Top right", "topright"},
+                          {"Top left", "topleft"},
+                          {"Top center", "topcenter"},
+                          {"Bottom left", "bottomleft"},
+                          {"Bottom right", "bottomright"}});
+  AddBoolSetting(display.items, "ios_device_status", "Device Status",
+                 "Shows the iOS version and the thermal state (Nominal, Fair, Serious "
+                 "or Critical; iOS reports no temperature) in the top-left corner "
+                 "while a game runs. Applies at once.",
+                 false);
   AddBoolSetting(display.items, "metal_presenter_force_10bpc", "Force 10bpc Presenter Output",
                  "Metal-only. Uses RGB10A2 output, which is the default path and usually "
                  "reduces gamma-conversion cost on Apple GPUs. Disable only if colors, "
@@ -3604,14 +3637,13 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
                  "while it is being tested.",
                  false);
   AddBoolSetting(performance.items, "msaa_samples_as_pixels", "MSAA Samples as Pixels",
-                 "Keeps each multisampled (MSAA) buffer as a plain buffer of its "
-                 "samples, so a game switching a buffer between full resolution and "
-                 "MSAA (Batman: Arkham Asylum's depth buffer, for every light) uses one "
-                 "copy with no conversions. Games that really draw with MSAA shade up "
-                 "to 4 times as many pixels and may look slightly different, so it is "
-                 "best for games that use MSAA briefly. Turn off if edges, foliage or "
-                 "effects look wrong. Applies at once. Off by default while it is "
-                 "being tested.",
+                 "Draws multisampled (MSAA) clears and other screen rectangles "
+                 "straight into the full-resolution buffer whose pixels are the "
+                 "samples, instead of copying the buffer to MSAA and back (Batman: "
+                 "Arkham Asylum does this for every light). Real MSAA geometry keeps "
+                 "the normal path, with Xbox 360 sample positions. Turn off if "
+                 "lighting, shadows or edges look wrong. Applies at once. Off by "
+                 "default while it is being tested.",
                  false);
   AddBoolSetting(performance.items, "context_promote_vec128", "Keep Vector Registers in CPU",
                  "Lets the recompiler keep the Xbox 360's vector registers in host "
@@ -8795,6 +8827,9 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   CGSize last_collection_layout_size_;
   BOOL compat_fetch_started_;
   std::filesystem::path pending_external_launch_path_;
+  // Settings > Display > Device Status, and the thermal state it shows.
+  UILabel* device_status_label_;
+  NSInteger device_status_thermal_;
 }
 
 - (void)viewDidLoad {
@@ -8825,6 +8860,28 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
       UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   self.touchPadView.hidden = YES;
   [self.view addSubview:self.touchPadView];
+
+  // Device status (Settings > Display): the iOS version and thermal state in
+  // the top-left corner while a game runs. The Metal HUD shows neither on
+  // iOS 16. Below every menu, like the on-screen controller.
+  device_status_label_ = [[UILabel alloc] init];
+  device_status_label_.translatesAutoresizingMaskIntoConstraints = NO;
+  device_status_label_.font = [UIFont monospacedDigitSystemFontOfSize:12
+                                                               weight:UIFontWeightSemibold];
+  device_status_label_.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.55];
+  device_status_label_.layer.cornerRadius = 6.0;
+  device_status_label_.layer.masksToBounds = YES;
+  device_status_label_.userInteractionEnabled = NO;
+  device_status_label_.hidden = YES;
+  device_status_thermal_ = -1;
+  [self.view addSubview:device_status_label_];
+  [NSLayoutConstraint activateConstraints:@[
+    [device_status_label_.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor
+                                                   constant:6.0],
+    [device_status_label_.leadingAnchor
+        constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor
+                       constant:8.0],
+  ]];
 
   // Create the launcher overlay UI immediately. When JIT is missing, keep
   // settings/navigation available but gate game launch with status.
@@ -9620,6 +9677,43 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
     if (hide_touch_pad) {
       [self.touchPadView resetTouches];
     }
+  }
+
+  // Device status: shown while a game is on screen, if enabled; the text
+  // changes with the thermal state only.
+  const BOOL show_device_status = cvars::ios_device_status && self.gameRunning &&
+                                  self.launcherOverlay.hidden && self.inGameMenuOverlay.hidden &&
+                                  !self.presentedViewController;
+  if (show_device_status) {
+    NSInteger thermal = static_cast<NSInteger>([NSProcessInfo processInfo].thermalState);
+    if (thermal != device_status_thermal_) {
+      device_status_thermal_ = thermal;
+      NSString* thermal_name = @"Nominal";
+      UIColor* thermal_color = [UIColor whiteColor];
+      switch (static_cast<NSProcessInfoThermalState>(thermal)) {
+        case NSProcessInfoThermalStateFair:
+          thermal_name = @"Fair";
+          thermal_color = [UIColor systemYellowColor];
+          break;
+        case NSProcessInfoThermalStateSerious:
+          thermal_name = @"Serious";
+          thermal_color = [UIColor systemOrangeColor];
+          break;
+        case NSProcessInfoThermalStateCritical:
+          thermal_name = @"Critical";
+          thermal_color = [UIColor systemRedColor];
+          break;
+        default:
+          break;
+      }
+      device_status_label_.text =
+          [NSString stringWithFormat:@"  iOS %@ · Thermal: %@  ",
+                                     [UIDevice currentDevice].systemVersion, thermal_name];
+      device_status_label_.textColor = thermal_color;
+    }
+  }
+  if (device_status_label_.hidden == show_device_status) {
+    device_status_label_.hidden = !show_device_status;
   }
 
   const bool navigation_enabled = cvars::ui_controller_navigation;

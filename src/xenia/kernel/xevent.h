@@ -42,7 +42,7 @@ class XEvent : public XObject {
   void Query(uint32_t* out_type, uint32_t* out_state);
   void Clear();
 
-  // For the stuck thread report: the guest thread and return address that
+  // For the stuck thread report: the guest thread and return addresses that
   // last set or pulsed this event, how long ago, and how many times in all.
   std::string DescribeLastSignal() const;
 
@@ -60,6 +60,8 @@ class XEvent : public XObject {
   std::unique_ptr<xe::threading::Event> event_;
   std::atomic<uint32_t> last_signal_thread_{0};
   std::atomic<uint32_t> last_signal_lr_{0};
+  // The two return addresses above last_signal_lr_ on the guest stack.
+  std::atomic<uint32_t> last_signal_callers_[2] = {};
   std::atomic<uint64_t> last_signal_ms_{0};
   std::atomic<uint64_t> signal_count_{0};
 };
