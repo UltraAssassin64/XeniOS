@@ -2096,6 +2096,20 @@ quit flag, 0x82F718BC idle-worker count.
   queues frame jobs (82925778 is only reached by function pointer, from
   code outside the dumped ranges).
 
+### Spider-Man watch runs on 9655 (logs 06-32-58, 06-39-50)
+
+- 0x82F6F404 (Game Master's sync queue) = 0x2D (45); queue array at
+  0x00091080, so queue 45's counters are at 0x91620 (pending) and 0x9163C
+  (active).
+- Queue 45: pending 0 for 99% of samples, active 1 for ~100% after the
+  loading screen starts (min 0, so it does end now and then, and something
+  starts it again at once). So the loading-screen work on queue 45 is
+  never finished when Game Master's frame syncs on it.
+- Suspect: the frame job (82925778) ends with 825A88C8(*(0x82CE2158)),
+  which may queue the next frame unless a stop condition holds. Next: dump
+  825A8000-825A9800 (and 82939000-8293A000 for 82939360) to read it; no new
+  build needed (debug_dump_guest_code).
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own
