@@ -2135,6 +2135,32 @@ quit flag, 0x82F718BC idle-worker count.
   and lock state from XMPGetPlaybackController (ours writes 0, 0), not
   ported yet.
 
+### Spider-Man: Web of Shadows solved by comparison with PC (owner, 2026-11-20)
+
+- Owner's xenia-edge PC log (edge@f159897b9): same packs in the same order
+  as on the phone, then XamUserGetName, XGIUserSetContext x2 and, one
+  frame later, XamShowDeviceSelectorUI (answered automatically, no visible
+  prompt), XamContentGetDeviceData, content enumeration, main menu. The PC
+  had a profile signed in at boot (logged_profile_slot_0_xuid); the phone
+  had none, so the game showed XamShowSigninUI after Press Start, and after
+  it made the same profile reads and XGI calls but never the device
+  selector. (The next screen is the main menu, not a storage prompt.)
+- Confirmed (owner, 9658, log 08-29-45): with logged_profile_slot_0_xuid
+  set to the phone profile (E03000000B54CE77) the game reaches the main
+  menu.
+- Cause: on iOS, XamShowSigninUI ran the native prompt inside the call
+  (xeXamDispatchHeadless with no overlapped): the guest thread was blocked
+  until a profile was picked, and XN_SYS_UI 1, XN_SYS_SIGNINCHANGED and
+  XN_SYS_UI 0 were all queued before the call returned. On the console and
+  in xenia-edge the call returns at once and the game waits for them.
+- Fix (next build): the iOS path broadcasts UI shown, counts the dialog
+  (IsUIActive), returns X_ERROR_SUCCESS, and runs the prompt (or the
+  fallback LoginMultiple) on its own thread, then UI closed 100 ms later.
+  To test: Spider-Man with logged_profile_slot_0_xuid empty, signing in at
+  the prompt; and the other games' sign-in prompts.
+- The job-system, music and fence investigations above were not the cause;
+  their diagnostics (debug watch, code dump, report code dumps) stay.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

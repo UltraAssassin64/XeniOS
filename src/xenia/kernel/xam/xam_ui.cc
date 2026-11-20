@@ -1177,31 +1177,38 @@ X_RESULT xeXamShowSigninUI(uint32_t user_index, uint32_t users_needed,
     auto* ios_context =
         dynamic_cast<xe::ui::IOSWindowedAppContext*>(&app_context);
     if (ios_context) {
-      return xeXamDispatchHeadless(
-          [ios_context, user_index, users_needed]() -> X_RESULT {
-            if (ios_context->PromptSignInUI(user_index, users_needed)) {
-              return X_ERROR_SUCCESS;
-            }
-            // Fallback when native prompt couldn't be shown.
-            std::map<uint8_t, uint64_t> xuids;
-            for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
-              UserProfile* profile =
-                  kernel_state()->xam_state()->GetUserProfile(i);
-              if (profile) {
-                xuids[i] = profile->xuid();
-                if (xuids.size() >= users_needed) {
-                  break;
-                }
+      // As on the console, the call returns at once and the game then waits
+      // for the notifications: UI shown, the sign-in, UI closed. Running the
+      // prompt inside the call (the guest thread blocked until a profile was
+      // picked) delivered all three before the game started waiting, and
+      // Spider-Man: Web of Shadows never left "Please Wait" after it. The
+      // prompt blocks a thread that isn't the UI thread while UIKit shows it.
+      kernel_state()->BroadcastNotification(kXNotificationSystemUI, true);
+      kernel_state()->xam_state()->xam_dialogs_shown_++;
+      std::thread([ios_context, user_index, users_needed]() {
+        if (!ios_context->PromptSignInUI(user_index, users_needed)) {
+          // Fallback when the native prompt couldn't be shown.
+          std::map<uint8_t, uint64_t> xuids;
+          for (uint32_t i = 0; i < XUserMaxUserCount; i++) {
+            UserProfile* profile =
+                kernel_state()->xam_state()->GetUserProfile(i);
+            if (profile) {
+              xuids[i] = profile->xuid();
+              if (xuids.size() >= users_needed) {
+                break;
               }
             }
-            if (xuids.empty()) {
-              return X_ERROR_NO_SUCH_USER;
-            }
+          }
+          if (!xuids.empty()) {
             kernel_state()->xam_state()->profile_manager()->LoginMultiple(
                 xuids);
-            return X_ERROR_SUCCESS;
-          },
-          0);
+          }
+        }
+        kernel_state()->xam_state()->xam_dialogs_shown_--;
+        xe::threading::Sleep(std::chrono::milliseconds(100));
+        kernel_state()->BroadcastNotification(kXNotificationSystemUI, false);
+      }).detach();
+      return X_ERROR_SUCCESS;
     }
 #endif  // XE_PLATFORM_IOS
 
