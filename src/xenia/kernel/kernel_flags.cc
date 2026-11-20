@@ -27,6 +27,13 @@ DEFINE_bool(
     "isn't only waiting spends its time (guest functions or host functions). "
     "Apple ARM64 only.",
     "Logging");
+DEFINE_string(
+    debug_watch_guest_addresses, "",
+    "Diagnostics: comma-separated guest addresses (hex) of 32-bit values to "
+    "sample every 0.1 ms while a game runs; every 2 seconds the log shows "
+    "each one's minimum, maximum, last value and how often it was 0. For a "
+    "game stuck waiting on a counter or flag. Empty: off.",
+    "Logging");
 DEFINE_bool(
     guest_scheduler, false,
     "Run guest threads as cooperative fibers driven by an in-kernel scheduler "

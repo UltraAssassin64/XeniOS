@@ -11,10 +11,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -458,6 +460,91 @@ void LogKernelCallThreads() {
       kernel_call_global.unlock();
     }
   }
+}
+
+void StartGuestValueWatch() {
+  static std::atomic<bool> watch_started{false};
+  if (cvars::debug_watch_guest_addresses.empty() ||
+      watch_started.exchange(true)) {
+    return;
+  }
+  std::vector<uint32_t> watch_addresses;
+  for (size_t watch_start = 0;
+       watch_start < cvars::debug_watch_guest_addresses.size();) {
+    size_t watch_end =
+        cvars::debug_watch_guest_addresses.find(',', watch_start);
+    if (watch_end == std::string::npos) {
+      watch_end = cvars::debug_watch_guest_addresses.size();
+    }
+    const std::string watch_text = cvars::debug_watch_guest_addresses.substr(
+        watch_start, watch_end - watch_start);
+    char* watch_parse_end = nullptr;
+    const unsigned long watch_address =
+        std::strtoul(watch_text.c_str(), &watch_parse_end, 16);
+    if (watch_parse_end != watch_text.c_str()) {
+      watch_addresses.push_back(uint32_t(watch_address) & ~3u);
+    }
+    watch_start = watch_end + 1;
+  }
+  if (watch_addresses.empty()) {
+    return;
+  }
+  std::thread([watch_addresses]() {
+    const size_t watch_count = watch_addresses.size();
+    std::vector<uint32_t> watch_min(watch_count), watch_max(watch_count),
+        watch_last(watch_count), watch_zero(watch_count);
+    while (true) {
+      std::fill(watch_min.begin(), watch_min.end(), UINT32_MAX);
+      std::fill(watch_max.begin(), watch_max.end(), 0);
+      std::fill(watch_zero.begin(), watch_zero.end(), 0);
+      uint32_t watch_samples = 0;
+      const uint64_t watch_window_start = Clock::QueryHostUptimeMillis();
+      while (Clock::QueryHostUptimeMillis() - watch_window_start < 2000) {
+        // Checked under the global lock every 5 ms (never waiting for it):
+        // the game may be gone, or not mapped the addresses yet.
+        bool watch_readable = false;
+        uint8_t* watch_host[64] = {};
+        auto& watch_global = xe::global_critical_region::mutex();
+        if (kernel_state() && watch_global.try_lock()) {
+          watch_readable = true;
+          for (size_t i = 0; i < watch_count && i < 64; ++i) {
+            if (!KernelCallReadable(watch_addresses[i], 4)) {
+              watch_readable = false;
+              break;
+            }
+            watch_host[i] =
+                kernel_memory()->TranslateVirtual<uint8_t*>(watch_addresses[i]);
+          }
+          watch_global.unlock();
+        }
+        for (uint32_t watch_step = 0; watch_step < 50; ++watch_step) {
+          if (watch_readable) {
+            for (size_t i = 0; i < watch_count && i < 64; ++i) {
+              const uint32_t watch_value =
+                  xe::load_and_swap<uint32_t>(watch_host[i]);
+              watch_min[i] = std::min(watch_min[i], watch_value);
+              watch_max[i] = std::max(watch_max[i], watch_value);
+              watch_last[i] = watch_value;
+              watch_zero[i] += watch_value == 0;
+            }
+            ++watch_samples;
+          }
+          xe::threading::Sleep(std::chrono::microseconds(100));
+        }
+      }
+      if (!watch_samples) {
+        continue;
+      }
+      std::string watch_line;
+      for (size_t i = 0; i < watch_count && i < 64; ++i) {
+        watch_line += fmt::format(
+            "; {:08X} min {:08X} max {:08X} last {:08X} zero {}%",
+            watch_addresses[i], watch_min[i], watch_max[i], watch_last[i],
+            uint64_t(watch_zero[i]) * 100 / watch_samples);
+      }
+      XELOGI("Guest value watch over {} samples{}", watch_samples, watch_line);
+    }
+  }).detach();
 }
 
 void LogGuestThreadHotspots() {

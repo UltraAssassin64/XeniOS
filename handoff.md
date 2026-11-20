@@ -2034,6 +2034,24 @@ the owner's Actions were briefly disabled, hence an extra comment commit).
   for the GPU at Game Fences off (each on its own), to see which one lets
   the loading finish. Then fix the pacing or fence timing accordingly.
 
+### Build 9652 settings runs (owner, zip "spideyWoS9652": defaults 23-35-41, cap off 23-37-16, ordered fences off 23-39-39)
+
+- None got past "Please Wait"; with the refresh cap off, rare big stutters
+  (17 FPS). JQ worker 1 sits in the D3D fence spin in all three, even at
+  ~4 ms frames with the cap off, so pacing isn't what holds Game Master.
+- The fence is written by EVENT_WRITE_SHD (D3D 82ABA0F8 emits type 3 op
+  0x58 to *(device+0x2A90), next value +2); our handler stores it at once
+  (or at command buffer completion with ordered fences): not lost. The
+  command processor thread is ~2% busy (ring consumed).
+- New suspicion: a job counter that never returns to 0 (pending at
+  0x82F71910, active at 0x82F71914, which Game Master sums with lwsync),
+  e.g. a lost atomic update (lwarx/stwcx under contention on our ARM64
+  backend). Next build: debug_watch_guest_addresses (Settings > All
+  Options: Logging), a thread sampling the given guest words every 0.1 ms
+  and logging min/max/last/% zero every 2 s ("Guest value watch"). Ask the
+  owner to set it to 82F71910,82F71914 for a Spider-Man run: if active
+  stays >= 1 while every worker is idle, a decrement was lost.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

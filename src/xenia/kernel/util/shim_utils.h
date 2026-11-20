@@ -556,6 +556,9 @@ void LogKernelCallThreads();
 // each one that isn't only waiting spends its time (log_guest_thread_hotspots;
 // Apple ARM64 only).
 void LogGuestThreadHotspots();
+// debug_watch_guest_addresses: starts the thread that samples those guest
+// values and logs their range every 2 seconds (once per run; no-op if empty).
+void StartGuestValueWatch();
 // Whether guest memory [address, address + size) is committed and readable.
 // The caller holds the global critical region.
 bool KernelCallReadable(uint32_t address, uint32_t size);

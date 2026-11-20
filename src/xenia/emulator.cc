@@ -2255,6 +2255,7 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
       cvars::native_stencil_value_output,
       cvars::skip_unchanged_render_target_transfers,
       cvars::msaa_samples_as_pixels);
+  kernel::shim::StartGuestValueWatch();
 
   auto main_thread = kernel_state_->LaunchModule(module);
   if (!main_thread) {
