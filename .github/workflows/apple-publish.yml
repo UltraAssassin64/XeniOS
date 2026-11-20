@@ -222,6 +222,7 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           xcrun --find metal
+          
       - name: Cache Qt 6.10.1
         if: "${{ matrix.needs_qt }}"
         uses: actions/cache@v4
