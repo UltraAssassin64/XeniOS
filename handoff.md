@@ -2052,6 +2052,23 @@ the owner's Actions were briefly disabled, hence an extra comment commit).
   owner to set it to 82F71910,82F71914 for a Spider-Man run: if active
   stays >= 1 while every worker is idle, a decrement was lost.
 
+### Build 9654 result (owner, zip "Spidey_WoS-2": 05-43-41, 05-47-29, watch on 82F71910,82F71914)
+
+- Both counters move (min 0, max 2) but sit at 1 essentially always after
+  the loading screen starts ("zero 0%" in every 2 s window, ~15,000
+  samples): one frame job running and the next already queued. No lost
+  update. Before the loading screen they were 0 90-99% of the time.
+- Game Master's help step (82963468.., 82963600) may run queued jobs itself
+  (class 1 any time for worker slots < 2, else only inside a time window
+  read from 0x82F719C0/0x82F719C8 against 82920CC0; class 2 for slots < 5),
+  so the jobs are reachable; what is missing is why frame jobs keep being
+  queued, i.e. what should end the loading screen.
+- Next build: debug_dump_guest_code (Settings > All Options: Logging),
+  "start-end" hex ranges, at most 64 KB each, logged once 20 s after
+  launch ("Guest code dump at A: 8 words"). Ask for 82962000-82968000
+  (job system), 82925000-82931000 (loading-screen frame job),
+  82A16000-82A26000 (music system) and 82920000-82921000 (clock).
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

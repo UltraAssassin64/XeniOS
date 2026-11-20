@@ -16,6 +16,7 @@ DECLARE_bool(log_high_frequency_kernel_calls);
 DECLARE_uint32(kernel_call_repeat_threshold);
 DECLARE_bool(log_guest_thread_hotspots);
 DECLARE_string(debug_watch_guest_addresses);
+DECLARE_string(debug_dump_guest_code);
 DECLARE_bool(guest_scheduler);
 DECLARE_uint32(guest_scheduler_cpus);
 

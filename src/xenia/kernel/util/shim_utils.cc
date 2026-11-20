@@ -464,9 +464,34 @@ void LogKernelCallThreads() {
 
 void StartGuestValueWatch() {
   static std::atomic<bool> watch_started{false};
-  if (cvars::debug_watch_guest_addresses.empty() ||
+  if ((cvars::debug_watch_guest_addresses.empty() &&
+       cvars::debug_dump_guest_code.empty()) ||
       watch_started.exchange(true)) {
     return;
+  }
+  // debug_dump_guest_code: "start-end" ranges (hex), comma-separated.
+  std::vector<std::pair<uint32_t, uint32_t>> dump_ranges;
+  for (size_t watch_start = 0;
+       watch_start < cvars::debug_dump_guest_code.size();) {
+    size_t watch_end = cvars::debug_dump_guest_code.find(',', watch_start);
+    if (watch_end == std::string::npos) {
+      watch_end = cvars::debug_dump_guest_code.size();
+    }
+    const std::string watch_text = cvars::debug_dump_guest_code.substr(
+        watch_start, watch_end - watch_start);
+    char* watch_parse_end = nullptr;
+    const unsigned long dump_first =
+        std::strtoul(watch_text.c_str(), &watch_parse_end, 16);
+    if (watch_parse_end != watch_text.c_str() && *watch_parse_end == '-') {
+      const unsigned long dump_last =
+          std::strtoul(watch_parse_end + 1, nullptr, 16);
+      // At most 64 KB per range.
+      if (dump_last > dump_first && dump_last - dump_first <= 0x10000) {
+        dump_ranges.emplace_back(uint32_t(dump_first) & ~31u,
+                                 uint32_t(dump_last));
+      }
+    }
+    watch_start = watch_end + 1;
   }
   std::vector<uint32_t> watch_addresses;
   for (size_t watch_start = 0;
@@ -486,10 +511,38 @@ void StartGuestValueWatch() {
     }
     watch_start = watch_end + 1;
   }
-  if (watch_addresses.empty()) {
+  if (watch_addresses.empty() && dump_ranges.empty()) {
     return;
   }
-  std::thread([watch_addresses]() {
+  std::thread([watch_addresses, dump_ranges]() {
+    // The code dump, once, 20 seconds in (the game has loaded its code).
+    if (!dump_ranges.empty()) {
+      xe::threading::Sleep(std::chrono::seconds(20));
+      for (const auto& [dump_first, dump_last] : dump_ranges) {
+        for (uint32_t dump_line = dump_first; dump_line < dump_last;
+             dump_line += 32) {
+          auto& dump_global = xe::global_critical_region::mutex();
+          std::string dump_words;
+          if (kernel_state()) {
+            std::lock_guard<decltype(dump_global)> dump_lock(dump_global);
+            if (KernelCallReadable(dump_line, 32)) {
+              for (uint32_t i = 0; i < 8; ++i) {
+                dump_words += fmt::format(
+                    " {:08X}",
+                    xe::load_and_swap<uint32_t>(
+                        kernel_memory()->TranslateVirtual(dump_line + i * 4)));
+              }
+            }
+          }
+          if (!dump_words.empty()) {
+            XELOGI("Guest code dump at {:08X}:{}", dump_line, dump_words);
+          }
+        }
+      }
+      if (watch_addresses.empty()) {
+        return;
+      }
+    }
     const size_t watch_count = watch_addresses.size();
     std::vector<uint32_t> watch_min(watch_count), watch_max(watch_count),
         watch_last(watch_count), watch_zero(watch_count);

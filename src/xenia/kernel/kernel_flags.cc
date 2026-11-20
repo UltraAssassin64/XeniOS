@@ -34,6 +34,13 @@ DEFINE_string(
     "each one's minimum, maximum, last value and how often it was 0. For a "
     "game stuck waiting on a counter or flag. Empty: off.",
     "Logging");
+DEFINE_string(
+    debug_dump_guest_code, "",
+    "Diagnostics: comma-separated guest address ranges (hex, start-end, at "
+    "most 64 KB each) whose code is written to the log once, 20 seconds "
+    "after launch (\"Guest code dump at\" lines), to disassemble a stuck "
+    "game offline. Empty: off.",
+    "Logging");
 DEFINE_bool(
     guest_scheduler, false,
     "Run guest threads as cooperative fibers driven by an in-kernel scheduler "
