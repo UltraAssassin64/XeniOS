@@ -1967,6 +1967,29 @@ iOS 16). Next build, Settings > Display:
   no temperature API), coloured by state. Works on iOS 16 whatever the HUD
   supports.
 
+Built as 9650 (`xenios_ios_arm64_0.2.9-9650`, commit 3b04d54f5, CI run 329;
+the owner's Actions were briefly disabled, hence an extra comment commit).
+
+### Build 9650 results (owner, zip "9650-log": Batman 20-43-05 off and 20-47-00 samples as pixels on, Spider-Man debug 20-49-48)
+
+- Batman: owner: fine, the second run (samples as pixels on) 3-4 FPS better;
+  rt transfer 61.4 -> 17.8 passes, 33.1 -> 16.8 ms per frame. Shading
+  regression not reported again (to confirm on screen).
+- Spider-Man: F8000060 set 7 times, last by Game Master at the SetEvent
+  wrapper 82B16C5C, called from 82A23390, called from 82A18710, ~2 s before
+  the sign-in UI. The worker F8000064 (start 82A25CE8) is the game's music
+  manager: it calls XMsgInProcessCall(0xFA, 0x0007001B) =
+  XMPGetPlaybackController(2, ...), and F8000058 (start 82A7CD00) waits on
+  F8000054 (never set), F800004C (set by F8000064 from 82A7B7CC/82A7C14C)
+  and F8000050 (set by the XMA thread F800008C). Game Master's last calls
+  after sign-in: XamUserReadProfileSettings, XamUserGetName, two
+  XGIUserSetContext; then the job wait.
+- Next build: the thread report dumps the guest code (64 words before, 8
+  after, once per address) of each blocked thread's call stack and of the
+  two callers that last set the event it waits on, to disassemble Game
+  Master's job wait, the music worker's waits and 82A23390/82A18710
+  (tools/dis_storm.py reads these lines).
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own

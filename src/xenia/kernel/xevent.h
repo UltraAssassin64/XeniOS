@@ -45,6 +45,10 @@ class XEvent : public XObject {
   // For the stuck thread report: the guest thread and return addresses that
   // last set or pulsed this event, how long ago, and how many times in all.
   std::string DescribeLastSignal() const;
+  // Return address index 0 or 1 above the last set or pulse (0 if unknown).
+  uint32_t last_signal_caller(size_t index) const {
+    return last_signal_callers_[index].load(std::memory_order_relaxed);
+  }
 
   bool Save(ByteStream* stream) override;
   static object_ref<XEvent> Restore(KernelState* kernel_state,

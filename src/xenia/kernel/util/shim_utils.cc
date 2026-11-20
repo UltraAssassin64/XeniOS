@@ -241,6 +241,8 @@ void LogKernelCallThreads() {
     if (kernel_call_inside && kernel_call_ms >= 1000) {
       const uint32_t kernel_call_handle = kernel_call_state->guest_arg0;
       std::string kernel_call_object = "no object";
+      // For an event: the code that last set it, dumped below.
+      uint32_t kernel_call_signal_callers[2] = {};
       // The object table shares the global lock with the kernel; a stuck
       // thread may hold it, so never wait for it here.
       auto& kernel_call_global = xe::global_critical_region::mutex();
@@ -253,9 +255,14 @@ void LogKernelCallThreads() {
                           uint32_t(kernel_call_xobject->type()),
                           kernel_call_xobject->name());
           if (kernel_call_xobject->type() == XObject::Type::Event) {
+            auto* kernel_call_event =
+                static_cast<XEvent*>(kernel_call_xobject.get());
             kernel_call_object +=
-                ", " + static_cast<XEvent*>(kernel_call_xobject.get())
-                           ->DescribeLastSignal();
+                ", " + kernel_call_event->DescribeLastSignal();
+            kernel_call_signal_callers[0] =
+                kernel_call_event->last_signal_caller(0);
+            kernel_call_signal_callers[1] =
+                kernel_call_event->last_signal_caller(1);
           }
         }
         kernel_call_global.unlock();
@@ -266,6 +273,15 @@ void LogKernelCallThreads() {
              kernel_call_state->handle.load(), kernel_call_handle,
              kernel_call_object, kernel_call_state->guest_arg1.load(),
              LogKernelCallStack(kernel_call_state->guest_stack_pointer));
+      // The guest code of the wait and of what last set the event, once per
+      // address, to disassemble what each side is waiting for.
+      LogKernelCallStackCode(kernel_call_state->lr.load(),
+                             kernel_call_state->guest_stack_pointer);
+      for (uint32_t kernel_call_signal_caller : kernel_call_signal_callers) {
+        if (kernel_call_signal_caller) {
+          LogKernelCallStackCode(kernel_call_signal_caller, 0);
+        }
+      }
       // NtWaitForMultipleObjectsEx: r3 is the count, r4 the handle array.
       if (kernel_call_last &&
           !std::strcmp(kernel_call_last->name, "NtWaitForMultipleObjectsEx") &&
