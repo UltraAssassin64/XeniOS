@@ -2011,6 +2011,29 @@ the owner's Actions were briefly disabled, hence an extra comment commit).
   thread's stack (829258C4 etc.), and dumps are 128 words before each
   return address (was 64). tools/dis_storm.py must start 0x200 before.
 
+### Build 9652 result (owner, Spider-Man debug log 23-30-47)
+
+- The loading screen is one job per frame: 82925778 (timing with mftb,
+  fills debug data with 0xDEADBEEF, draws), run by JQ worker 1. Before
+  drawing it waits for the previous frame's fence when it isn't done
+  (829258AC: `if (fence != -1 && !done(fence)) wait(fence)` -> 82ABA520 ->
+  the 82ABA2F0/82AC0C10 spin on *(device+0x2A90)).
+- The GPU is busy only 9-14% of the time and frames are 33.3 ms, yet the
+  worker spends 12-14 of 16 samples in that fence spin: the fence follows
+  the 30 Hz frame pacing, not GPU work. A frame job is therefore active
+  almost all the time, and Game Master's wait (82962D70, r26 = -1: until
+  pending + active jobs of every queue are 0) never sees 0.
+- Hypothesis: on the console the frame job finishes early in each frame
+  and leaves an idle gap Game Master's polling catches; here the fence
+  (swap/vblank pacing, or our fence write-back at command buffer
+  completion with metal_gpu_ordered_fences) holds it until the next frame.
+  The upstream compatibility report's "endless loadings fixed by enabling
+  VSync" points at the same pacing.
+- Asked of the owner (no build needed): one run with Settings > Display >
+  Cap Guest Display Refresh off, and one with Settings > Accuracy > Wait
+  for the GPU at Game Fences off (each on its own), to see which one lets
+  the loading finish. Then fix the pacing or fence timing accordingly.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own
