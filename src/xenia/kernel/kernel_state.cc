@@ -19,6 +19,7 @@
 #if XE_PLATFORM_IOS
 #include "xenia/cpu/processor.h"
 #endif  // XE_PLATFORM_IOS
+#include "xenia/apu/audio_media_player.h"
 #include "xenia/emulator.h"
 #include "xenia/hid/input_system.h"
 #include "xenia/kernel/guest_scheduler.h"
@@ -1232,6 +1233,21 @@ void KernelState::RegisterNotifyListener(XNotifyListener* listener) {
     listener->EnqueueNotification(kXNotificationLiveConnectionChanged,
                                   0x001510F1L);
     listener->EnqueueNotification(kXNotificationLiveLinkStateChanged, 0);
+  }
+
+  // The first music player listener starts with its state and controller,
+  // without being signaled (as xenia-edge and XeniOS HEAD). Spider-Man: Web
+  // of Shadows creates one before anything else and its music system waits
+  // on it.
+  if (!has_notified_xmp_startup_ && listener->mask() & kXNotifyXmp) {
+    has_notified_xmp_startup_ = true;
+    auto media_player = emulator()->audio_media_player();
+    listener->EnqueueNotification(
+        kXNotificationXmpStateChanged,
+        media_player->GetState() != xam::apps::XmpApp::State::kIdle, false);
+    listener->EnqueueNotification(kXNotificationXmpPlaybackControllerChanged,
+                                  media_player->IsTitleInPlaybackControl(),
+                                  false);
   }
 }
 

@@ -1010,7 +1010,7 @@ further edits.
 | `crash_pointer_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding it. | `src/xenia/emulator.cc` | 1811, 1813, 1814 | 3 |
 | `crash_pointer_info` | local in Emulator::ExceptionCallback (crash dump) | Its allocation. | `src/xenia/emulator.cc` | 1812, 1815, 1816, 1822, 1823, 1824 | 7 |
 | `crash_bytes` | local in Emulator::ExceptionCallback (crash dump) | Start of the 32 bytes dumped around it. | `src/xenia/emulator.cc` | 1825, 1826, 1831 | 3 |
-| `signed_in_mask` | local in KernelState::RegisterNotifyListener | Users signed in, for the startup XN_SYS_SIGNINCHANGED. | `src/xenia/kernel/kernel_state.cc` | 1219, 1223, 1227 | 3 |
+| `signed_in_mask` | local in KernelState::RegisterNotifyListener | Users signed in, for the startup XN_SYS_SIGNINCHANGED. | `src/xenia/kernel/kernel_state.cc` | 1220, 1224, 1228 | 3 |
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/gpu/render_target_cache.cc` | 48, 764, 1389 | 3 |
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/gpu/render_target_cache.h` | 36 | 1 |
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/emulator.cc` | 123, 2257 | 2 |
@@ -2076,3 +2076,7 @@ further edits.
 - `tile` and `key` (parameters of IsEdramTileOwnedBy), `it` (its map
   iterator), and `frame` and `caller` (locals in XEvent::NoteSignal) are
   generic names with the same role elsewhere, not listed.
+- `has_notified_xmp_startup_` (KernelState) and the `signal` parameter of
+  XNotifyListener::EnqueueNotification have the same names and roles in
+  xenia-edge HEAD (`refs/remotes/xenia-edge-deep/HEAD`), where the startup
+  music player notifications come from, so they are not listed.

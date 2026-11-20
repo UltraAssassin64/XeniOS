@@ -33,7 +33,8 @@ void XNotifyListener::Initialize(uint64_t mask, uint32_t max_version) {
   kernel_state_->RegisterNotifyListener(this);
 }
 
-void XNotifyListener::EnqueueNotification(XNotificationID id, uint32_t data) {
+void XNotifyListener::EnqueueNotification(XNotificationID id, uint32_t data,
+                                          bool signal) {
   auto key = XNotificationKey(id);
   // Ignore if the notification doesn't match our mask.
   if ((mask_ & uint64_t(1ULL << key.mask_index)) == 0) {
@@ -45,7 +46,9 @@ void XNotifyListener::EnqueueNotification(XNotificationID id, uint32_t data) {
   }
   auto global_lock = global_critical_region_.Acquire();
   notifications_.push_back(std::pair<XNotificationID, uint32_t>(id, data));
-  wait_handle_->Set();
+  if (signal) {
+    wait_handle_->Set();
+  }
 }
 
 bool XNotifyListener::DequeueNotification(XNotificationID* out_id,

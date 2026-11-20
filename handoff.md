@@ -2110,6 +2110,31 @@ quit flag, 0x82F718BC idle-worker count.
   825A8000-825A9800 (and 82939000-8293A000 for 82939360) to read it; no new
   build needed (debug_dump_guest_code).
 
+### Spider-Man: code dump 825A8000.. (9655, log 06-48-33) and the fix tried next
+
+- 825A88C8 only frees a list's nodes; the frame job does not requeue
+  itself. The job runner (82963600..) calls job->vtable[0] (8296369C),
+  then decrements the global and the queue's active counts; the worker
+  then takes the next frame job. So the loading screen runs normally and
+  Game Master is probably not frozen in its per-frame sync either; it only
+  spends most of each frame there. The open question is the game logic
+  that should end "Please Wait".
+- The game's notification listeners: mask 0x20 (music player) first, mask
+  1 (system), another 0x20 later. The system one got the sign-in
+  notifications; the music player ones never got anything. xenia-edge and
+  XeniOS HEAD give the first music player listener its state
+  (XmpStateChanged) and controller (XmpPlaybackControllerChanged) at
+  registration, unsignaled; this branch sent nothing. The music worker
+  (F8000064) and F8000058 (waiting on an event never set) belong to that
+  system.
+- Next build: those two startup notifications ported
+  (KernelState::RegisterNotifyListener, has_notified_xmp_startup_;
+  XNotifyListener::EnqueueNotification gets xenia-edge's `signal`
+  parameter, default true). To test: Spider-Man past "Please Wait".
+  xenia-edge's XMP app also returns the media player's real controller
+  and lock state from XMPGetPlaybackController (ours writes 0, 0), not
+  ported yet.
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own
