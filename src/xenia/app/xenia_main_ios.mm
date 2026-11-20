@@ -180,7 +180,7 @@ bool EmulatorAppIOS::OnInitialize() {
 
   // Metal performance HUD options (Settings > Display), for Metal to read when
   // it starts, which is later than this. main() turned the HUD on before the
-  // config was read.
+  // config was read. Unsupported MTL_HUD_* values are ignored by Metal.
   if (cvars::metal_hud) {
     if (!cvars::metal_hud_elements.empty()) {
       setenv("MTL_HUD_ELEMENTS", cvars::metal_hud_elements.c_str(), 1);
