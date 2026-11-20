@@ -194,18 +194,18 @@ jobs:
             artifact_path: "scratch/artifacts/xenios_ios_iphone_ipad.ipa"
             script_args: "--skip-macos-arm64 --skip-macos-x86_64"
             needs_qt: false
-          - label: "macOS Apple Silicon"
-            runner: "macos-15"
-            artifact_name: "xenios_macos_apple_silicon"
-            artifact_path: "scratch/artifacts/xenios_macos_apple_silicon.dmg"
-            script_args: "--skip-ios --skip-macos-x86_64"
-            needs_qt: true
-          - label: "macOS Intel"
-            runner: "macos-15-intel"
-            artifact_name: "xenios_macos_intel"
-            artifact_path: "scratch/artifacts/xenios_macos_intel.dmg"
-            script_args: "--skip-ios --skip-macos-arm64"
-            needs_qt: true
+      #   - label: "macOS Apple Silicon"
+      #     runner: "macos-15"
+      #     artifact_name: "xenios_macos_apple_silicon"
+      #     artifact_path: "scratch/artifacts/xenios_macos_apple_silicon.dmg"
+      #     script_args: "--skip-ios --skip-macos-x86_64"
+      #     needs_qt: true
+      #   - label: "macOS Intel"
+      #     runner: "macos-15-intel"
+      #     artifact_name: "xenios_macos_intel"
+      #     artifact_path: "scratch/artifacts/xenios_macos_intel.dmg"
+      #     script_args: "--skip-ios --skip-macos-arm64"
+      #     needs_qt: true
 
     steps:
       - uses: actions/checkout@v4
@@ -316,17 +316,17 @@ jobs:
           name: "xenios_ios_iphone_ipad"
           path: "artifacts/ios"
 
-      - name: Download macOS Apple Silicon artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: "xenios_macos_apple_silicon"
-          path: "artifacts/macos-arm64"
+   #  - name: Download macOS Apple Silicon artifact
+   #    uses: actions/download-artifact@v4
+   #    with:
+   #      name: "xenios_macos_apple_silicon"
+   #      path: "artifacts/macos-arm64"
 
-      - name: Download macOS Intel artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: "xenios_macos_intel"
-          path: "artifacts/macos-x86_64"
+   #  - name: Download macOS Intel artifact
+   #    uses: actions/download-artifact@v4
+   #    with:
+   #      name: "xenios_macos_intel"
+   #      path: "artifacts/macos-x86_64"
 
       - name: Create or update GitHub release
         id: github_release
