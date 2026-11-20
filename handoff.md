@@ -2069,6 +2069,33 @@ the owner's Actions were briefly disabled, hence an extra comment commit).
   (job system), 82925000-82931000 (loading-screen frame job),
   82A16000-82A26000 (music system) and 82920000-82921000 (clock).
 
+### Build 9655 result (owner, log 06-20-13 with the code dump; disassembly in the session scratchpad r9655/dis.txt)
+
+Job system (globals at 0x82F718C8 = J): J+0x3C pointer to 32-byte queue
+entries, J+0x44 free-list head, J+0x48 / J+0x4C pending / active over all
+queues, J+0x50.. per-queue in each entry (+0 pending, +0x1C active),
+J+0x50/0x54 = events 0x82F71918 / 0x82F7191C (worker wake), 0x82F71920
+quit flag, 0x82F718BC idle-worker count.
+- 829622F8 creates a queue (returns its index), 82962368 destroys one
+  (waits for all with -1 first), 829623C8 shuts the system down.
+- 82962D70(queue, wake_a, wake_b): sets or resets the two wake events, then
+  polls the counters (the queue's own if queue != -1, else the global
+  ones), calling 82963600 (run a job, else sleep 82B13248) between polls,
+  10000 times per round, forever until 0.
+- 82962EE8 is a worker's idle wait: while nothing is pending, count itself
+  idle and wait 1 ms on the wake event.
+- Game Master's frame (8292FF08) calls 82962D70(*(0x82F6F404), 1, 0) every
+  frame; 0x82F6F404 is the render queue, created by 829285E0. The
+  loading-screen frame job (82925778) takes D3D ownership (82928540 /
+  82928598), waits for the previous frame's fence (829258C0), inserts a
+  new fence, draws, and ends with 82928598 and 825A88C8(*(0x82CE2158)).
+- The watch (9654) was of the global counters, which include every queue.
+  Next: watch 82F6F404 (which queue Game Master waits for: an index or -1),
+  82F71904 (the queue array), plus 82F71910,82F71914; then that queue's
+  own counters (array + 32 * index, +0 and +0x1C). Not yet known: who
+  queues frame jobs (82925778 is only reached by function pointer, from
+  code outside the dumped ranges).
+
 ### Async shader compilation backport: first scoping (2026-11-19)
 
 - spirv2air (`xenios-jp/spirv2air` 84638ce, BSD-3, no LLVM, writes its own
