@@ -666,6 +666,51 @@ dword_result_t NtDeviceIoControlFile_entry(
   return X_STATUS_SUCCESS;
 }
 DECLARE_XBOXKRNL_EXPORT1(NtDeviceIoControlFile, kFileSystem, kStub);
+
+// The following four as xenia-edge (xboxkrnl_io.cc). Call of Duty: Black Ops
+// mounts its cache drive with them; they were undefined exports here, which
+// return whatever r3 held.
+
+// cache: is a host folder mounted for every title, so no STFS volume is made
+// over a cache partition and the caller's device object stays as it was.
+dword_result_t StfsCreateDevice_entry(lpvoid_t params, dword_t params_size) {
+  if (params_size != 0x58) {
+    return X_STATUS_INVALID_PARAMETER;
+  }
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XBOXKRNL_EXPORT1(StfsCreateDevice, kFileSystem, kStub);
+
+dword_result_t StfsControlDevice_entry(lpvoid_t device, dword_t control_code,
+                                       lpvoid_t buffer) {
+  if (control_code > 4) {
+    return X_STATUS_INVALID_DEVICE_REQUEST;
+  }
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XBOXKRNL_EXPORT1(StfsControlDevice, kFileSystem, kStub);
+
+// A volume is dismounted by the DismountVolume routine of its device's driver.
+// The XDK cache drive's routine closes an event and deletes the device. It
+// isn't called here. The drive leaves both behind each time it's closed.
+dword_result_t IoDismountVolume_entry(lpvoid_t device_object) {
+  if (!device_object) {
+    return X_STATUS_INVALID_PARAMETER;
+  }
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XBOXKRNL_EXPORT1(IoDismountVolume, kFileSystem, kStub);
+
+// A handle xenia opened sits on a host backed file system with no guest
+// volume to dismount. A valid one is all that is checked.
+dword_result_t IoDismountVolumeByFileHandle_entry(dword_t file_handle) {
+  auto file = kernel_state()->object_table()->LookupObject<XFile>(file_handle);
+  if (!file) {
+    return X_STATUS_INVALID_HANDLE;
+  }
+  return X_STATUS_SUCCESS;
+}
+DECLARE_XBOXKRNL_EXPORT1(IoDismountVolumeByFileHandle, kFileSystem, kStub);
 // device_extension_size = additional bytes of data (aligned up to 8 byte
 // granularity) that will be allocated at the tail of the resulting device
 // object. although it is allocated at the tail, it is accessed through a

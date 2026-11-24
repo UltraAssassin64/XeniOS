@@ -2351,6 +2351,88 @@ Other findings, not fixed yet:
 - Command buffers: 44-53 a frame in AC, Spider-Man, GTA IV (texture loads
   in their own buffers, plan item 3 above).
 
+### Black Ops, Edge of Time, New Vegas (owner, 2026-11-24: zips "Spidey_EoT_and_Fallout" logs 11-36-17 / 11-37-19 + traces, "Edge_of_time_and_fallout" photos 3897-3903)
+
+Title 41560855 is Call of Duty: Black Ops (goal: running into gameplay).
+
+Black Ops (logs 11-54-34 .. 12-07-42, build 9660): never presents a frame.
+- Two runs: crash dumps on host-created threads running guest callbacks for
+  the first time, the vblank interrupt callback on 01000014 (guest 824A5C58,
+  its entry; r3 0 = vblank, r4 the D3D device) and the audio callback on
+  0100001C (8251AEA8), both "write at 0x0" with the host PC in the code
+  cache; and F800007C jumping to host address 0 (pc 0, retried forever).
+- Cause found in the a64 code cache, iOS only: indirection is encoded (a
+  slot holds the target's offset in the code cache) and the table is
+  reserved readable/writable and zeroed, so a slot no module commit filled
+  reads 0 = code cache offset 0, which was the host-to-guest thunk (emitted
+  first). A call through such a slot entered that thunk with garbage
+  registers: writes to address 0, jumps to 0. XeniOS afbf8cf11 ("Commit the
+  indirection table on demand") made 0 mean the resolve thunk by emitting it
+  first. Fix (next build): the resolve thunk is emitted first (a warning is
+  logged if it does not land at offset 0); ResolveFunction logs the first 16
+  targets it can't resolve (guest address, thread, guest lr), and the thunk
+  then traps (brk) instead of running garbage.
+- Kernel exports Black Ops called that were undefined here (an undefined
+  export returns whatever r3 held): XeKeysConsolePrivateKeySign (called once
+  at startup; no certificate was written) and IoDismountVolumeByFileHandle
+  (twice, cache drive). Ported from xenia-edge (next build):
+  XeKeysConsolePrivateKeySign, XeKeysConsoleSignatureVerification (with its
+  certificate structs), StfsCreateDevice, StfsControlDevice,
+  IoDismountVolume, IoDismountVolumeByFileHandle.
+- Also imported and missing, not ported: __C_specific_handler, RtlUnwind,
+  RtlCaptureContext (structured exception handling; xenia-edge's
+  xboxkrnl_debug.cc is 2035 lines against 198 here, with guest unwinding
+  tied to the JIT), IoCompleteRequest/IoCheckShareAccess/... and
+  ObIsTitleObject (no upstream implementation either), the NetDll_XNet*
+  online calls, XCustomSetAction.
+- Crash dumps now print the host PC (offset in the function), LR, x8-x10,
+  x19-x21 and the code cache base on ARM64; "Unhandled host exception" lines
+  print lr and sp. To check on the next build: no crash dump at launch; if
+  frames still don't appear, an "A64 ResolveFunction: no function at guest"
+  line or the new registers say where to look, and a Debug log level run
+  (kernel calls) would show what the stuck threads wait for (F80000FC polls
+  a handle that is still 0, F800007C polls an event with a zero timeout).
+
+Edge of Time (415608B2, log 11-36-17, trace 11-37-06, photos 3897-3899):
+the screen is black at 30 FPS with the GPU busy. The frame is rendered
+(1120x640, 16_16_16_16 targets, lighting, 35 resolves); its last draws
+composite into a 2_10_10_10 target, a full-screen textured quad (tex x
+interpolated colour, alpha blended, tf0 a 512x64 DXT5 at the time of the
+trace) goes on top, and the frame is resolved to a 2_10_10_10 front buffer
+(04E81000, 1120x632, fetch format 54 = 2_10_10_10_AS_16_16_16_16, base format
+2_10_10_10, endian 0), so the swap goes through the PWL gamma ramp (the only
+game here that does). The PWL ramp in the trace is a real curve (base 0x0240
+to 0xFF40, the same for R, G and B). The swap path's code checks out; what
+is black is unknown: the front buffer, or the PWL/10 bpc present path.
+Owner test (no build needed): metal_presenter_gamma_debug = 2 (copies the
+front buffer without gamma), then = 1 (a gradient from the presenter). A
+picture with 2 means the PWL step; black with 2 and a gradient with 1 means
+the front buffer itself. Tools for this: scratchpad tools/xtr_mem.py (replays
+a trace with guest memory from its memory reads: LOAD_ALU_CONSTANT, IM_LOAD;
+dumps constants, fetch constants and shader microcode at a draw; the ucode
+hash matches the Frame Detail PS hash as xxh3-64 of the big-endian words).
+
+Fallout: New Vegas (425307E0, log 11-37-19, traces 11-37-33 and 11-39-10,
+photos 3900-3903): everything renders except faces: the player's face black,
+Doc Mitchell's face showing a hair/scalp texture. The 4x MSAA main pass
+(predicated tiling, 3 bands) draws characters with small per-character
+textures (64x64 8_8_8_8 at 1F7FC000, 32x32 and 64x64 DXT1 at 1FB64000 and
+1FC7F000) that no resolve in the frame wrote. Black or another texture's
+content at such addresses is what stale data looks like: memory reused for a
+new face without the texture cache seeing the write, or (if the game builds
+faces on the GPU and reads them back) the CPU reading resolve output before
+the GPU wrote it (zero-copy; XeniOS c694076c5 and 237a78443 hold fences and
+interrupts behind resolve output; this branch holds only shader-done
+fences). Owner test: per game, metal_shared_memory_zero_copy = false. If the
+faces are right, it's the zero-copy ordering; if not, the texture cache's
+invalidation of those pages.
+
+user_language/user_country (next build): xboxkrnl_xconfig.cc no longer
+defines them as strings; GetUserLanguageValue/GetUserCountryValue read
+XConfig's int32 cvars (defaults English, United States, as before), and a
+saved name ("English") that MigrateLegacyCvars maps is no longer reported as
+an invalid type, so the box at every launch goes away.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

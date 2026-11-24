@@ -14,17 +14,6 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_private.h"
 #include "xenia/xbox.h"
 
-DEFINE_string(
-    user_language, "English",
-    "User language. Supported: English, Japanese, German, French, Spanish, "
-    "Italian, Korean, TChinese, Portuguese, SChinese, Polish, Russian",
-    "XConfig");
-
-DEFINE_string(
-    user_country, "United States",
-    "User country. See XOnlineCountry enum in xbox.h for supported values.",
-    "XConfig");
-
 DEFINE_uint32(
     audio_flag, 0x00010001,
     "Audio Mode Analog.\n"
@@ -42,6 +31,11 @@ DEFINE_uint32(
     " optional. Ex) 0x00010001\n",
     "XConfig");
 
+// The language and country are XConfig's integer cvars (kernel/xconfig.cc),
+// as upstream. This file also defined them as strings ("English", "United
+// States"): the same symbols with another type.
+DECLARE_int32(user_language);
+DECLARE_int32(user_country);
 DECLARE_bool(widescreen);
 DECLARE_bool(use_50Hz_mode);
 DECLARE_int32(video_standard);
@@ -52,145 +46,17 @@ namespace kernel {
 namespace xboxkrnl {
 
 uint32_t GetUserLanguageValue() {
-  static const std::map<std::string, XLanguage> language_map = {
-      {"English", XLanguage::kEnglish},
-      {"Japanese", XLanguage::kJapanese},
-      {"German", XLanguage::kGerman},
-      {"French", XLanguage::kFrench},
-      {"Spanish", XLanguage::kSpanish},
-      {"Italian", XLanguage::kItalian},
-      {"Korean", XLanguage::kKorean},
-      {"TChinese", XLanguage::kTChinese},
-      {"Portuguese", XLanguage::kPortuguese},
-      {"SChinese", XLanguage::kSChinese},
-      {"Polish", XLanguage::kPolish},
-      {"Russian", XLanguage::kRussian},
-  };
-
-  const auto& lang = cvars::user_language;
-  auto it = language_map.find(lang);
-  if (it != language_map.end()) {
-    return static_cast<uint32_t>(it->second);
+  if (cvars::user_language > 0 &&
+      cvars::user_language < static_cast<int32_t>(XLanguage::kMaxLanguages)) {
+    return static_cast<uint32_t>(cvars::user_language);
   }
   return static_cast<uint32_t>(XLanguage::kEnglish);  // Default
 }
 
 uint32_t GetUserCountryValue() {
-  static const std::map<std::string, XOnlineCountry> country_map = {
-      {"UAE", XOnlineCountry::kUnitedArabEmirates},
-      {"Albania", XOnlineCountry::kAlbania},
-      {"Armenia", XOnlineCountry::kArmenia},
-      {"Argentina", XOnlineCountry::kArgentina},
-      {"Austria", XOnlineCountry::kAustria},
-      {"Australia", XOnlineCountry::kAustralia},
-      {"Azerbaijan", XOnlineCountry::kAzerbaijan},
-      {"Belgium", XOnlineCountry::kBelgium},
-      {"Bulgaria", XOnlineCountry::kBulgaria},
-      {"Bahrain", XOnlineCountry::kBahrain},
-      {"Brunei", XOnlineCountry::kBruneiDarussalam},
-      {"Bolivia", XOnlineCountry::kBolivia},
-      {"Brazil", XOnlineCountry::kBrazil},
-      {"Belarus", XOnlineCountry::kBelarus},
-      {"Belize", XOnlineCountry::kBelize},
-      {"Canada", XOnlineCountry::kCanada},
-      {"Switzerland", XOnlineCountry::kSwitzerland},
-      {"Chile", XOnlineCountry::kChile},
-      {"China", XOnlineCountry::kChina},
-      {"Colombia", XOnlineCountry::kColombia},
-      {"Costa Rica", XOnlineCountry::kCostaRica},
-      {"Czech Republic", XOnlineCountry::kCzechRepublic},
-      {"Germany", XOnlineCountry::kGermany},
-      {"Denmark", XOnlineCountry::kDenmark},
-      {"Dominican Republic", XOnlineCountry::kDominicanRepublic},
-      {"Algeria", XOnlineCountry::kAlgeria},
-      {"Ecuador", XOnlineCountry::kEcuador},
-      {"Estonia", XOnlineCountry::kEstonia},
-      {"Egypt", XOnlineCountry::kEgypt},
-      {"Spain", XOnlineCountry::kSpain},
-      {"Finland", XOnlineCountry::kFinland},
-      {"Faroe Islands", XOnlineCountry::kFaroeIslands},
-      {"France", XOnlineCountry::kFrance},
-      {"Great Britain", XOnlineCountry::kGreatBritain},
-      {"Georgia", XOnlineCountry::kGeorgia},
-      {"Greece", XOnlineCountry::kGreece},
-      {"Guatemala", XOnlineCountry::kGuatemala},
-      {"Hong Kong", XOnlineCountry::kHongKong},
-      {"Honduras", XOnlineCountry::kHonduras},
-      {"Croatia", XOnlineCountry::kCroatia},
-      {"Hungary", XOnlineCountry::kHungary},
-      {"Indonesia", XOnlineCountry::kIndonesia},
-      {"Ireland", XOnlineCountry::kIreland},
-      {"Israel", XOnlineCountry::kIsrael},
-      {"India", XOnlineCountry::kIndia},
-      {"Iraq", XOnlineCountry::kIraq},
-      {"Iran", XOnlineCountry::kIran},
-      {"Iceland", XOnlineCountry::kIceland},
-      {"Italy", XOnlineCountry::kItaly},
-      {"Jamaica", XOnlineCountry::kJamaica},
-      {"Jordan", XOnlineCountry::kJordan},
-      {"Japan", XOnlineCountry::kJapan},
-      {"Kenya", XOnlineCountry::kKenya},
-      {"Kyrgyzstan", XOnlineCountry::kKyrgyzstan},
-      {"Korea", XOnlineCountry::kKorea},
-      {"Kuwait", XOnlineCountry::kKuwait},
-      {"Kazakhstan", XOnlineCountry::kKazakhstan},
-      {"Lebanon", XOnlineCountry::kLebanon},
-      {"Liechtenstein", XOnlineCountry::kLiechtenstein},
-      {"Lithuania", XOnlineCountry::kLithuania},
-      {"Luxembourg", XOnlineCountry::kLuxembourg},
-      {"Latvia", XOnlineCountry::kLatvia},
-      {"Libya", XOnlineCountry::kLibya},
-      {"Morocco", XOnlineCountry::kMorocco},
-      {"Monaco", XOnlineCountry::kMonaco},
-      {"Macedonia", XOnlineCountry::kMacedonia},
-      {"Mongolia", XOnlineCountry::kMongolia},
-      {"Macau", XOnlineCountry::kMacau},
-      {"Maldives", XOnlineCountry::kMaldives},
-      {"Mexico", XOnlineCountry::kMexico},
-      {"Malaysia", XOnlineCountry::kMalaysia},
-      {"Nicaragua", XOnlineCountry::kNicaragua},
-      {"Netherlands", XOnlineCountry::kNetherlands},
-      {"Norway", XOnlineCountry::kNorway},
-      {"New Zealand", XOnlineCountry::kNewZealand},
-      {"Oman", XOnlineCountry::kOman},
-      {"Panama", XOnlineCountry::kPanama},
-      {"Peru", XOnlineCountry::kPeru},
-      {"Philippines", XOnlineCountry::kPhilippines},
-      {"Pakistan", XOnlineCountry::kPakistan},
-      {"Poland", XOnlineCountry::kPoland},
-      {"Puerto Rico", XOnlineCountry::kPuertoRico},
-      {"Portugal", XOnlineCountry::kPortugal},
-      {"Paraguay", XOnlineCountry::kParaguay},
-      {"Qatar", XOnlineCountry::kQatar},
-      {"Romania", XOnlineCountry::kRomania},
-      {"Russia", XOnlineCountry::kRussianFederation},
-      {"Saudi Arabia", XOnlineCountry::kSaudiArabia},
-      {"Sweden", XOnlineCountry::kSweden},
-      {"Singapore", XOnlineCountry::kSingapore},
-      {"Slovenia", XOnlineCountry::kSlovenia},
-      {"Slovakia", XOnlineCountry::kSlovakRepublic},
-      {"El Salvador", XOnlineCountry::kElSalvador},
-      {"Syria", XOnlineCountry::kSyria},
-      {"Thailand", XOnlineCountry::kThailand},
-      {"Tunisia", XOnlineCountry::kTunisia},
-      {"Turkey", XOnlineCountry::kTurkey},
-      {"Trinidad", XOnlineCountry::kTrinidadAndTobago},
-      {"Taiwan", XOnlineCountry::kTaiwan},
-      {"Ukraine", XOnlineCountry::kUkraine},
-      {"United States", XOnlineCountry::kUnitedStates},
-      {"Uruguay", XOnlineCountry::kUruguay},
-      {"Uzbekistan", XOnlineCountry::kUzbekistan},
-      {"Venezuela", XOnlineCountry::kVenezuela},
-      {"Vietnam", XOnlineCountry::kVietNam},
-      {"Yemen", XOnlineCountry::kYemen},
-      {"South Africa", XOnlineCountry::kSouthAfrica},
-      {"Zimbabwe", XOnlineCountry::kZimbabwe},
-  };
-
-  const auto& country = cvars::user_country;
-  auto it = country_map.find(country);
-  if (it != country_map.end()) {
-    return static_cast<uint32_t>(it->second);
+  if (cvars::user_country > 0 &&
+      cvars::user_country <= static_cast<int32_t>(XOnlineCountry::kZimbabwe)) {
+    return static_cast<uint32_t>(cvars::user_country);
   }
   return static_cast<uint32_t>(XOnlineCountry::kUnitedStates);  // Default
 }

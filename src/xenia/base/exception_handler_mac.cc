@@ -226,11 +226,22 @@ static void ExceptionHandlerCallback(int signal_number, siginfo_t* signal_info,
       unhandled_host_exception_count.fetch_add(1, std::memory_order_relaxed) +
       1;
   if (unhandled_count <= 10 || !(unhandled_count % 1000000)) {
+#if XE_ARCH_ARM64
+    // The link register says who called a null or bad function pointer (pc
+    // 0): a host return address, or one in the JIT code cache.
+    XELOGE(
+        "Unhandled host exception: signal={} pc=0x{:016X} address=0x{:016X} "
+        "lr=0x{:016X} sp=0x{:016X} ({} so far)",
+        signal_number, uint64_t(ex.pc()),
+        reinterpret_cast<uint64_t>(signal_info->si_addr), thread_context.x[30],
+        thread_context.sp, unhandled_count);
+#else
     XELOGE(
         "Unhandled host exception: signal={} pc=0x{:016X} address=0x{:016X} "
         "({} so far)",
         signal_number, uint64_t(ex.pc()),
         reinterpret_cast<uint64_t>(signal_info->si_addr), unhandled_count);
+#endif  // XE_ARCH_ARM64
   }
 }
 

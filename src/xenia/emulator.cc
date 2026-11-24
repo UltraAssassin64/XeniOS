@@ -1735,6 +1735,29 @@ bool Emulator::ExceptionCallback(Exception* ex) {
   crash_msg.append(
       fmt::format("PC: 0x{:08X}\n",
                   guest_function->MapMachineCodeToGuestAddress(ex->pc())));
+#if XE_ARCH_ARM64
+  // Where in the generated code: the host PC as an offset in the function
+  // the guest PC was mapped from (a PC outside its code means the lookup
+  // found a neighbour, e.g. a thunk), the link register, and the registers
+  // the JIT keeps its state in (x19 backend context, x20 guest context, x21
+  // membase) and the stackpoint store uses (x8-x10).
+  if (const HostThreadContext* host_crash_context = ex->thread_context()) {
+    const uint64_t host_code_start =
+        reinterpret_cast<uint64_t>(guest_function->machine_code());
+    crash_msg.append(fmt::format(
+        "Host PC 0x{:016X} ({}+0x{:X} in the function at 0x{:016X}, {} "
+        "bytes), LR 0x{:016X}, x8 0x{:X} x9 0x{:X} x10 0x{:X} x19 0x{:X} "
+        "x20 0x{:X} x21 0x{:X}, code cache 0x{:016X}\n",
+        ex->pc(), ex->pc() >= host_code_start ? "" : "-",
+        ex->pc() >= host_code_start ? ex->pc() - host_code_start
+                                    : host_code_start - ex->pc(),
+        host_code_start, guest_function->machine_code_length(),
+        host_crash_context->x[30], host_crash_context->x[8],
+        host_crash_context->x[9], host_crash_context->x[10],
+        host_crash_context->x[19], host_crash_context->x[20],
+        host_crash_context->x[21], code_base));
+  }
+#endif  // XE_ARCH_ARM64
   if (ex->code() == Exception::Code::kAccessViolation) {
     const char* op_str = "unknown";
     if (ex->access_violation_operation() ==

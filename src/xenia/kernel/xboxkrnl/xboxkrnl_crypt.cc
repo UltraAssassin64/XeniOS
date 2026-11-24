@@ -8,6 +8,7 @@
 */
 
 #include <algorithm>
+#include <cstring>
 
 #include "xenia/base/logging.h"
 #include "xenia/base/platform.h"
@@ -858,6 +859,125 @@ dword_result_t XeKeysHmacShaUsingKey_entry(lpvoid_t obscured_key,
   return X_STATUS_SUCCESS;
 }
 DECLARE_XBOXKRNL_EXPORT1(XeKeysHmacShaUsingKey, kNone, kImplemented);
+
+// Console certificates, as xenia-edge (xboxkrnl_crypt.cc): Call of Duty:
+// Black Ops signs data with XeKeysConsolePrivateKeySign at startup, which was
+// an undefined export here (no certificate written, a garbage return).
+struct XECRYPT_SIG {
+  xe::be<uint64_t> aqwPad[0x1C];
+  xe::be<uint8_t> One;
+  uint8_t Salt[0xA];
+  uint8_t Hash[0x14];
+  xe::be<uint8_t> End;
+};
+static_assert_size(XECRYPT_SIG, 0x100);  // size 256
+
+#pragma pack(push, 1)
+struct XE_CONSOLE_ID {
+  union {
+    struct {
+      uint8_t RefurbBits : 4;
+      uint8_t ManufactureMonth : 4;
+      uint32_t ManufactureYear : 4;
+      uint32_t MacIndex3 : 8;
+      uint32_t MacIndex4 : 8;
+      uint32_t MacIndex5 : 8;
+      uint32_t Crc : 4;
+    };
+    uint8_t Data[5];
+  };
+};
+#pragma pack(pop)
+
+struct X_CONSOLE_PUBLIC_KEY {
+  uint8_t public_exponent[0x4];  // 0x0 sz:0x4
+  uint8_t modulus[0x80];         // 0x4 sz:0x80
+};  // size 132
+static_assert_size(X_CONSOLE_PUBLIC_KEY, 0x84);
+
+enum XConsoleType : uint32_t {
+  Invalid = 0,
+  Devkit = 1,
+  Retail = 2,
+  Testkit = 0x40000001,
+  RecoveredDevkit = 0x80000001,
+  Pre1888Devkit = 0x80000002
+};
+
+struct XE_CONSOLE_CERTIFICATE {
+  xe::be<uint16_t> cert_size;               // 0x0 sz:0x2
+  XE_CONSOLE_ID console_id;                 // 0x2 sz:0x5
+  uint8_t console_part_number[11];          // 0x7 sz:0xB
+  uint8_t reserved[4];                      // 0x12 sz:0x4
+  xe::be<uint16_t> privileges;              // 0x16 sz:0x2
+  xe::be<XConsoleType> console_type;        // 0x18 sz:0x4
+  uint8_t manufacture_date[8];              // 0x1C sz:0x8
+  X_CONSOLE_PUBLIC_KEY console_public_key;  // 0x24 sz:0x84
+  XECRYPT_SIG signature;                    // 0xA8 sz:0x100
+};  // size 424
+static_assert_size(XE_CONSOLE_CERTIFICATE, 0x1A8);
+
+struct XE_CONSOLE_SIGNATURE {
+  XE_CONSOLE_CERTIFICATE console_certificate;
+  uint8_t signature[0x80];
+};
+static_assert_size(XE_CONSOLE_SIGNATURE, 0x228);
+
+// The certificate this console signs with.
+static void FillConsoleCertificate(XE_CONSOLE_CERTIFICATE* certificate) {
+  std::memset(certificate, 0, sizeof(*certificate));
+  certificate->console_id.RefurbBits = 0b0011;
+  certificate->console_id.ManufactureMonth = 0b1001;
+  certificate->console_id.ManufactureYear = 0b0001;
+  certificate->console_id.MacIndex3 = 0b01000000;
+  certificate->console_id.MacIndex4 = 0b01100110;
+  certificate->console_id.MacIndex5 = 0b01111110;
+  certificate->console_id.Crc = 0b0000;
+  certificate->console_type = Retail;
+  certificate->manufacture_date[0] = 2;
+  certificate->manufacture_date[1] = 0;
+  certificate->manufacture_date[2] = 0;
+  certificate->manufacture_date[3] = 5;
+  certificate->manufacture_date[4] = 1;
+  certificate->manufacture_date[5] = 1;
+  certificate->manufacture_date[6] = 2;
+  certificate->manufacture_date[7] = 2;
+}
+
+dword_result_t XeKeysConsolePrivateKeySign_entry(
+    lpvoid_t hash, pointer_t<XE_CONSOLE_CERTIFICATE> output) {
+  if (!hash) {
+    return false;
+  }
+
+  if (!output) {
+    return false;
+  }
+
+  FillConsoleCertificate(output);
+  return true;
+}
+DECLARE_XBOXKRNL_EXPORT1(XeKeysConsolePrivateKeySign, kNone, kSketchy);
+
+// Signatures from XeKeysConsolePrivateKeySign hold only the certificate, the
+// one thing checked here.
+dword_result_t XeKeysConsoleSignatureVerification_entry(
+    lpvoid_t hash, pointer_t<XE_CONSOLE_SIGNATURE> signature,
+    lpdword_t same_console) {
+  if (!hash || !signature) {
+    return false;
+  }
+
+  XE_CONSOLE_CERTIFICATE certificate;
+  FillConsoleCertificate(&certificate);
+  const bool matches = !std::memcmp(&signature->console_certificate,
+                                    &certificate, sizeof(certificate));
+  if (same_console) {
+    *same_console = matches;
+  }
+  return matches;
+}
+DECLARE_XBOXKRNL_EXPORT1(XeKeysConsoleSignatureVerification, kNone, kSketchy);
 
 // going off of usage in some hbrew xex
 // 0 and 1 appear to be devkit, 2 is retail

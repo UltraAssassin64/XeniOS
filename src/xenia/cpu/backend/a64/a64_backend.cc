@@ -9,6 +9,7 @@
 
 #include "xenia/cpu/backend/a64/a64_backend.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstring>
 
@@ -873,7 +874,15 @@ uint64_t ResolveFunction(void* raw_context, uint64_t target_address) {
   auto fn = thread_state->processor()->ResolveFunction(
       static_cast<uint32_t>(target_address));
   if (!fn) {
-    // Unresolvable — return 0 which will fault.
+    // Unresolvable — return 0, and the resolve thunk traps (brk #0xF000).
+    static std::atomic<uint32_t> unresolved_calls{0};
+    if (unresolved_calls.fetch_add(1, std::memory_order_relaxed) < 16) {
+      XELOGE(
+          "A64 ResolveFunction: no function at guest {:08X} (thread {:08X}, "
+          "guest lr {:08X})",
+          static_cast<uint32_t>(target_address), thread_state->thread_id(),
+          static_cast<uint32_t>(guest_context->lr));
+    }
     return 0;
   }
 
@@ -1023,14 +1032,29 @@ bool A64Backend::Initialize(Processor* processor) {
   XbyakA64Allocator allocator;
   A64HelperEmitter thunk_emitter(this, &allocator);
 
+  // The resolve thunk goes first, at offset 0 of the code cache (as in
+  // XeniOS afbf8cf11). With encoded indirection (iOS) a slot holds the
+  // target's offset in the code cache, and the table is reserved readable
+  // and zeroed, so a call to guest code outside every committed range (code
+  // no module covers) reads 0. That now resolves the function instead of
+  // entering whatever was emitted first (the host-to-guest thunk, with
+  // garbage registers: writes to address 0 and jumps to 0).
+  resolve_function_thunk_ = thunk_emitter.EmitResolveFunctionThunk();
   host_to_guest_thunk_ = thunk_emitter.EmitHostToGuestThunk();
   guest_to_host_thunk_ = thunk_emitter.EmitGuestToHostThunk();
-  resolve_function_thunk_ = thunk_emitter.EmitResolveFunctionThunk();
 
   if (!host_to_guest_thunk_ || !guest_to_host_thunk_ ||
       !resolve_function_thunk_) {
     XELOGE("A64Backend: Failed to generate thunks");
     return false;
+  }
+  if (reinterpret_cast<uintptr_t>(resolve_function_thunk_) !=
+      code_cache_->execute_base_address()) {
+    XELOGW(
+        "A64Backend: resolve thunk at code cache offset 0x{:X}, not 0; "
+        "unfilled indirection slots will not resolve",
+        reinterpret_cast<uintptr_t>(resolve_function_thunk_) -
+            code_cache_->execute_base_address());
   }
 
   if (cvars::a64_enable_host_guest_stack_synchronization) {

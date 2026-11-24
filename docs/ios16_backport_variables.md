@@ -325,7 +325,7 @@ further edits.
 | `metal_perf_last_swap_` | MetalCommandProcessor member | Host time of the previous swap. | `src/xenia/gpu/metal/metal_command_processor.h` | 697 | 1 |
 | `metal_perf_last_swap_` | MetalCommandProcessor member | Host time of the previous swap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2844, 2847, 2855 | 3 |
 | `unhandled_host_exception_count` | function static atomic | Unhandled host faults so far, to log only the first ten and then one in a million. | `src/xenia/base/exception_handler_mac.cc` | 224, 226 | 2 |
-| `unhandled_count` | local | This fault's number. | `src/xenia/base/exception_handler_mac.cc` | 225, 228, 233 | 4 |
+| `unhandled_count` | local | This fault's number. | `src/xenia/base/exception_handler_mac.cc` | 225, 228, 243 | 4 |
 | `PreferPerformanceCores` | function (xe::threading) | Asks iOS to run the current thread on the performance cores (QOS_CLASS_USER_INTERACTIVE); false elsewhere. Ported from XeniOS 77cc1358 (same name there). | `src/xenia/base/threading.h` | 130 | 1 |
 | `PreferPerformanceCores` | function (xe::threading) | Asks iOS to run the current thread on the performance cores (QOS_CLASS_USER_INTERACTIVE); false elsewhere. Ported from XeniOS 77cc1358 (same name there). | `src/xenia/base/threading_posix.cc` | 200 | 1 |
 | `PreferPerformanceCores` | function (xe::threading) | Asks iOS to run the current thread on the performance cores (QOS_CLASS_USER_INTERACTIVE); false elsewhere. Ported from XeniOS 77cc1358 (same name there). | `src/xenia/base/threading_win.cc` | 164 | 1 |
@@ -906,16 +906,16 @@ further edits.
 | `first_tiles` | local in BeginCommandBuffer (frame detail) | Tiles copied before the EDRAM end wraps around. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7563, 7567, 7568, 7570, 7571 | 5 |
 | `KernelCallReadable` | function in xe::kernel::shim (declaration) | Whether a guest memory range is committed and readable. | `src/xenia/kernel/util/shim_utils.h` | 564 | 1 |
 | `LogKernelCallStack` | function in xe::kernel::shim (declaration) | Guest return addresses up the stack from a frame. | `src/xenia/kernel/util/shim_utils.h` | 567 | 1 |
-| `KernelCallReadable` | function in xe::kernel::shim | Checks the guest code around the crash PC is readable. | `src/xenia/emulator.cc` | 1794 | 1 |
-| `LogKernelCallStack` | function in xe::kernel::shim | Guest stack of the crashed thread. | `src/xenia/emulator.cc` | 1790 | 1 |
-| `crash_global` | local in Emulator::ExceptionCallback (crash dump) | The global critical region (try-locked; the page table and the stack walk need it). | `src/xenia/emulator.cc` | 1755, 1756, 1838 | 3 |
-| `crash_locked` | local in Emulator::ExceptionCallback (crash dump) | Whether crash_global was taken. | `src/xenia/emulator.cc` | 1756, 1767, 1787 | 3 |
-| `crash_fault` | local in Emulator::ExceptionCallback (crash dump) | Host fault address. | `src/xenia/emulator.cc` | 1758, 1761, 1762, 1763 | 4 |
-| `crash_virtual` | local in Emulator::ExceptionCallback (crash dump) | Host address of guest virtual address 0. | `src/xenia/emulator.cc` | 1759, 1761, 1762, 1763, 1783 | 5 |
-| `crash_guest` | local in Emulator::ExceptionCallback (crash dump) | Guest address of the fault. | `src/xenia/emulator.cc` | 1763, 1764, 1765, 1768 | 4 |
-| `crash_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding crash_guest. | `src/xenia/emulator.cc` | 1765, 1767, 1768, 1772, 1775 | 5 |
-| `crash_info` | local in Emulator::ExceptionCallback (crash dump) | Region and allocation of crash_guest (state, protection). | `src/xenia/emulator.cc` | 1766, 1768, 1772, 1773, 1774 | 8 |
-| `crash_pc` | local in Emulator::ExceptionCallback (crash dump) | Guest PC of the fault, for the code words around it. | `src/xenia/emulator.cc` | 1791, 1793, 1794, 1795, 1799 | 5 |
+| `KernelCallReadable` | function in xe::kernel::shim | Checks the guest code around the crash PC is readable. | `src/xenia/emulator.cc` | 1817 | 1 |
+| `LogKernelCallStack` | function in xe::kernel::shim | Guest stack of the crashed thread. | `src/xenia/emulator.cc` | 1813 | 1 |
+| `crash_global` | local in Emulator::ExceptionCallback (crash dump) | The global critical region (try-locked; the page table and the stack walk need it). | `src/xenia/emulator.cc` | 1778, 1779, 1861 | 3 |
+| `crash_locked` | local in Emulator::ExceptionCallback (crash dump) | Whether crash_global was taken. | `src/xenia/emulator.cc` | 1779, 1790, 1810 | 3 |
+| `crash_fault` | local in Emulator::ExceptionCallback (crash dump) | Host fault address. | `src/xenia/emulator.cc` | 1781, 1784, 1785, 1786 | 4 |
+| `crash_virtual` | local in Emulator::ExceptionCallback (crash dump) | Host address of guest virtual address 0. | `src/xenia/emulator.cc` | 1782, 1784, 1785, 1786, 1806 | 5 |
+| `crash_guest` | local in Emulator::ExceptionCallback (crash dump) | Guest address of the fault. | `src/xenia/emulator.cc` | 1786, 1787, 1788, 1791 | 4 |
+| `crash_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding crash_guest. | `src/xenia/emulator.cc` | 1788, 1790, 1791, 1795, 1798 | 5 |
+| `crash_info` | local in Emulator::ExceptionCallback (crash dump) | Region and allocation of crash_guest (state, protection). | `src/xenia/emulator.cc` | 1789, 1791, 1795, 1796, 1797 | 8 |
+| `crash_pc` | local in Emulator::ExceptionCallback (crash dump) | Guest PC of the fault, for the code words around it. | `src/xenia/emulator.cc` | 1814, 1816, 1817, 1818, 1822 | 5 |
 | `kernel_call_wait_objects` | local in LogKernelCallThreads | The handles of a NtWaitForMultipleObjectsEx with their object type and name. | `src/xenia/kernel/util/shim_utils.cc` | 292, 303, 307, 317, 321, 325 | 6 |
 | `kernel_call_handles` | local in LogKernelCallThreads | Guest address of the handle array (r4). | `src/xenia/kernel/util/shim_utils.cc` | 293, 294, 298 | 3 |
 | `kernel_call_wait_handle` | local in LogKernelCallThreads | One handle of the array. | `src/xenia/kernel/util/shim_utils.cc` | 296, 302, 304 | 3 |
@@ -930,7 +930,7 @@ further edits.
 | `only_frame_detail_log` | local in saveTapped: | Result of OnlyFrameDetailLogChanged before the settings are applied. | `src/xenia/ui/windowed_app_main_ios.mm` | 8743, 8747 | 2 |
 | `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/gpu/render_target_cache.cc` | 38, 1725 | 2 |
 | `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/gpu/metal/metal_command_processor.cc` | 95, 2981 | 2 |
-| `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/emulator.cc` | 122, 2256 | 2 |
+| `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/emulator.cc` | 122, 2279 | 2 |
 | `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/ui/windowed_app_main_ios.mm` | 3631 | 1 |
 | `TakeUnchangedTransferCounts` | member function of RenderTargetCache | Returns and resets unchanged_transfers_ and skipped_transfers_ for the Metal perf log. | `src/xenia/gpu/render_target_cache.h` | 229 | 1 |
 | `TakeUnchangedTransferCounts` | member function of RenderTargetCache | Returns and resets unchanged_transfers_ and skipped_transfers_ for the Metal perf log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2974 | 1 |
@@ -1004,16 +1004,16 @@ further edits.
 | `RecordVirtualMemoryEvent` | function (xboxkrnl_memory.cc) | Records a call. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.cc` | 86, 320, 421 | 3 |
 | `DescribeVirtualMemoryHistory` | function in xe::kernel::xboxkrnl | The recorded calls whose range holds an address, for the crash dump. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.h` | 63 | 1 |
 | `DescribeVirtualMemoryHistory` | function in xe::kernel::xboxkrnl | The recorded calls whose range holds an address, for the crash dump. | `src/xenia/kernel/xboxkrnl/xboxkrnl_memory.cc` | 98 | 1 |
-| `DescribeVirtualMemoryHistory` | function in xe::kernel::xboxkrnl | The recorded calls whose range holds an address, for the crash dump. | `src/xenia/emulator.cc` | 1836 | 1 |
-| `crash_reg` | local in Emulator::ExceptionCallback (crash dump) | Register index. | `src/xenia/emulator.cc` | 1806, 1807, 1822 | 5 |
-| `crash_pointer` | local in Emulator::ExceptionCallback (crash dump) | The register as a guest address. | `src/xenia/emulator.cc` | 1807, 1808, 1811, 1814, 1822, 1825, 1836 | 8 |
-| `crash_pointer_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding it. | `src/xenia/emulator.cc` | 1811, 1813, 1814 | 3 |
-| `crash_pointer_info` | local in Emulator::ExceptionCallback (crash dump) | Its allocation. | `src/xenia/emulator.cc` | 1812, 1815, 1816, 1822, 1823, 1824 | 7 |
-| `crash_bytes` | local in Emulator::ExceptionCallback (crash dump) | Start of the 32 bytes dumped around it. | `src/xenia/emulator.cc` | 1825, 1826, 1831 | 3 |
+| `DescribeVirtualMemoryHistory` | function in xe::kernel::xboxkrnl | The recorded calls whose range holds an address, for the crash dump. | `src/xenia/emulator.cc` | 1859 | 1 |
+| `crash_reg` | local in Emulator::ExceptionCallback (crash dump) | Register index. | `src/xenia/emulator.cc` | 1829, 1830, 1845 | 5 |
+| `crash_pointer` | local in Emulator::ExceptionCallback (crash dump) | The register as a guest address. | `src/xenia/emulator.cc` | 1830, 1831, 1834, 1837, 1845, 1848, 1859 | 8 |
+| `crash_pointer_heap` | local in Emulator::ExceptionCallback (crash dump) | Heap holding it. | `src/xenia/emulator.cc` | 1834, 1836, 1837 | 3 |
+| `crash_pointer_info` | local in Emulator::ExceptionCallback (crash dump) | Its allocation. | `src/xenia/emulator.cc` | 1835, 1838, 1839, 1845, 1846, 1847 | 7 |
+| `crash_bytes` | local in Emulator::ExceptionCallback (crash dump) | Start of the 32 bytes dumped around it. | `src/xenia/emulator.cc` | 1848, 1849, 1854 | 3 |
 | `signed_in_mask` | local in KernelState::RegisterNotifyListener | Users signed in, for the startup XN_SYS_SIGNINCHANGED. | `src/xenia/kernel/kernel_state.cc` | 1220, 1224, 1228 | 3 |
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/gpu/render_target_cache.cc` | 48, 764, 1389 | 3 |
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/gpu/render_target_cache.h` | 36 | 1 |
-| `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/emulator.cc` | 123, 2257 | 2 |
+| `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/emulator.cc` | 123, 2280 | 2 |
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/ui/windowed_app_main_ios.mm` | 3640 | 1 |
 | `last_update_samples_as_pixels_` | member of RenderTargetCache | Guest MSAA of the surface the last Update bound as 1x render targets of its samples, or k1X. | `src/xenia/gpu/render_target_cache.h` | 219, 222, 640 | 3 |
 | `last_update_samples_as_pixels_` | member of RenderTargetCache | Guest MSAA of the surface the last Update bound as 1x render targets of its samples, or k1X. | `src/xenia/gpu/render_target_cache.cc` | 610, 776 | 2 |
@@ -1091,7 +1091,7 @@ further edits.
 | `debug_watch_guest_addresses` | cvar | Guest addresses whose 32-bit values StartGuestValueWatch samples every 0.1 ms and logs (min, max, last, % zero) every 2 s. | `src/xenia/kernel/util/shim_utils.cc` | 467, 498, 500, 502, 504 | 5 |
 | `StartGuestValueWatch` | function in xe::kernel::shim | Starts the debug_watch_guest_addresses sampling thread once per run (called at launch). | `src/xenia/kernel/util/shim_utils.h` | 561 | 1 |
 | `StartGuestValueWatch` | function in xe::kernel::shim | Starts the debug_watch_guest_addresses sampling thread once per run (called at launch). | `src/xenia/kernel/util/shim_utils.cc` | 465 | 1 |
-| `StartGuestValueWatch` | function in xe::kernel::shim | Starts the debug_watch_guest_addresses sampling thread once per run (called at launch). | `src/xenia/emulator.cc` | 2258 | 1 |
+| `StartGuestValueWatch` | function in xe::kernel::shim | Starts the debug_watch_guest_addresses sampling thread once per run (called at launch). | `src/xenia/emulator.cc` | 2281 | 1 |
 | `watch_started` | local in StartGuestValueWatch | Function-local static: the thread was started. | `src/xenia/kernel/util/shim_utils.cc` | 466, 469 | 2 |
 | `watch_addresses` | local in StartGuestValueWatch | Parsed addresses. | `src/xenia/kernel/util/shim_utils.cc` | 496, 510, 514, 517, 542, 546, 564, 569, 595 | 9 |
 | `watch_start` | local in StartGuestValueWatch | Parse position. | `src/xenia/kernel/util/shim_utils.cc` | 474, 475, 476, 481, 494, 497, 498, 500, 505, 512 | 12 |
@@ -1151,6 +1151,10 @@ further edits.
 | `id_pos` | local in GetArgumentBufferLayoutKey | Position of a member's `[[id(` attribute. | `src/xenia/gpu/metal/msl_shader.cc` | 340, 341, 347, 361 | 4 |
 | `name_begin` | local in GetArgumentBufferLayoutKey | Start of the member name left out of the key. | `src/xenia/gpu/metal/msl_shader.cc` | 351, 352, 353, 354, 355, 357, 360 | 7 |
 | `device_address` | local in GetArgumentBufferLayoutKey | The device pointer, hashed into the key. | `src/xenia/gpu/metal/msl_shader.cc` | 369, 370, 371 | 3 |
+| `unresolved_calls` | static local in ResolveFunction (a64) | How many calls the a64 resolve thunk could not resolve (no function at the guest address); the first 16 are logged with the address and guest lr. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 878, 879 | 2 |
+| `host_crash_context` | local in Emulator::ExceptionCallback (ARM64) | Host registers of the fault, for the host PC, link register and JIT state registers in the crash dump. | `src/xenia/emulator.cc` | 1744, 1755, 1756, 1757, 1758 | 8 |
+| `host_code_start` | local in Emulator::ExceptionCallback (ARM64) | Start of the machine code of the guest function the host PC was mapped to, for the offset in the crash dump. | `src/xenia/emulator.cc` | 1745, 1751, 1752, 1753, 1754 | 6 |
+
 ## Total references per name
 
 | Name | Total uses in project |
@@ -1982,6 +1986,9 @@ further edits.
 | `id_pos` | 4 |
 | `name_begin` | 7 |
 | `device_address` | 3 |
+| `unresolved_calls` | 2 |
+| `host_crash_context` | 8 |
+| `host_code_start` | 6 |
 
 ## Checks
 
@@ -2157,3 +2164,17 @@ further edits.
   roles in xenia-edge HEAD (`refs/remotes/xenia-edge-deep/HEAD`, commit
   a573178da "Fix notify listeners queueing repeats and staying signaled"),
   where the change comes from, so they are not listed.
+- Black Ops kernel exports (xboxkrnl_io.cc: StfsCreateDevice,
+  StfsControlDevice, IoDismountVolume, IoDismountVolumeByFileHandle and their
+  parameters `params`, `params_size`, `device`, `control_code`, `buffer`,
+  `device_object`, `file_handle`, `file`; xboxkrnl_crypt.cc: XECRYPT_SIG,
+  XE_CONSOLE_ID and its fields, X_CONSOLE_PUBLIC_KEY, XConsoleType and its
+  enumerators, XE_CONSOLE_CERTIFICATE and its fields, XE_CONSOLE_SIGNATURE,
+  FillConsoleCertificate, XeKeysConsolePrivateKeySign,
+  XeKeysConsoleSignatureVerification and their `hash`, `output`,
+  `signature`, `same_console`, `certificate`, `matches`) have the same names
+  and roles in xenia-edge HEAD (`refs/remotes/xenia-edge-deep/HEAD`), where
+  they come from, so they are not listed.
+- The a64 thunk order change (resolve thunk first) and the
+  user_language/user_country fix (xboxkrnl_xconfig.cc now reads XConfig's
+  int32 cvars; the string definitions are gone) add no names.

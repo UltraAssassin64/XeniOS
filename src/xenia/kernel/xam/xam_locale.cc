@@ -23,8 +23,6 @@
 #include "third_party/fmt/include/fmt/format.h"
 #include "third_party/fmt/include/fmt/xchar.h"
 
-DECLARE_string(user_country);
-
 // TODO(gibbed): put these forward decls in a header somewhere.
 
 namespace xe {

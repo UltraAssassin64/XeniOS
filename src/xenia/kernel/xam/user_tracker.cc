@@ -25,8 +25,6 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_xconfig.h"
 #include "xenia/vfs/devices/xcontent_container_device.h"
 
-DECLARE_string(user_language);
-
 namespace xe {
 namespace kernel {
 namespace xam {

@@ -155,6 +155,12 @@ void MigrateLegacyCvars(const toml::table& config) {
               toml::value<int64_t> int_value(option.value);
               static_cast<cvar::IConfigVar*>(config_var->second)
                   ->LoadConfigValue(&int_value);
+              // Loading the name as the integer failed before this mapped
+              // it, so it is not an invalid value (as for the aliases in
+              // xenia-edge).
+              if (cvar::config_type_mismatch_warnings) {
+                std::erase(*cvar::config_type_mismatch_warnings, var_name);
+              }
             }
             break;
           }
