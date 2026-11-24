@@ -2177,6 +2177,88 @@ quit flag, 0x82F718BC idle-worker count.
   pass breaks (most from the resolves) is the lever, for both Batman games.
 - Traces not analysed yet (tools/xtr_parse.py + edram_sim.py work on them).
 
+### Batman: Arkham City logs analysed (2026-11-24) and the plan for GPU time and first-run stutters
+
+Same zip as above (build 9658). Runs 1 and 2 (08-33-33, 08-37-04):
+msaa_samples_as_pixels off; run 3 (08-39-09): on, with real occlusion
+queries, thermal state 2 most of the run.
+
+GPU time per frame, steady gameplay (no compiles):
+| | samples as pixels off (runs 1-2) | on (run 3) |
+|---|---|---|
+| frame | 38-63 ms, GPU busy 102-107% | 39-51 ms, GPU busy 82-105% |
+| rt transfer | 14.6-27.5 ms, 50-60 passes | 3.4-5.4 ms, 15 passes |
+| draws | 12.9-21.1 ms, 81-92 passes | 13-15 ms, 54-65 passes |
+| texture load + upload blit | 7-10 ms, ~30 loads | 6-8 ms |
+| edram dump + resolve | 8.4-9.9 ms, ~48 resolves | 6.3-7.2 ms |
+- Samples as pixels removes most of the transfers here as in Arkham Asylum
+  (the 640x384 4x depth round trips). Recommended per game for both Batman
+  games (long-press > Game Settings) until it is on by default.
+- What is left is pass structure: the 1280x736 main target is drawn in
+  13-19 passes a frame, each loading and storing it (150-230 MB each way),
+  because every resolve ends the render pass; and each resolve is two
+  compute passes (edram dump, resolve), each texture load two (load, blit).
+- About 35 command buffers a frame (4,000-4,500 per 120 frames). Two causes
+  in IssueCopy/RequestTextures: a resolve in a submission that has draws
+  commits the command buffer (XeniOS HEAD keeps it open: "Later work in the
+  submission that reads the output ... is ordered after the resolve on the
+  GPU"), and a texture load requested while the draw's render encoder is
+  open (IssueDraw opens it before IssueDrawMsl requests textures) goes into
+  a command buffer of its own, committed at once. The second is why the
+  first exists: a load in its own buffer runs ahead of the open one, so the
+  resolve it reads must already be committed. They have to change together
+  (XeniOS HEAD: loads into the current buffer after ending the pass, or
+  "loads ahead" from a CPU snapshot of guest memory).
+
+First-run stutters (run 3, a new area): up to 54 shaders and 40 pipelines
+per 120 frames, compile threads busy 5-20 s per window, draws waiting up
+to 1.6 s per window (metal_async_compile_wait_ms = 16 per frame) and
+compiles queued up to 3.3 s. Second runs compiled the same shaders in about
+1 ms each (Metal's system cache), but that cache is empty after an app
+update or a reboot (XeniOS HEAD's note on metal_bake_fetch_state), so every
+new build the owner installs is a first run again.
+- 670 "Compile timings" lines: per shader, median 239 ms; SPIRV-Cross
+  ~10 ms, Metal library from MSL source median 185 ms (MSL median 45 KB,
+  up to 180 KB), and newArgumentEncoder 38.8 s in total over the pixel
+  shaders (24% of their library time; median 10 ms, p90 214 ms): Metal
+  compiles the function to reflect it. Pipelines about 160 ms each.
+- XeniOS HEAD avoids the MSL compile with spirv2air (AIR straight from
+  SPIR-V, loaded with newLibraryWithData from its shader library cache) and
+  draws through vertex-only stand-ins while a pipeline builds. spirv2air
+  floors at iOS 18 / AIR 2.7 and goes with the DXIL binding layout (see the
+  scoping section below): not a small step.
+
+Plan, in order (each its own build):
+1. (Next build) Share argument encoders by layout:
+   metal_share_argument_encoders (default on, Settings > All Options:
+   Metal). The encoder depends only on the argument buffer struct, so one
+   newArgumentEncoder per distinct struct (GetArgumentBufferLayoutKey hashes
+   the spvDescriptorSetBuffer members' types and [[id]]s, names left out)
+   instead of one per shader. Expect "argument-encoder=0.00ms" on most
+   pixel shader Compile timings lines and "MslShader: argument encoder for
+   layout ..." info lines (one per layout). To check: pixel shader compile
+   time drops ~20% and pipeline creation time does not rise by the same
+   (if it does, Metal reused the reflection compile and nothing is won);
+   textures right everywhere (a wrong layout would show wrong textures).
+   Test on a fresh install of the build (cold cache), same route as run 3.
+2. A shader library cache of our own that survives updates: an
+   MTLBinaryArchive (iOS 14+) of the pipelines, filled as they are built and
+   saved per title, given to newRenderPipelineState. Saves the ~160 ms per
+   pipeline after an update or reboot; the MSL compile stays.
+3. Commit after resolves only at primary buffer end, with texture loads for
+   a draw encoded into the current command buffer: either request textures
+   before the draw opens its render encoder, or end the pass and reopen it
+   (as XeniOS HEAD). Fewer command buffers, and the same ordering.
+4. One compute encoder for a resolve's edram dump and resolve dispatches,
+   and one for a draw's texture loads (blits after), to halve those passes.
+5. The large one: resolves read from the open pass (XeniOS HEAD's tile
+   resolve, a tile dispatch reading the attachments in tile memory), so a
+   resolve no longer ends the pass and the main target stops being loaded
+   and stored 13-19 times a frame. Needs Apple tile shaders (A11+, iOS 11+).
+6. Compile cost itself: a spirv2air probe for iOS 16 (scoping section), or
+   cutting MSL size (the 45-180 KB per shader is mostly the translator's
+   control flow and helpers).
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

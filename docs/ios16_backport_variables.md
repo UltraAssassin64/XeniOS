@@ -1140,6 +1140,17 @@ further edits.
 | `paste_button` | local in the text setting editor | Pastes the clipboard into the field. | `src/xenia/ui/windowed_app_main_ios.mm` | 8609, 8610, 8612, 8613, 8614, 8623 | 6 |
 | `pasted` | local in the paste button handler | The clipboard text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8615, 8616, 8617 | 3 |
 | `text_stream` | local in ApplyGameConfigToSections | Writes an override as TOML text. | `src/xenia/ui/windowed_app_main_ios.mm` | 3992, 3993, 3994 | 3 |
+| `metal_share_argument_encoders` | cvar; iOS settings key | Share one texture/sampler argument encoder between shaders with the same argument buffer layout instead of reflecting each compiled function (default on). Settings > All Options: Metal. | `src/xenia/gpu/metal/msl_shader.cc` | 61, 306, 1545, 1547 | 4 |
+| `g_argument_encoder_cache_mutex` | file-local static (anonymous namespace) | Guards g_argument_encoder_cache (compile threads translate concurrently). | `src/xenia/gpu/metal/msl_shader.cc` | 309, 1551, 1562 | 3 |
+| `g_argument_encoder_cache` | file-local static (anonymous namespace) | Argument encoders by GetArgumentBufferLayoutKey, one reference each, kept for the process lifetime. | `src/xenia/gpu/metal/msl_shader.cc` | 310, 1552, 1553, 1563, 1572 | 5 |
+| `GetArgumentBufferLayoutKey` | function (anonymous namespace) | Hash of the spvDescriptorSetBuffer structs' member types and [[id]] slots (names left out) and the device; 0 if absent or unexpected. | `src/xenia/gpu/metal/msl_shader.cc` | 306, 317, 1548 | 3 |
+| `argument_buffer_layout_key` | local in CompileToMsl | This translation's layout key, 0 when sharing is off or the key could not be made. | `src/xenia/gpu/metal/msl_shader.cc` | 1546, 1550, 1552, 1561, 1564, 1570 | 6 |
+| `kStructPrefix` | constant in GetArgumentBufferLayoutKey | The text that starts an argument buffer struct in SPIRV-Cross output. | `src/xenia/gpu/metal/msl_shader.cc` | 319, 323 | 2 |
+| `struct_begin` | local in GetArgumentBufferLayoutKey | Position of the struct being read. | `src/xenia/gpu/metal/msl_shader.cc` | 322, 323, 325, 326, 332, 364 | 8 |
+| `struct_end` | local in GetArgumentBufferLayoutKey | Position of the struct's closing `};`. | `src/xenia/gpu/metal/msl_shader.cc` | 325, 327, 328, 335, 336, 364 | 6 |
+| `id_pos` | local in GetArgumentBufferLayoutKey | Position of a member's `[[id(` attribute. | `src/xenia/gpu/metal/msl_shader.cc` | 340, 341, 347, 361 | 4 |
+| `name_begin` | local in GetArgumentBufferLayoutKey | Start of the member name left out of the key. | `src/xenia/gpu/metal/msl_shader.cc` | 351, 352, 353, 354, 355, 357, 360 | 7 |
+| `device_address` | local in GetArgumentBufferLayoutKey | The device pointer, hashed into the key. | `src/xenia/gpu/metal/msl_shader.cc` | 369, 370, 371 | 3 |
 ## Total references per name
 
 | Name | Total uses in project |
@@ -1960,6 +1971,17 @@ further edits.
 | `paste_button` | 6 |
 | `pasted` | 3 |
 | `text_stream` | 3 |
+| `metal_share_argument_encoders` | 4 |
+| `g_argument_encoder_cache_mutex` | 3 |
+| `g_argument_encoder_cache` | 5 |
+| `GetArgumentBufferLayoutKey` | 3 |
+| `argument_buffer_layout_key` | 6 |
+| `kStructPrefix` | 2 |
+| `struct_begin` | 8 |
+| `struct_end` | 6 |
+| `id_pos` | 4 |
+| `name_begin` | 7 |
+| `device_address` | 3 |
 
 ## Checks
 
@@ -2124,3 +2146,8 @@ further edits.
   role elsewhere, not listed.
 - `game_title_` in XeniaConfigViewController has the same name and role as
   the existing ivar of the compatibility and content sheets, not listed.
+- Shared argument encoders (msl_shader.cc): `layout`, `line`, `it` and
+  `lock` are generic locals with the same role elsewhere, and `line_begin`
+  and `line_end` already name line bounds in the same file (the
+  strip_nocontract_optnone pass in CompileToMsl), so they are not listed;
+  `name_end` has the same name and role in XeniOS HEAD.

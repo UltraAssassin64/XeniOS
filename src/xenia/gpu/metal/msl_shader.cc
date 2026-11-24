@@ -22,6 +22,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_map>
 
 #include "spirv_msl.hpp"
 #include "third_party/fmt/include/fmt/format.h"
@@ -55,6 +56,14 @@ DEFINE_string(
     "example 6C76CC934779C668) whose Xbox 360 microcode disassembly and "
     "generated Metal source are written to the log when they are translated "
     "(\"Shader log\" lines).",
+    "Metal");
+DEFINE_bool(
+    metal_share_argument_encoders, true,
+    "Share one texture/sampler argument encoder between Metal shaders whose "
+    "argument buffer layout is the same, instead of asking Metal for one per "
+    "shader. Metal reflects the compiled function for that, which on a cold "
+    "shader cache (first run, app update, reboot) adds tens to hundreds of ms "
+    "to most pixel shader compiles. Off: one per shader, as before.",
     "Metal");
 
 namespace xe {
@@ -291,6 +300,79 @@ void ClearMslShaderSourceCacheDirectory() {
   std::lock_guard<std::mutex> lock(g_msl_source_cache_mutex);
   g_msl_source_cache_directory.clear();
 }
+
+namespace {
+
+// metal_share_argument_encoders: encoders by GetArgumentBufferLayoutKey. Each
+// holds a reference of its own, kept for the life of the process (one per
+// distinct layout, a few dozen at most).
+std::mutex g_argument_encoder_cache_mutex;
+std::unordered_map<uint64_t, MTL::ArgumentEncoder*> g_argument_encoder_cache;
+
+// A hash of the argument buffer structs (spvDescriptorSetBuffer<set>) that
+// SPIRV-Cross declared in the MSL source - each member's type and [[id]],
+// without its name, which only says which fetch constant it is - and of the
+// device. The encoder's layout follows from those alone. 0 if the source has
+// no such struct or one in an unexpected form (the caller then reflects).
+uint64_t GetArgumentBufferLayoutKey(const std::string& msl_source,
+                                    const MTL::Device* device) {
+  static constexpr std::string_view kStructPrefix =
+      "struct spvDescriptorSetBuffer";
+  std::string layout;
+  size_t struct_begin = 0;
+  while ((struct_begin = msl_source.find(kStructPrefix, struct_begin)) !=
+         std::string::npos) {
+    size_t struct_end = msl_source.find("};", struct_begin);
+    size_t line_begin = msl_source.find('\n', struct_begin);
+    if (struct_end == std::string::npos || line_begin == std::string::npos ||
+        line_begin > struct_end) {
+      return 0;
+    }
+    // The struct's name, with its descriptor set.
+    layout.append(msl_source, struct_begin, line_begin - struct_begin);
+    layout.push_back('\n');
+    ++line_begin;
+    while (line_begin < struct_end) {
+      size_t line_end = std::min(msl_source.find('\n', line_begin), struct_end);
+      std::string_view line(msl_source.data() + line_begin,
+                            line_end - line_begin);
+      line_begin = line_end + 1;
+      size_t id_pos = line.find("[[id(");
+      if (id_pos == std::string_view::npos) {
+        if (line.find_first_not_of(" \t{\r") != std::string_view::npos) {
+          return 0;
+        }
+        continue;
+      }
+      size_t name_end = id_pos;
+      while (name_end && line[name_end - 1] == ' ') {
+        --name_end;
+      }
+      size_t name_begin = name_end;
+      while (name_begin &&
+             (std::isalnum(static_cast<unsigned char>(line[name_begin - 1])) ||
+              line[name_begin - 1] == '_')) {
+        --name_begin;
+      }
+      if (name_begin == name_end) {
+        return 0;
+      }
+      layout.append(line.substr(0, name_begin));
+      layout.append(line.substr(id_pos));
+      layout.push_back('\n');
+    }
+    struct_begin = struct_end;
+  }
+  if (layout.empty()) {
+    return 0;
+  }
+  const uintptr_t device_address = reinterpret_cast<uintptr_t>(device);
+  layout.append(reinterpret_cast<const char*>(&device_address),
+                sizeof(device_address));
+  return XXH3_64bits(layout.data(), layout.size());
+}
+
+}  // namespace
 
 // SPIR-V descriptor set indices matching SpirvShaderTranslator's layout.
 // These values must stay in sync with the enum in spirv_shader_translator.h.
@@ -1458,8 +1540,39 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
 
   const auto argument_encoder_begin = std::chrono::steady_clock::now();
   if (uses_argument_buffers_ && has_argument_buffer_resources) {
-    argument_encoder_ = metal_function_->newArgumentEncoder(
-        MslBufferIndex::kArgumentBufferTexturesSamplers);
+    // newArgumentEncoder reflects the function, which compiles it; the
+    // encoder depends only on the argument buffer struct, so with
+    // metal_share_argument_encoders one is made per layout.
+    const uint64_t argument_buffer_layout_key =
+        cvars::metal_share_argument_encoders
+            ? GetArgumentBufferLayoutKey(msl_source_, device)
+            : 0;
+    if (argument_buffer_layout_key) {
+      std::lock_guard<std::mutex> lock(g_argument_encoder_cache_mutex);
+      auto it = g_argument_encoder_cache.find(argument_buffer_layout_key);
+      if (it != g_argument_encoder_cache.end()) {
+        argument_encoder_ = it->second;
+        argument_encoder_->retain();
+      }
+    }
+    if (!argument_encoder_) {
+      argument_encoder_ = metal_function_->newArgumentEncoder(
+          MslBufferIndex::kArgumentBufferTexturesSamplers);
+      if (argument_encoder_ && argument_buffer_layout_key) {
+        std::lock_guard<std::mutex> lock(g_argument_encoder_cache_mutex);
+        if (g_argument_encoder_cache
+                .emplace(argument_buffer_layout_key, argument_encoder_)
+                .second) {
+          argument_encoder_->retain();
+          XELOGI(
+              "MslShader: argument encoder for layout {:016X} from shader "
+              "{:016X} ({} bytes; {} layouts)",
+              argument_buffer_layout_key, shader().ucode_data_hash(),
+              argument_encoder_->encodedLength(),
+              g_argument_encoder_cache.size());
+        }
+      }
+    }
     if (argument_encoder_) {
       argument_encoder_alignment_ =
           static_cast<uint32_t>(argument_encoder_->alignment());
