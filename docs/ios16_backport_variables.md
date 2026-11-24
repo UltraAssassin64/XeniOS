@@ -2151,3 +2151,9 @@ further edits.
   and `line_end` already name line bounds in the same file (the
   strip_nocontract_optnone pass in CompileToMsl), so they are not listed;
   `name_end` has the same name and role in XeniOS HEAD.
+- Notification listeners (xnotifylistener.{h,cc}): `QueueKey`,
+  `RemoveNotification`, the `Notifications` alias, and the locals `area`,
+  `rest`, `key`, `notification`, `id` and `data` have the same names and
+  roles in xenia-edge HEAD (`refs/remotes/xenia-edge-deep/HEAD`, commit
+  a573178da "Fix notify listeners queueing repeats and staying signaled"),
+  where the change comes from, so they are not listed.

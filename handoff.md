@@ -2259,6 +2259,98 @@ Plan, in order (each its own build):
    cutting MSL size (the 45-180 KB per shader is mostly the translator's
    control flow and helpers).
 
+### Arkham City traces re-checked (2026-11-24, the 6 traces from build 9658)
+
+Tools: scratchpad tools/xtr_parse.py, edram_auto.py, and new
+pass_model.py / pass_timeline.py (render passes as the Metal backend opens
+them: the shared cache's accumulated targets, a resolve ends the pass).
+- Samples as pixels cuts modelled transfers 60-70% in all six traces
+  (79-130 -> 27-42 per frame); the rectangle-list, owner-aware rule gives
+  the same result as "all MSAA as pixels" in this game.
+- Correction to the section above: the main 1280x720 depth target
+  (D24FS8 at base 0, pitch 16) is bound in 28-54 passes a frame in the
+  model, not 13-19, and about half of all pass breaks are target switches,
+  not resolves. Of those, most are a draw adding a colour target to a
+  depth-only pass (the per-light loop: depth only, depth + colour, depth
+  only, shadow map, resolve), which RenderTargetCache treats as a new pass
+  ("Binding a totally new render target - won't keep the existing render
+  pass anyway"). Model: 57-103 passes per frame now; 41-71 if adding a
+  target kept the pass; 32-59 if resolves also kept it. So plan item 5
+  (tile resolve) is worth less than thought (about 10-15% of passes), and
+  "start the pass with the colour target the previous pass on this depth
+  had" (when it still owns its tiles) is worth about 30%.
+- The 24-draw "none" runs are point-list memexport draws (no targets,
+  colour mask 0); they keep the pass.
+- Model limits: it can't see which colour targets a pixel shader writes,
+  so RT1-3 left at RB_COLORn_INFO 0 are dropped, and storage formats 10/12
+  are folded into 2/3 as RenderTargetKey does.
+
+### Owner's runs on build 9660 (zip "Logs_of_various_games_for_data_acquisition-1", 2026-11-20..22)
+
+All 33 logs are 9660 (6c7c4319f). Every launch shows the "config values
+had invalid types" box for user_country/user_language (see below).
+
+| Game (title id) | Logs | What happens |
+|---|---|---|
+| Borderlands 2 (5454087C) | 20-22-07, 20-28-33, 08-37-06 | Boots, plays the intro Bink, at ~34 s the main thread waits forever on an event (82E7CE5C <- 82E7E24C, never set); the movie keeps drawing (3-4 draws, 180 MB/window) for 346 s. Same in all 3. |
+| AC Revelations (55530879) | 13-29-10 .. 13-38-34 (6) | Frames stop after exactly 10 perf windows (~43 s, all 6 runs); the render thread waits on an event never set (8354D85C), every thread idle. 9648 ran into chapter 1. |
+| Dishonored (425307E3) | 08-51-49 | Menu/loading at 33 ms, GPU 9%; from ~75 s the main thread waits forever (82A64824 <- 82A65C14, never set), 56 draws a frame for 156 s. |
+| Spider-Man WoS (41560815) | 09-16-01, 09-19-23, 18-58-13 | Sign-in fix works (profile prompt, gameplay, 17 min in one run). 64-95 ms frames: per frame ~50 ms of GPU with SAP (draws 20, rt transfer 13, texture load+blit 9, edram dump+resolve 7) and 52 command buffers; GPU busy 50-60%, JQ workers 50-65% each. |
+| GTA IV (545407F2) | 08-46-03 | 37 ms median, later 50-87 ms; GPU bound (100%+): rt transfer 26 ms in 50 passes even with SAP, draws 21, texture load 9 (85 a frame), edram dump+resolve 10; 2.3-5 GB uploaded a window; one guest thread at 82% CPU (hotspot 8216D90C, the XMA code). |
+| Arkham Asylum (5343080B) | 09-23-15, 09-27-07 | 39-45 ms median, thermal 2; no hang. |
+| Arkham City (57520802) | 15-41-03, 15-43-50, 15-46-05 | 33-44 ms median, spikes 1.6-1.8 s (compiles); mem peak 2.15 GB; no hang. |
+| Fallout NV (425307E0) | 08-55-53 | 806 s at the 30 FPS cap, GPU 10%; 791 "AllocFixed ... already reserved range" at boot (harmless so far); face glitches need photos. |
+| Spider-Man Edge of Time (415608B2) | 08-44-18 | 28 s of frames at 1120x640, GPU busy 9% (median); the INDIRECT RINGBUFFER errors are at shutdown only. "Presentation broken" needs a photo. |
+| 41560816 (UE3, "WGame") | 16-21-54 | 250 s at 3 draws a frame (movie/loading), then gameplay 50-115 ms, mem to 2.4 GB. |
+| 41560855 (unidentified, .pak~lk files) | 11-54-34 .. 12-07-42 (5) | Never presents a frame. Two runs: crash dump on kernel thread 01000014 at guest 824A5C58 (write to host address 0) and F800007C jumping to host 0; the others: F80000FC waits on handle 0 and yields in a loop, F800007C spins in NtWaitForSingleObjectEx. |
+
+Common cause found for BL2, AC, Dishonored (and the "UE games have no
+audio" report): the notify listener. In each game one thread, in the same
+library as the hung wait (XAudio2's music-player handling: it listens to
+the XMP area), loops NtWaitForMultipleObjectsEx -> XNotifyGetNext(handle,
+0A000003) millions of times (BL2 F8000134, AC F8000244, Dishonored
+F80001BC). BL2's report shows its wait list: [listener, F8000120 (set 2176
+times by the audio processing thread F8000108), F8000130]. Our listener was
+a manual-reset event that stays set while anything is queued; since 9658
+(24cc8363e) the first XMP listener starts with XmpStateChanged (0A000001)
+queued, which this thread never reads (it only asks for 0A000003), so the
+listener stays signaled for good, every wait returns index 0, and
+F8000120 (voice callbacks: buffer and stream end) is never serviced. Sound
+that waits on those callbacks never finishes, and a thread that waits for
+it (stopping voices at a load) hangs. It also burns a core (94% for that
+thread in AC). xenia-edge fixed exactly this in a573178da ("a wait +
+XNotifyGetNext(id) loop spun while other notifications were pending"): the
+listener's event is auto-reset (a wait takes the signal), one entry per
+notification (a repeat replaces the data), and a read clears the signal
+when it empties that area.
+- Fix (next build, owner approved 2026-11-24): that commit ported (git
+  show a573178da from refs/remotes/xenia-edge-deep/HEAD; identical files
+  except the follow-up 4c222dc85, system-only notifications, which needs
+  XamNotifyCreateListener's is_system), with a Checks note in
+  docs/ios16_backport_variables.md for QueueKey, RemoveNotification,
+  Notifications and its locals. To check: AC past 43 s, BL2 past the intro movie, Dishonored
+  past its load, audio in UE3 games; no "XNotifyGetNext; guest lr" repeat
+  warnings; Spider-Man WoS still reaches the menu (it was primed by the
+  same change).
+
+Other findings, not fixed yet:
+- user_language/user_country are defined twice (half-port):
+  xboxkrnl/xboxkrnl_xconfig.cc DEFINE_string ("English", "United States",
+  read by xam_locale.cc and user_tracker.cc through DECLARE_string) and
+  kernel/xconfig.cc DEFINE_int32 (1, 103, read by xeGetLanguage through
+  XConfig and achievement_manager.cc). Both upstreams have only the int32
+  ones (their xboxkrnl_xconfig.cc is 107 lines of exports). The saved
+  config holds the strings, the int cvar flags them, MigrateLegacyCvars
+  then maps the names, hence the box every launch. Which definition the
+  binary really uses is unclear (same symbol, two types); worth porting
+  upstream's xboxkrnl_xconfig.cc and checking the language games get.
+- "uploaded" in the perf line is shared memory revalidated after CPU writes
+  (zero-copy buffer: no memcpy, but write watches and faults): 60-270 MB/s
+  across games (GTA IV highest). A fault counter would say what it costs
+  on the CPU.
+- Command buffers: 44-53 a frame in AC, Spider-Man, GTA IV (texture loads
+  in their own buffers, plan item 3 above).
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings
