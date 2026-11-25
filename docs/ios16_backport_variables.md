@@ -1177,7 +1177,7 @@ further edits.
 | `xma_census_data` | local in XmaDecoder::WriteRegister | A context's XMA_CONTEXT_DATA read from guest memory. | `src/xenia/apu/xma_decoder.cc` | 462, 465, 466, 467, 468, 469, 470, 471, 472, 480, 481, 482, 483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 493, 494 | 24 |
 | `xma_census_key` | local in XmaDecoder::WriteRegister | A context's state packed for comparison with xma_census_keys. | `src/xenia/apu/xma_decoder.cc` | 464, 475, 497 | 3 |
 | `xma_census_list` | local in XmaDecoder::WriteRegister | The fields of up to three stalled contexts, appended to the census line. | `src/xenia/apu/xma_decoder.cc` | 454, 477, 503 | 3 |
-| `metal_resolve_keep_command_buffer` | cvar (bool, Metal) | SPIRV-Cross path: keep the command buffer open after a resolve in a submission with draws and load textures read from resolved memory into it. Default true. | `src/xenia/gpu/metal/metal_command_processor.cc` | 154, 4855, 4861, 6616, 6624 | 5 |
+| `metal_resolve_keep_command_buffer` | cvar (bool, Metal) | SPIRV-Cross path: keep the command buffer open after a resolve in a submission with draws and load textures read from resolved memory into it. Default false since build 9676 (GTA IV's main pass restarted 24-88 times a frame, ACR menus flickered); per-game opt-in. | `src/xenia/gpu/metal/metal_command_processor.cc` | 154, 4855, 4861, 6616, 6624 | 5 |
 | `resolve_keep_command_buffer` | local in IssueDrawMsl | metal_resolve_keep_command_buffer with blit texture uploads on: load in the current command buffer instead of committing it. | `src/xenia/gpu/metal/metal_command_processor.cc` | 4860, 4864, 4904 | 3 |
 | `sleep_zero_backoff_us` | cvar (uint32, Kernel) | Sleep length for a guest thread polling with Sleep(0); 0 always yields. Default 50. | `src/xenia/kernel/xthread.cc` | 50, 1275 | 2 |
 | `sleep_zero_last_us` | thread_local in XThread::Delay | Time (us) of this thread's previous Sleep(0). | `src/xenia/kernel/xthread.cc` | 1273, 1281, 1285 | 3 |
@@ -2305,4 +2305,8 @@ further edits.
   sleep_zero_backoff_us (xthread.cc) with their locals are listed above.
   `metal_resolve_keep_command_buffer` has no XeniOS HEAD counterpart under
   that name; XeniOS HEAD keeps the buffer open after resolves unconditionally
-  with a read watch on the output (237a78443), not ported.
+  with a read watch on the output (237a78443), not ported. Default off since
+  build 9676: the resolve-pending flag stays set for the whole buffer, so
+  every later draw reading resolved memory with changed bindings restarted
+  the render pass (GTA IV 24-88 passes a frame, attachment traffic doubled,
+  GPU-bound frames slower), and ACR's save menu flickered with it.

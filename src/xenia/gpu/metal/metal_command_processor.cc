@@ -151,13 +151,13 @@ DEFINE_int32(
 // at a cutscene's end empty.
 UPDATE_from_int32(metal_async_compile_wait_ms, 2026, 11, 18, 21, 0);
 DEFINE_bool(
-    metal_resolve_keep_command_buffer, true,
-    "SPIRV-Cross path: keep the command buffer open after a resolve in a "
-    "submission that has draws, and load the textures a later draw samples "
-    "from resolved memory into it between render passes, instead of "
-    "committing the command buffer at each such resolve and draw (about 40 "
-    "command buffers a frame in games that resolve often). Off restores the "
-    "commit at each.",
+    metal_resolve_keep_command_buffer, false,
+    "SPIRV-Cross path: keep the command buffer open after resolves, loading "
+    "textures read from resolved memory into it between render passes, "
+    "instead of committing it at each. Fewer command buffers, but a pass is "
+    "restarted at each such draw (GTA IV: 24-88 passes a frame, GPU slower), "
+    "and Assassin's Creed Revelations' menus flicker with it. Per-game use "
+    "only (Spider-Man: Edge of Time ran better with it).",
     "Metal");
 DEFINE_int32(
     metal_pipeline_creation_threads, -1,

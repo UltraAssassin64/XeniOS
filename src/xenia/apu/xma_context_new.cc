@@ -542,37 +542,44 @@ void XmaContextNew::Decode(XMA_CONTEXT_DATA* data) {
 
   PrepareDecoder(data->sample_rate, bool(data->is_stereo));
   PreparePacket(packet_info.current_frame_size_, padding_start);
+  // Every frame is output, as on the hardware. FFmpeg gives no samples for
+  // the first frame after the codec is opened (it only keeps that frame's
+  // overlap for the next one) or for a frame it cannot decode; those frames
+  // are output as silence (raw_frame_ is zeroed above). Dropping them left a
+  // buffer one frame short, and the guest's voice then never finished: in
+  // Batman: Arkham City every voice whose first frame was dropped was never
+  // reused, so a dialogue line never ended and voices ran out over time.
   if (DecodePacket(av_context_, av_packet_, av_frame_)) {
     // dump_raw(av_frame_, id());
     ConvertFrame(reinterpret_cast<const uint8_t**>(&av_frame_->data),
                  bool(data->is_stereo), raw_frame_.data());
-    current_frame_remaining_subframes_ = 4 << data->is_stereo;
+  }
+  current_frame_remaining_subframes_ = 4 << data->is_stereo;
 
-    // Loop end: limit output to subframes 0..loop_subframe_end.
-    if (is_loop_end_frame) {
-      loop_frame_output_limit_ = (data->loop_subframe_end + 1)
-                                 << data->is_stereo;
+  // Loop end: limit output to subframes 0..loop_subframe_end.
+  if (is_loop_end_frame) {
+    loop_frame_output_limit_ = (data->loop_subframe_end + 1)
+                               << data->is_stereo;
+    XELOGAPU(
+        "XmaContext {}: Loop end frame - limiting output to {} subframes "
+        "(loop_subframe_end={})",
+        id(), loop_frame_output_limit_, data->loop_subframe_end);
+  } else {
+    loop_frame_output_limit_ = 0;
+  }
+
+  // Loop start: skip leading subframes per loop_subframe_skip.
+  // Reducing remaining shifts the read offset forward in Consume().
+  if (loop_start_skip_pending_) {
+    const uint8_t skip = data->loop_subframe_skip << data->is_stereo;
+    if (skip < current_frame_remaining_subframes_) {
       XELOGAPU(
-          "XmaContext {}: Loop end frame - limiting output to {} subframes "
-          "(loop_subframe_end={})",
-          id(), loop_frame_output_limit_, data->loop_subframe_end);
-    } else {
-      loop_frame_output_limit_ = 0;
+          "XmaContext {}: Loop start - skipping {} leading subframes "
+          "(loop_subframe_skip={})",
+          id(), skip, data->loop_subframe_skip);
+      current_frame_remaining_subframes_ -= skip;
     }
-
-    // Loop start: skip leading subframes per loop_subframe_skip.
-    // Reducing remaining shifts the read offset forward in Consume().
-    if (loop_start_skip_pending_) {
-      const uint8_t skip = data->loop_subframe_skip << data->is_stereo;
-      if (skip < current_frame_remaining_subframes_) {
-        XELOGAPU(
-            "XmaContext {}: Loop start - skipping {} leading subframes "
-            "(loop_subframe_skip={})",
-            id(), skip, data->loop_subframe_skip);
-        current_frame_remaining_subframes_ -= skip;
-      }
-      loop_start_skip_pending_ = false;
-    }
+    loop_start_skip_pending_ = false;
   }
 
   // Compute where to go next.

@@ -2786,6 +2786,63 @@ Arkham City (06-14-31 debug, 06-01-21):
   (b) default decoder, note the census time stamp when it stalls; (c) which
   upstream build the owner remembers as first bad.
 
+### Owner's runs on build 9675 (zip "9675_logs-1": GTA IV 07-17-47, Arkham City 08-16-05 default and 08-21-56 old decoder, ACR 08-25-35/08-30-33/08-32-46, EoT and Batman AA 08-36-10, 4 traces) and the next build
+
+Owner: GTA IV stutters more, times a little lower. Arkham City: with the
+default decoder the line dropped (~08:19:26); with xma_decoder = "old" (set
+globally before launch) it played and the story continued. Owner recalls the
+regression between upstream 2.0.0 and 2.0.1; fix asked for on our own. ACR:
+save-select menu flickers with metal_resolve_keep_command_buffer on (two
+runs), fixed with it off. EoT better with it on; still missing lighting
+effects and the time chamber's blue glow. Batman AA: compiles faster, pre and
+GPU still ~high 40s ms. Signed-in profile not remembered after an app restart;
+settings changed after a game was launched and closed reportedly not saved.
+
+Arkham City root cause (XmaContextNew):
+- FFmpeg's wmapro/xmaframes decoder sets skip_frame on open and returns no
+  samples for the first frame (it keeps only its overlap). XmaContextNew
+  reopens the codec whenever a context's sample rate or channel count
+  changes (dialogue voices move between 24 and 32 kHz) and then advanced past
+  that frame with nothing written, so the stream came out one frame (512
+  samples) short. XmaContextOld returned without advancing and decoded the
+  frame again, so its count stayed right.
+- Evidence (9674 debug logs 06-14-31 / 06-01-21, tools/xma_reinit_reuse.py in
+  the scratchpad): every stream whose context was never used again by the
+  game had lost its first frame (173 / 115); every stream that kept all its
+  frames was followed by reuse (255 / 289). The guest's voice waits for the
+  buffer's samples, so a short one never finishes: the dialogue line never
+  ends, and voices leak until nothing new plays ("all audio buffers out").
+  The census never saw it because those contexts hold no input.
+- Fix: a frame FFmpeg gives no samples for (first after open, or a decode
+  error) is output as silence; every frame produces its subframes, as on the
+  hardware.
+- Seen but not changed: loop jumps happen before the loop-end frame is
+  decoded (that frame is skipped and the loop-start frame is cut instead);
+  error_status 4 (split frame whose next buffer is not valid yet) is never
+  cleared and makes every later Work() run one pass. Neither seen in these
+  logs.
+
+metal_resolve_keep_command_buffer: default off again. Command buffers fell
+from ~5000 to ~500 per 120 frames, but copy_resolve_writes_pending_ stays set
+for the whole buffer, so every draw reading resolved memory with changed
+texture bindings restarted the render pass: GTA IV's main pass went from ~2
+to 24-88 passes a frame, attachment traffic 1.6-4.3 GB a frame (was ~1 GB),
+GPU-bound frames 57-68 ms (9674 49-62 ms on the same route). ACR's menu
+flicker cause not pinned (trace 08-27-52: 48 resolves a frame into a 4096x1024
+atlas sampled right after). Kept as a per-game opt-in for EoT.
+
+Profile sign-in: ProfileManager::UpdateConfig used OVERRIDE_string, which on
+this branch sets the per-title value (not written by SaveConfig, cleared at
+the next title load), so the slot was always saved empty. Now
+OVERRIDE_PERSIST_string, as XeniOS and xenia-edge HEAD. Settings: the iOS
+screens write config_value and SaveConfig at once and config is read only at
+app start; the logs show changes made in short sessions persisting. Need the
+owner's exact steps (which screen, game running or closed, which setting).
+
+sleep_zero_backoff_us stays 50: XThread10E03 in GTA IV now sleeps in it
+(__semwait_signal) instead of yielding; the frame-time change is the pass
+splitting above. A/B with 0 if stutter remains.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings
