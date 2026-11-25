@@ -2714,6 +2714,78 @@ Owner's wishlist (2026-11-24), assessment:
 - In-app .zar compression: XeniOS has zar_converter.cc and the
   long-press action; third_party/zarchive is here; a port.
 
+### Owner's runs on build 9674 (zips "9674_logs-1", "xenia_2026-11-25_06-14-31", "xenia_2026-11-25_06-22-12": GTA IV 05-39-34 and 06-22-12 debug, Arkham City 05-50-46, 06-01-21 and 06-14-31 debug) and the next build
+
+Owner: GTA IV no crash in two runs, but the Metal HUD still shows the CPU
+side at 80-100 ms and the GPU at ~44 ms in gameplay. Arkham City: the story
+stalled waiting for a dialogue line again (music kept playing this time).
+The owner recalls the missing line was a regression introduced later in
+upstream, so the fault is likely in code brought from upstream; asked for
+our own fix, not an upstream port, and offered diagnostic runs.
+
+GTA IV (05-39-34):
+- "uploaded" fell from 3-5 GB to 10-50 MB per 120 frames (zero-copy GPU
+  reads); texture loads from 350-430 to ~50 a frame.
+- Two areas: frame 50-58 ms with the GPU 100% busy, and 75-97 ms with the
+  GPU 45-60% busy and no thread saturated: serialised, not loaded.
+- ~42 command buffers a frame (5,000 per 120). Causes in the SPIRV-Cross
+  path: IssueCopy commits a draw-containing command buffer at every resolve
+  (~43 a frame, the 3 predicated-tiling tiles 1280x256/256/224 at 2x MSAA),
+  IssueDrawMsl commits again when a draw samples resolved memory, and a
+  texture load requested while the render encoder is open goes into a
+  command buffer of its own.
+- GPU per frame: draws 25 ms, rt transfers 24 ms (51 passes, mostly the
+  tiles' 2x MSAA colour; little shader time, mostly pass boundaries and
+  attachment traffic, 1.1 GB a frame), texture load + blit 9 ms, edram
+  dump + resolve 8 ms, host depth store 2 ms.
+- XThreadD403 (~80%) is the audio thread: XMA decodes on the kicking
+  thread (ff_wma*, MDCT, ConvertFrame) plus guest mixing. XThread11027
+  spends 20-45% of its samples in syscall_thread_switch (Sleep(0) polling).
+Changes:
+1. metal_resolve_keep_command_buffer (default on): a draw-containing command
+   buffer stays open after a resolve, as copy-only ones already did, and is
+   committed at primary buffer end / ring-empty waits / swap. A draw that
+   samples a texture to be loaded from memory a resolve wrote this frame ends
+   the render pass, loads the textures into the same command buffer (after
+   the resolve) and begins the pass again (attachments loaded; a first-bind
+   clear is not repeated, the descriptor is rebuilt with Load). Shader-done
+   fences are still written when the buffer completes. Off restores the
+   commits. Risk: a game reading resolve output on the CPU between the
+   resolve and the commit (no read watch here, unlike XeniOS 237a78443).
+   Expect "N command buffers" per 120 frames to drop well below 5,000.
+2. sleep_zero_backoff_us (default 50): a thread making 64 quick Sleep(0)
+   calls in a row sleeps 50 us per call instead of yielding.
+
+Arkham City (06-14-31 debug, 06-01-21):
+- The census was wrong: Work() clears the enabled flag at the start of the
+  kick, so "enabled" was always 0 and nothing could count as stalled. Now
+  counted by state: "XMA census at T s: N allocated, H holding input, S of
+  them unchanged for 10 s; context ...".
+- XMA contexts are never released in gameplay (ids handed out in order,
+  allocated count 110-180 then flat, also in 06-01-21 where sounds later
+  resumed): the game caches voices; no pool exhaustion.
+- No decoder errors: no error_status 4 exits, no "Decode skipped".
+- In both runs new voices stop starting for long stretches while ~7
+  long-lived contexts (music, ambience) keep decoding (06-14-31 after line
+  2.81M; 06-01-21 lines 1.4M-3.95M, then new ones again).
+- Full output ring: when a decode fills the ring exactly (write == read),
+  Work() clears output_buffer_valid ("Output ring buffer empty"). The guest
+  reads valid 0 with write == read as full (context 6 read 8 blocks after
+  one), so no audio is lost there. The same code would invalidate a truly
+  empty ring if a context with no input were kicked; never seen.
+- StoreContextMerged writes back output_buffer_read_offset (the guest's)
+  and input_buffer_read_offset from the snapshot at Work() start, so a guest
+  change made during a decode from another thread would be lost. Kicks and
+  mixing are on the same thread here (F800021C), so not shown to matter.
+- Sleep(0) storms: F8000108 (87M calls), F800029C and the main thread
+  (TryEnterCriticalSection / LeaveCriticalSection / Sleep(0)), through
+  XAPI SleepEx at 82D3E83C (interval = ms * -10000; Sleep(0) yields).
+  Normal for the title, but each pins a host core.
+- Next diagnostic runs: (a) the same story point with xma_decoder = "old"
+  (the older decoder; if the line plays, the fault is in XmaContextNew);
+  (b) default decoder, note the census time stamp when it stalls; (c) which
+  upstream build the owner remembers as first bad.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <string>
 
 #include "xenia/apu/xma_context.h"
 #include "xenia/apu/xma_context_fake.h"
@@ -433,7 +434,9 @@ void XmaDecoder::WriteRegister(uint32_t addr, uint32_t value) {
       }
     }
     // Census every 10 s: a voice whose context holds input but never moves
-    // never ends, so a title waiting for it to finish waits forever.
+    // never ends, so a title waiting for it to finish waits forever. A kick
+    // decodes at once and clears the enabled flag, so a context is counted by
+    // its state, not by that flag.
     static std::atomic<uint64_t> xma_census_next_ms{0};
     const uint64_t xma_census_now_ms = uint64_t(
         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -446,8 +449,9 @@ void XmaDecoder::WriteRegister(uint32_t addr, uint32_t value) {
       // Per context: the state at the previous census, read offset and output
       // offsets with the valid bits.
       static uint64_t xma_census_keys[kContextCount];
-      uint32_t xma_census_allocated = 0, xma_census_enabled = 0,
-               xma_census_stalled = 0, xma_census_first = UINT32_MAX;
+      uint32_t xma_census_allocated = 0, xma_census_holding = 0,
+               xma_census_stalled = 0;
+      std::string xma_census_list;
       for (uint32_t n = 0; n < kContextCount; ++n) {
         XmaContext& xma_census_context = *contexts_[n];
         if (!xma_census_context.is_allocated()) {
@@ -464,46 +468,39 @@ void XmaDecoder::WriteRegister(uint32_t addr, uint32_t value) {
             (uint64_t(xma_census_data.input_buffer_0_valid) << 2) |
             (uint64_t(xma_census_data.input_buffer_1_valid) << 1) |
             uint64_t(xma_census_data.output_buffer_valid) | (1ull << 63);
-        if (xma_census_context.is_enabled()) {
-          ++xma_census_enabled;
+        if (xma_census_data.input_buffer_0_valid ||
+            xma_census_data.input_buffer_1_valid) {
+          // Here: holding input to decode.
+          ++xma_census_holding;
           if (xma_census_key == xma_census_keys[n] &&
-              (xma_census_data.input_buffer_0_valid ||
-               xma_census_data.input_buffer_1_valid)) {
-            ++xma_census_stalled;
-            if (xma_census_first == UINT32_MAX) {
-              xma_census_first = n;
-            }
+              ++xma_census_stalled <= 3) {
+            xma_census_list += fmt::format(
+                "; context {}: in0 {}/{} in1 {}/{} current {} read {:X} out "
+                "{} w{} r{} blocks {} loop {} {:X}-{:X} error {}/{}",
+                n, uint32_t(xma_census_data.input_buffer_0_valid),
+                uint32_t(xma_census_data.input_buffer_0_packet_count),
+                uint32_t(xma_census_data.input_buffer_1_valid),
+                uint32_t(xma_census_data.input_buffer_1_packet_count),
+                uint32_t(xma_census_data.current_buffer),
+                uint32_t(xma_census_data.input_buffer_read_offset),
+                uint32_t(xma_census_data.output_buffer_valid),
+                uint32_t(xma_census_data.output_buffer_write_offset),
+                uint32_t(xma_census_data.output_buffer_read_offset),
+                uint32_t(xma_census_data.output_buffer_block_count),
+                uint32_t(xma_census_data.loop_count),
+                uint32_t(xma_census_data.loop_start),
+                uint32_t(xma_census_data.loop_end),
+                uint32_t(xma_census_data.error_set),
+                uint32_t(xma_census_data.error_status));
           }
         }
         xma_census_keys[n] = xma_census_key;
       }
-      if (xma_census_first == UINT32_MAX) {
-        XELOGI("XMA census: {} contexts allocated, {} enabled, 0 stalled",
-               xma_census_allocated, xma_census_enabled);
-      } else {
-        XMA_CONTEXT_DATA xma_census_data(memory()->TranslateVirtual(
-            contexts_[xma_census_first]->guest_ptr()));
-        XELOGW(
-            "XMA census: {} contexts allocated, {} enabled, {} stalled 10 s "
-            "with input; context {}: in0 {}/{} in1 {}/{} current {} read "
-            "{:X} out {} w{} r{} blocks {} loop {} {:X}-{:X} error {}/{}",
-            xma_census_allocated, xma_census_enabled, xma_census_stalled,
-            xma_census_first, uint32_t(xma_census_data.input_buffer_0_valid),
-            uint32_t(xma_census_data.input_buffer_0_packet_count),
-            uint32_t(xma_census_data.input_buffer_1_valid),
-            uint32_t(xma_census_data.input_buffer_1_packet_count),
-            uint32_t(xma_census_data.current_buffer),
-            uint32_t(xma_census_data.input_buffer_read_offset),
-            uint32_t(xma_census_data.output_buffer_valid),
-            uint32_t(xma_census_data.output_buffer_write_offset),
-            uint32_t(xma_census_data.output_buffer_read_offset),
-            uint32_t(xma_census_data.output_buffer_block_count),
-            uint32_t(xma_census_data.loop_count),
-            uint32_t(xma_census_data.loop_start),
-            uint32_t(xma_census_data.loop_end),
-            uint32_t(xma_census_data.error_set),
-            uint32_t(xma_census_data.error_status));
-      }
+      XELOGI(
+          "XMA census at {} s: {} contexts allocated, {} holding input, {} of "
+          "them unchanged for 10 s{}",
+          xma_census_now_ms / 1000, xma_census_allocated, xma_census_holding,
+          xma_census_stalled, xma_census_list);
     }
   } else if (r >= XmaRegister::Context0Lock && r <= XmaRegister::Context9Lock) {
     // Context lock command.

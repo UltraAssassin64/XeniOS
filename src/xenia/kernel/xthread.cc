@@ -10,6 +10,7 @@
 #include "xenia/kernel/xthread.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 
 #if XE_PLATFORM_LINUX || XE_PLATFORM_ANDROID || XE_PLATFORM_APPLE
@@ -44,6 +45,15 @@ DEFINE_bool(
     "scheduler experiment for devices where guest CPU execution falls behind.",
     "iOS");
 #endif  // XE_PLATFORM_IOS
+
+DEFINE_uint32(
+    sleep_zero_backoff_us, 50,
+    "A guest thread polling with Sleep(0) (64 calls in a row, each within "
+    "this many microseconds of the last) sleeps this long per call instead "
+    "of yielding, so the loop no longer holds a whole host core (over a "
+    "million calls a second in Batman: Arkham City and GTA IV). 0 always "
+    "yields.",
+    "Kernel");
 
 #if 0
 DEFINE_int64(stack_size_multiplier_hack, 1,
@@ -1259,7 +1269,24 @@ X_STATUS XThread::Delay(uint32_t processor_mode, uint32_t alertable,
     }
   } else {
     if (timeout_ms == 0) {
-      if (priority_ <= xe::threading::ThreadPriority::kBelowNormal) {
+      // Consecutive quick Sleep(0) calls on this thread: a polling loop.
+      thread_local uint64_t sleep_zero_last_us = 0;
+      thread_local uint32_t sleep_zero_run = 0;
+      const uint32_t sleep_zero_backoff = cvars::sleep_zero_backoff_us;
+      if (sleep_zero_backoff) {
+        const uint64_t sleep_zero_now_us = uint64_t(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count());
+        sleep_zero_run = sleep_zero_now_us - sleep_zero_last_us <=
+                                 sleep_zero_backoff
+                             ? sleep_zero_run + 1
+                             : 0;
+        sleep_zero_last_us = sleep_zero_now_us;
+      }
+      if (sleep_zero_backoff && sleep_zero_run >= 64) {
+        xe::threading::NanoSleep(int64_t(sleep_zero_backoff) * 1000);
+      } else if (priority_ <= xe::threading::ThreadPriority::kBelowNormal) {
         xe::threading::NanoSleep(100);
       } else {
         xe::threading::MaybeYield();

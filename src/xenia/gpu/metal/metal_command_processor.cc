@@ -150,6 +150,15 @@ DEFINE_int32(
 // yet with 0 the draws using them were skipped, leaving half of the frames
 // at a cutscene's end empty.
 UPDATE_from_int32(metal_async_compile_wait_ms, 2026, 11, 18, 21, 0);
+DEFINE_bool(
+    metal_resolve_keep_command_buffer, true,
+    "SPIRV-Cross path: keep the command buffer open after a resolve in a "
+    "submission that has draws, and load the textures a later draw samples "
+    "from resolved memory into it between render passes, instead of "
+    "committing the command buffer at each such resolve and draw (about 40 "
+    "command buffers a frame in games that resolve often). Off restores the "
+    "commit at each.",
+    "Metal");
 DEFINE_int32(
     metal_pipeline_creation_threads, -1,
     "Number of threads used for SPIRV-Cross shader and render pipeline "
@@ -4843,7 +4852,18 @@ bool MetalCommandProcessor::IssueDrawMsl(
     used_texture_mask |= msl_pixel_shader->GetUsedTextureMaskAfterTranslation();
   }
 
-  if (copy_resolve_writes_pending_ && used_texture_mask) {
+  // With metal_resolve_keep_command_buffer the command buffer stays open after
+  // resolves, so a texture to be loaded from what a resolve in it wrote must
+  // be loaded in it, after the resolve: the render pass is ended for the load
+  // (texture uploads go into the current command buffer when no render
+  // encoder is open) and begun again, its attachments loaded.
+  const bool resolve_keep_command_buffer =
+      cvars::metal_resolve_keep_command_buffer &&
+      cvars::metal_texture_upload_via_blit;
+  if (copy_resolve_writes_pending_ && used_texture_mask &&
+      (!resolve_keep_command_buffer ||
+       (texture_cache_ &&
+        texture_cache_->AnyUsedTextureRequestWorkPending(used_texture_mask)))) {
     auto overlaps_resolved_texture_ranges = [&](uint32_t texture_fetch_mask) {
       uint32_t remaining_fetch_bits = texture_fetch_mask;
       uint32_t fetch_index = 0;
@@ -4881,7 +4901,12 @@ bool MetalCommandProcessor::IssueDrawMsl(
       return false;
     };
     if (overlaps_resolved_texture_ranges(used_texture_mask)) {
-      EndCommandBuffer();
+      if (resolve_keep_command_buffer) {
+        EndRenderEncoder();
+        texture_cache_->RequestTextures(used_texture_mask);
+      } else {
+        EndCommandBuffer();
+      }
       BeginCommandBuffer();
       if (!current_command_buffer_ || !current_render_encoder_) {
         XELOGE(
@@ -6588,11 +6613,16 @@ bool MetalCommandProcessor::IssueCopy() {
   // Keep copy-only resolve bursts open so multiple resolves can be coalesced,
   // but commit draw-containing submissions so subsequent work observes the
   // resolved guest memory immediately.
-  if (current_draw_index_ == 0
+  // With metal_resolve_keep_command_buffer, a draw-containing one stays open
+  // too: IssueDrawMsl loads the textures that read the output into it after
+  // the resolve, and the guest's fences are written when it completes.
+  if ((current_draw_index_ == 0
 #if METAL_SHADER_CONVERTER_AVAILABLE
-      && command_buffer_draw_rings_.empty()
+       && command_buffer_draw_rings_.empty()
 #endif
-  ) {
+       ) ||
+      (UseSpirvCrossPath() && cvars::metal_resolve_keep_command_buffer &&
+       cvars::metal_texture_upload_via_blit)) {
     copy_resolve_writes_pending_ = true;
     return true;
   }
