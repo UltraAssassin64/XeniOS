@@ -2493,11 +2493,29 @@ black; with 1, the same gradient throughout. So two problems:
 
 Fallout: New Vegas (log 19-25-28): faces still wrong with
 metal_shared_memory_zero_copy = false, so it is not the zero-copy ordering.
-Left: the texture cache's invalidation of the face texture pages (a log of
-invalidations at 1F7FC000 / 1FB64000 / 1FC7F000 would say), or how the faces
-are built (FNV also has integer fetches of other formats, depth 24_8 among
-them, which the next build's fetch scale doesn't cover). A Frame Detail run
-in a dialogue would show the face draws' textures.
+The photos (3901-3903) show Doc Mitchell's face mesh drawn with another
+texture's content (hair-like, with the face's UVs): a texture cache entry
+that kept old bytes after the CPU rewrote its memory. Cause found in the
+write watches, iOS-specific (16 KB host pages, 4 KB guest pages):
+PhysicalHeap::EnableAccessCallbacksInner decided whether to arm a 16 KB host
+page from its first 4 KB guest page only. In 0xE0000000 (4 KB pages, 4 KB off
+the host pages) a texture in the last 4 KB of a host page whose first 4 KB
+were free, or read-only, got no watch, while SharedMemory marked its range
+valid: CPU writes there were never seen. One of the face textures,
+1FC7F000, is in the last 4 KB of its 16 KB block. Also, Release, Decommit
+and Protect-to-writable only invalidated ranges that had a watch armed, and
+Alloc invalidated nothing, so memory handed out again (a new face texture
+where the hair was) could keep the old texture. Fix (next build), the write
+watch parts of xenia-edge aed81ca93 and d1541a579 (both in XeniOS HEAD):
+arming and unprotecting use the most permissive access of all guest pages
+in the host page (PhysicalHeap::SystemPageGuestAccess, as BaseHeap::Protect
+already did), and Alloc/AllocFixed/AllocRange, Release, Decommit and
+Protect-to-writable invalidate even with no watch armed. Not ported: the
+read watches (data providers) in aed81ca93, and its change to report a
+fault on an unwatched page the guest can't write as unhandled (iOS retries
+unhandled faults anyway). If faces are still wrong: a Frame Detail run in a
+dialogue, and FNV's integer fetches of other formats (depth 24_8 among
+them), which the fetch scale doesn't cover yet.
 
 Rainbow textures while Dishonored and BL2 first load (owner's photo):
 optimisation lead, not a bug yet. UE3 streams textures in, and the colours

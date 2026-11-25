@@ -2214,3 +2214,13 @@ further edits.
   Processor::ClearTitleStopRequestIOS. The resolve.xesli unsigned integer
   scale, the metal_presenter.mm swap through gamma_output_texture_ and the
   ResolveFunction first-instruction skip (XeniOS 6e304ab86) add no names.
+- Physical memory write watches (memory.h, memory.cc), the write-watch parts
+  of xenia-edge aed81ca93 and d1541a579: `PhysicalHeap::SystemPageGuestAccess`
+  (with its locals `offset`, `system_base`, `system_last`, `guest_page_first`,
+  `guest_page_count`, `guest_page_last`, `access`, `page_access`) and the
+  `invalidate_unwatched` parameter of `PhysicalHeap::TriggerCallbacks` have the
+  same names and roles in xenia-edge and XeniOS HEAD, so they are not listed.
+  `ToPageAccess` moved from memory.cc to memory.h as upstream. Removed:
+  `GuestPagenumToSystemPagenum` and EnableAccessCallbacksInner's unused locals
+  (`page_table_ptr`, `first_guest_page`, `last_guest_page`, `guest_one`,
+  `system_one`, `guest_page_number`), as upstream.

@@ -136,18 +136,6 @@ static inline bool ShouldSkipHostCommit(const BaseHeap& heap) {
   return false;
 }
 
-xe::memory::PageAccess ToPageAccess(uint32_t protect) {
-  bool is_writable = IsWritableProtect(protect);
-
-  if ((protect & kMemoryProtectRead) && !is_writable) {
-    return xe::memory::PageAccess::kReadOnly;
-  } else if ((protect & kMemoryProtectRead) && is_writable) {
-    return xe::memory::PageAccess::kReadWrite;
-  } else {
-    return xe::memory::PageAccess::kNoAccess;
-  }
-}
-
 void RandomizeMemory(void* range_start, uint32_t size) {
   if (!cvars::scribble_heap) {
     return;
@@ -1904,6 +1892,10 @@ bool PhysicalHeap::Alloc(uint32_t size, uint32_t alignment,
     parent_heap_->Release(parent_address);
     return false;
   }
+  // Pages the GPU marked valid while unowned, or whose watch a commit's host
+  // protection dropped, carry no write watch (xenia-edge d1541a579).
+  TriggerCallbacks(std::move(global_lock), address, xe::align(size, alignment),
+                   true, true, true, true);
   *out_address = address;
   return true;
 }
@@ -1950,6 +1942,8 @@ bool PhysicalHeap::AllocFixed(uint32_t base_address, uint32_t size,
     parent_heap_->Release(parent_base_address);
     return false;
   }
+  TriggerCallbacks(std::move(global_lock), address, xe::align(size, alignment),
+                   true, true, true, true);
 
   return true;
 }
@@ -2002,6 +1996,8 @@ bool PhysicalHeap::AllocRange(uint32_t low_address, uint32_t high_address,
     parent_heap_->Release(parent_address);
     return false;
   }
+  TriggerCallbacks(std::move(global_lock), address, xe::align(size, alignment),
+                   true, true, true, true);
   *out_address = address;
   return true;
 }
@@ -2023,7 +2019,8 @@ bool PhysicalHeap::Decommit(uint32_t address, uint32_t size) {
   }
 
   // Not caring about the contents anymore.
-  TriggerCallbacks(std::move(global_lock), address, size, true, true);
+  TriggerCallbacks(std::move(global_lock), address, size, true, true, true,
+                   true);
 
   return BaseHeap::Decommit(address, size);
 }
@@ -2048,7 +2045,7 @@ bool PhysicalHeap::Release(uint32_t base_address, uint32_t* out_region_size) {
   uint32_t region_size;
   if (QuerySize(base_address, &region_size)) {
     TriggerCallbacks(std::move(global_lock), base_address, region_size, true,
-                     true);
+                     true, true, true);
   }
 
   return BaseHeap::Release(base_address, out_region_size);
@@ -2059,9 +2056,12 @@ bool PhysicalHeap::Protect(uint32_t address, uint32_t size, uint32_t protect,
   auto global_lock = global_critical_region_.Acquire();
 
   // Only invalidate if making writable again, for simplicity - not when simply
-  // marking some range as immutable, for instance.
+  // marking some range as immutable, for instance. The guest is announcing a
+  // write rather than reacting to a fault, so invalidate even with no watch
+  // armed: a range that was read-only when it was last uploaded never got one.
   if (IsWritableProtect(protect)) {
-    TriggerCallbacks(std::move(global_lock), address, size, true, true, false);
+    TriggerCallbacks(std::move(global_lock), address, size, true, true, false,
+                     true);
   }
 
   if (!parent_heap_->Protect(GetPhysicalAddress(address), size, protect,
@@ -2132,19 +2132,11 @@ XE_NOINLINE void PhysicalHeap::EnableAccessCallbacksInner(
   uint32_t protect_system_page_first = UINT32_MAX;
 
   SystemPageFlagsBlock* XE_RESTRICT sys_page_flags = system_page_flags_.data();
-  PageEntry* XE_RESTRICT page_table_ptr = page_table_.data();
 
   // chrispy: a lot of time is spent in this loop, and i think some of the work
   // may be avoidable and repetitive profiling shows quite a bit of time spent
   // in this loop, but very little spent actually calling Protect
   uint32_t i = system_page_first;
-
-  uint32_t first_guest_page = SystemPagenumToGuestPagenum(system_page_first);
-  uint32_t last_guest_page = SystemPagenumToGuestPagenum(system_page_last);
-
-  uint32_t guest_one = SystemPagenumToGuestPagenum(1);
-
-  uint32_t system_one = GuestPagenumToSystemPagenum(1);
   for (; i <= system_page_last; ++i) {
     // Check if need to enable callbacks for the page and raise its protection.
     //
@@ -2176,16 +2168,10 @@ XE_NOINLINE void PhysicalHeap::EnableAccessCallbacksInner(
     uint64_t page_flags_bit = uint64_t(1) << (i & 63);
 #endif
 
-    uint32_t guest_page_number = SystemPagenumToGuestPagenum(i);
-    if (guest_page_number >= page_table_.size()) {
-      XELOGE(
-          "Access callback page OOB: system_page={} guest_page={} "
-          "offset=0x{:X}",
-          i, guest_page_number, host_address_offset());
-      assert_always();
-    }
-    xe::memory::PageAccess current_page_access =
-        ToPageAccess(page_table_ptr[guest_page_number].current_protect);
+    // All the guest pages the system page covers, not only its first: a
+    // texture in the last 4 KB of a 16 KB host page whose first 4 KB were
+    // free was never watched, so CPU writes to it went unseen.
+    xe::memory::PageAccess current_page_access = SystemPageGuestAccess(i);
     bool protect_system_page = false;
     // Don't do anything with inaccessible pages - don't protect, don't enable
     // callbacks - because real access violations are needed there. And don't
@@ -2229,7 +2215,8 @@ XE_NOINLINE void PhysicalHeap::EnableAccessCallbacksInner(
 }
 bool PhysicalHeap::TriggerCallbacks(
     global_unique_lock_type global_lock_locked_once, uint32_t virtual_address,
-    uint32_t length, bool is_write, bool unwatch_exact_range, bool unprotect) {
+    uint32_t length, bool is_write, bool unwatch_exact_range, bool unprotect,
+    bool invalidate_unwatched) {
   // TODO(Triang3l): Support read watches.
   assert_true(is_write);
   if (!is_write) {
@@ -2277,7 +2264,7 @@ bool PhysicalHeap::TriggerCallbacks(
       break;
     }
   }
-  if (!any_watched) {
+  if (!any_watched && !invalidate_unwatched) {
     // No watches on this page — another thread already cleared them (race
     // condition between the fault firing and acquiring the lock). Return true
     // so the faulting instruction retries; the page is now unprotected and the
@@ -2358,11 +2345,7 @@ bool PhysicalHeap::TriggerCallbacks(
       bool unprotect_page = (system_page_flags_[i >> 6].notify_on_invalidation &
                              (uint64_t(1) << (i & 63))) != 0;
       if (unprotect_page) {
-        uint32_t guest_page_number =
-            xe::sat_sub(i << system_page_shift_, host_address_offset()) >>
-            page_size_shift_;
-        if (ToPageAccess(page_table_[guest_page_number].current_protect) !=
-            xe::memory::PageAccess::kReadWrite) {
+        if (SystemPageGuestAccess(i) != xe::memory::PageAccess::kReadWrite) {
           unprotect_page = false;
         }
       }
