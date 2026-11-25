@@ -327,15 +327,15 @@ further edits.
 | `frames_over_50ms` | DrawStats field | Frames longer than 50 ms. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2863, 2910 | 2 |
 | `metal_perf_last_swap_` | MetalCommandProcessor member | Host time of the previous swap. | `src/xenia/gpu/metal/metal_command_processor.h` | 697 | 1 |
 | `metal_perf_last_swap_` | MetalCommandProcessor member | Host time of the previous swap. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2854, 2857, 2865 | 3 |
-| `unhandled_host_exception_count` | function static atomic | Unhandled host faults so far, to log only the first ten and then one in a million. | `src/xenia/base/exception_handler_mac.cc` | 226, 228 | 2 |
-| `unhandled_count` | local | This fault's number. | `src/xenia/base/exception_handler_mac.cc` | 227, 230, 239, 240, 293 | 6 |
-| `unhandled_symbol` | local (first unhandled fault only) | dladdr result for one host address. | `src/xenia/base/exception_handler_mac.cc` | 246, 250, 251, 253, 254 | 5 |
-| `unhandled_backtrace` | local (first unhandled fault only) | The pc, lr and frame return addresses, named, as logged. | `src/xenia/base/exception_handler_mac.cc` | 247, 252, 256, 286 | 4 |
-| `unhandled_name` | local lambda (first unhandled fault only) | Appends one host address as symbol+offset, or as a number. | `src/xenia/base/exception_handler_mac.cc` | 248, 259, 260, 269 | 4 |
-| `address` | lambda parameter of unhandled_name | The host address to name, with its pointer authentication bits removed. | `src/xenia/base/exception_handler_mac.cc` | 248, 249, 250, 254, 256 | 5 |
-| `unhandled_stack_top` | local (first unhandled fault only) | Top of the faulting thread's stack; the frame walk stays below it. | `src/xenia/base/exception_handler_mac.cc` | 261, 266 | 2 |
-| `unhandled_frame` | local (first unhandled fault only) | Frame record being walked (x29 chain). | `src/xenia/base/exception_handler_mac.cc` | 263, 265, 266, 267, 269, 270, 271, 274 | 9 |
-| `unhandled_depth` | loop variable | Frames walked so far (at most 16). | `src/xenia/base/exception_handler_mac.cc` | 264, 265, 268 | 3 |
+| `unhandled_host_exception_count` | function static atomic | Unhandled host faults so far, to log only the first ten and then one in a million. | `src/xenia/base/exception_handler_mac.cc` | 231, 233 | 2 |
+| `unhandled_count` | local | This fault's number. | `src/xenia/base/exception_handler_mac.cc` | 232, 235, 244, 245, 298 | 6 |
+| `unhandled_symbol` | local (first unhandled fault only) | dladdr result for one host address. | `src/xenia/base/exception_handler_mac.cc` | 251, 255, 256, 258, 259 | 5 |
+| `unhandled_backtrace` | local (first unhandled fault only) | The pc, lr and frame return addresses, named, as logged. | `src/xenia/base/exception_handler_mac.cc` | 252, 257, 261, 291 | 4 |
+| `unhandled_name` | local lambda (first unhandled fault only) | Appends one host address as symbol+offset, or as a number. | `src/xenia/base/exception_handler_mac.cc` | 253, 264, 265, 274 | 4 |
+| `address` | lambda parameter of unhandled_name | The host address to name, with its pointer authentication bits removed. | `src/xenia/base/exception_handler_mac.cc` | 253, 254, 255, 259, 261 | 5 |
+| `unhandled_stack_top` | local (first unhandled fault only) | Top of the faulting thread's stack; the frame walk stays below it. | `src/xenia/base/exception_handler_mac.cc` | 266, 271 | 2 |
+| `unhandled_frame` | local (first unhandled fault only) | Frame record being walked (x29 chain). | `src/xenia/base/exception_handler_mac.cc` | 268, 270, 271, 272, 274, 275, 276, 279 | 9 |
+| `unhandled_depth` | loop variable | Frames walked so far (at most 16). | `src/xenia/base/exception_handler_mac.cc` | 269, 270, 273 | 3 |
 | `PreferPerformanceCores` | function (xe::threading) | Asks iOS to run the current thread on the performance cores (QOS_CLASS_USER_INTERACTIVE); false elsewhere. Ported from XeniOS 77cc1358 (same name there). | `src/xenia/base/threading.h` | 130 | 1 |
 | `PreferPerformanceCores` | function (xe::threading) | Asks iOS to run the current thread on the performance cores (QOS_CLASS_USER_INTERACTIVE); false elsewhere. Ported from XeniOS 77cc1358 (same name there). | `src/xenia/base/threading_posix.cc` | 200 | 1 |
 | `PreferPerformanceCores` | function (xe::threading) | Asks iOS to run the current thread on the performance cores (QOS_CLASS_USER_INTERACTIVE); false elsewhere. Ported from XeniOS 77cc1358 (same name there). | `src/xenia/base/threading_win.cc` | 164 | 1 |

@@ -8,6 +8,11 @@
  */
 
 #define _XOPEN_SOURCE 600
+// Keep the Darwin extensions _XOPEN_SOURCE hides (dladdr, Dl_info,
+// pthread_get_stackaddr_np) for the unhandled fault backtrace.
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#endif
 
 #include "xenia/base/exception_handler.h"
 
