@@ -26,8 +26,10 @@
 #include "xenia/base/cvar.h"
 #include "xenia/base/filesystem.h"
 #include "xenia/base/logging.h"
+#include "xenia/base/string.h"
 #include "xenia/base/threading.h"
 #include "xenia/config.h"
+#include "xenia/cpu/processor.h"
 #include "xenia/emulator.h"
 #include "xenia/ui/window.h"
 #include "xenia/ui/window_ios.h"
@@ -248,14 +250,27 @@ bool EmulatorAppIOS::OnInitialize() {
         }
         if (!launch_module.empty()) {
           std::filesystem::path launch_module_path(launch_module);
+          const std::string relaunch_extension =
+              relaunch_target.extension().string();
+          const bool relaunch_target_is_xex =
+              xe_strcasecmp(relaunch_extension.c_str(), ".xex") == 0;
+          std::error_code relaunch_target_error;
+          const bool relaunch_target_is_directory =
+              std::filesystem::is_directory(relaunch_target,
+                                            relaunch_target_error);
           if (relaunch_target.empty()) {
             relaunch_target = launch_module_path;
-          } else if (relaunch_target.extension() == ".xex" ||
-                     relaunch_target.extension() == ".XEX") {
+          } else if (relaunch_target_is_xex) {
             relaunch_target = relaunch_target.parent_path() / launch_module_path;
-          } else {
+          } else if (relaunch_target_is_directory) {
             relaunch_target = relaunch_target / launch_module_path;
           }
+          // Otherwise the target is a container (a GoD or STFS package, .iso
+          // or .zar) with the module inside it: launch the container, and its
+          // launch finds the module from cvars::launch_module, set below (as
+          // XeniOS HEAD). Call of Duty: Black Ops relaunches its own
+          // default.xex from its package; appending the module made a path
+          // inside the package file, which failed with C00000BB.
         }
         relaunch_target = relaunch_target.lexically_normal();
         if (relaunch_target.empty()) {
@@ -809,6 +824,14 @@ void EmulatorAppIOS::EmulatorThread(const std::filesystem::path& game_path,
 
   if (!game_path.empty()) {
     auto abs_path = std::filesystem::absolute(game_path);
+    // The emulator is kept across launches in a session. A stop request of
+    // the previous title (quitting it, or its XamLoaderLaunchTitle) stayed
+    // set and made every later launch return X_STATUS_PROCESS_IS_TERMINATING
+    // (C000010A) until the app restarted. That title has exited by now (its
+    // emulator thread was joined); a stop of this launch sets it again.
+    if (emulator_->processor()) {
+      emulator_->processor()->ClearTitleStopRequestIOS();
+    }
     XELOGI("iOS: Launching game: {}", abs_path);
 
     auto xam = emulator_->kernel_state()->GetKernelModule<kernel::xam::XamModule>("xam.xex");

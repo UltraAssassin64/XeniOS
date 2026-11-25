@@ -1906,7 +1906,12 @@ bool MetalPresenter::CopyTextureToGuestOutput(MTL::Texture* source_texture, id d
   if (apply_gamma) {
     id<MTLTexture> gamma_dest_texture = dest_metal_texture;
     bool needs_gamma_convert = false;
-    if (!is_rgb10a2_format(dst_format)) {
+    // A red/blue swap the source view couldn't do runs after gamma, reading
+    // the gamma output and writing the guest output; never the same texture
+    // (read and written in one dispatch, Spider-Man: Edge of Time's 10-bit
+    // front buffer, which asks for the swap, came out black).
+    if (!is_rgb10a2_format(dst_format) ||
+        (force_swap_rb && swizzle_view == nullptr)) {
       if (!gamma_output_texture_ || gamma_output_width_ != copy_width ||
           gamma_output_height_ != copy_height) {
         if (gamma_output_texture_) {

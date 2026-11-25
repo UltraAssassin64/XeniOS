@@ -847,11 +847,17 @@ uint64_t ResolveFunction(void* raw_context, uint64_t target_address) {
         for (auto* entry : processor->FindFunctionsWithAddress(
                  static_cast<uint32_t>(target_address))) {
           auto* afunc = static_cast<A64Function*>(entry);
+          // Landing on a function's first instruction would skip its prolog
+          // (its code follows the prolog, so the old test against the
+          // function's machine code never rejected anything), as XeniOS
+          // 6e304ab86. A function that starts right after a call to one
+          // that doesn't return is a return site too.
+          if (afunc->address() == static_cast<uint32_t>(target_address)) {
+            continue;
+          }
           host_address = afunc->MapGuestAddressToMachineCode(
               static_cast<uint32_t>(target_address));
-          if (host_address &&
-              afunc->machine_code() !=
-                  reinterpret_cast<const uint8_t*>(host_address)) {
+          if (host_address) {
             auto* backend = static_cast<A64Backend*>(processor->backend());
             auto* backend_context =
                 backend->BackendContextForGuestContext(guest_context);
@@ -861,6 +867,20 @@ uint64_t ResolveFunction(void* raw_context, uint64_t target_address) {
                 static_cast<uint32_t>(guest_context->r[1]),
                 static_cast<uint32_t>(target_address));
             if (sync_depth != 0) {
+              // Rare outside longjmp; logged to tell a real one from a
+              // wrong landing.
+              static std::atomic<uint32_t> longjmp_resumes{0};
+              if (longjmp_resumes.fetch_add(1, std::memory_order_relaxed) <
+                  16) {
+                XELOGI(
+                    "A64 ResolveFunction: longjmp to guest {:08X} in the "
+                    "function at {:08X}, frame {} of {} (thread {:08X}, r1 "
+                    "{:08X})",
+                    static_cast<uint32_t>(target_address), afunc->address(),
+                    sync_depth, backend_context->current_stackpoint_depth,
+                    thread_state->thread_id(),
+                    static_cast<uint32_t>(guest_context->r[1]));
+              }
               backend_context->pending_stackpoint_sync_depth = sync_depth;
               return host_address;
             }

@@ -2433,6 +2433,77 @@ XConfig's int32 cvars (defaults English, United States, as before), and a
 saved name ("English") that MigrateLegacyCvars maps is no longer reported as
 an invalid type, so the box at every launch goes away.
 
+### Owner's runs on build 9670 (zip "9670_logs-1", 2026-11-24, logs 19-02-27 .. 19-25-28) and the next build
+
+Confirmed fixed on 9670: AC Revelations runs again; Dishonored and BL2 load
+into gameplay with audio (notify listener fix). Not yet reported: the config
+box at every launch.
+
+Call of Duty: Black Ops (41560855, logs 19-05-37 and 19-05-51): black screen,
+no crash dumps (the resolve thunk fix holds).
+- Run 1 reached the game's own XamLoaderLaunchTitle ("iOS: Queued title
+  relaunch", line 2157) and the relaunch failed with C00000BB: the target is
+  the GoD package file, and the callback appended default.xex to it, a path
+  inside a file. Fix (next build, XeniOS HEAD's form): a .xex target gets its
+  directory + module, a directory gets / module, anything else (a container)
+  is launched as is and its launch finds the module from
+  cvars::launch_module.
+- Run 2 never got that far: F80000FC polls a handle that is still 0,
+  F800007C waits on an event with a zero timeout in a loop, the main thread
+  sits in a KeDelayExecutionThread loop. The difference from run 1 is the
+  InfoCache (Library/Caches/xenia/modules/<sha>/executable_addr_flags.bin),
+  written by run 1 and loaded by run 2: its is_return_site flags send calls
+  through the longjmp path in ResolveFunction. That path could land on a
+  function's first instruction (skipping its prolog: the old test compared
+  against machine_code(), which is before the prolog-less body, so it never
+  rejected anything). Fix (next build, XeniOS 6e304ab86): never resume on a
+  function's first instruction; the first 16 resumes are logged ("A64
+  ResolveFunction: longjmp to guest ..."). If it still stalls: per-game
+  disable_instruction_infocache = true turns the longjmp path off (no flags),
+  which says whether it is involved.
+- The owner then launched Dishonored in the same session: C000010A
+  (X_STATUS_PROCESS_IS_TERMINATING). TerminateTitle sets the processor's
+  title stop request and nothing cleared it, so every later launch in the
+  session failed until the app restarted. Fix (next build): EmulatorThread
+  clears it (ClearTitleStopRequestIOS) before each launch. Black Ops'
+  relaunch depends on this too.
+- Still not ported: xenia-edge 02ad00c2b (a longjmp resumes only in its own
+  function's frame), the SEH exports, Io share access, NetDll online calls.
+
+Spider-Man: Edge of Time (logs 19-19-27, 19-20-31, 19-23-58): with
+metal_presenter_gamma_debug = 2, 2D (logo, save select) shows and 3D stays
+black; with 1, the same gradient throughout. So two problems:
+- The PWL present: the front buffer is 2_10_10_10 and asks for a red/blue
+  swap the source view can't do; the gamma pass wrote the guest output and
+  the swap then read and wrote that same texture in one dispatch. Fix (next
+  build): in that case gamma writes gamma_output_texture_ and the swap
+  writes the guest output.
+- The 3D: the game resolves its HDR scene to 16_16_16_16 with number format
+  2 (unsigned integer, bits 13:15 of RB_COPY_DEST_INFO) and exponent bias 11,
+  and samples it as an integer texture (fetch word 3 bit 0) with exp_adjust
+  -11. The console stores round(x * 2048) as the bits and returns them as
+  integers; here the resolve packed unorm (saturate, so 1.0 at most) and the
+  fetch returned unorm, so the scene came out at most 1/2048 of its value:
+  black. Fix (next build): resolve.xesli divides the exp bias factor by 255
+  or 65535 for unsigned integer 8- and 16-bit destinations; the SPIR-V fetch
+  multiplies integer fetches of 8- and 16-bit-per-component formats by
+  2^bits - 1 (unsigned) or 2^(bits-1) - 1 (signed, biased), as XeniOS HEAD's
+  GetIntegerScaleBits; constant swizzles and gamma are left alone. Other
+  integer formats (10_11_11, 2_10_10_10, 24_8, 32) are not scaled yet.
+
+Fallout: New Vegas (log 19-25-28): faces still wrong with
+metal_shared_memory_zero_copy = false, so it is not the zero-copy ordering.
+Left: the texture cache's invalidation of the face texture pages (a log of
+invalidations at 1F7FC000 / 1FB64000 / 1FC7F000 would say), or how the faces
+are built (FNV also has integer fetches of other formats, depth 24_8 among
+them, which the next build's fetch scale doesn't cover). A Frame Detail run
+in a dialogue would show the face draws' textures.
+
+Rainbow textures while Dishonored and BL2 first load (owner's photo):
+optimisation lead, not a bug yet. UE3 streams textures in, and the colours
+look like mips or memory not yet uploaded being sampled; samplers already
+clamp the minimum mip level. To look at once the hangs are done.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

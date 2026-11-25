@@ -135,6 +135,23 @@ XeResolveInfo XeResolveGetInfo(param_push_consts_xe) {
     resolve_info.dest_exp_bias_factor = int_bits_to_float_xe(
         (int(dest_info) << (32 - (16 + 6)) >> (32 - 6) << 23) +
         float_bits_to_int_xe(1.0f));
+    // An unsigned integer destination (number format 2, bits 13:15) holds
+    // round(value * 2^exp_bias), clamped, as its bits. The unorm packers
+    // write round(saturate(x) * (2^bits - 1)), so for formats with 8 or 16
+    // bits in every component pass them x / (2^bits - 1).
+    if (((dest_info >> 13u) & 7u) == 2u) {
+      if (resolve_info.dest_format == kXenosFormat_8 ||
+          resolve_info.dest_format == kXenosFormat_8_8 ||
+          resolve_info.dest_format == kXenosFormat_8_8_8_8 ||
+          resolve_info.dest_format == kXenosFormat_8_8_8_8_A ||
+          resolve_info.dest_format == kXenosFormat_8_8_8_8_AS_16_16_16_16) {
+        resolve_info.dest_exp_bias_factor *= 1.0f / 255.0f;
+      } else if (resolve_info.dest_format == kXenosFormat_16 ||
+                 resolve_info.dest_format == kXenosFormat_16_16 ||
+                 resolve_info.dest_format == kXenosFormat_16_16_16_16) {
+        resolve_info.dest_exp_bias_factor *= 1.0f / 65535.0f;
+      }
+    }
     resolve_info.dest_swap = (dest_info & (1u << 24u)) != 0u;
     resolve_info.dest_row_pitch_macro_tiles =
         dest_coordinate_info & ((1u << 10u) - 1u);

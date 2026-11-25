@@ -244,7 +244,7 @@ further edits.
 | `kernel_call_sample` | local | Index of the extra samples (7, 1 ms apart). | `src/xenia/kernel/util/shim_utils.cc` | 371, 372 | 3 |
 | `kernel_call_sample_pc` | local | Host PC of one extra sample. | `src/xenia/kernel/util/shim_utils.cc` | 374, 377, 378, 385 | 4 |
 | `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/kernel/util/shim_utils.h` | 554 | 1 |
-| `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/app/xenia_main_ios.mm` | 604 | 1 |
+| `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/app/xenia_main_ios.mm` | 619 | 1 |
 
 | `MetalPerfCounters` | struct | Performance counters filled in across the Metal backend, logged and reset with the draw stats. | `src/xenia/gpu/metal/metal_perf_counters.h` | 26, 76 | 2 |
 | `gpu_us` | MetalPerfCounters field | GPU execution time of completed submission command buffers (us). | `src/xenia/gpu/metal/metal_perf_counters.h` | 28 | 1 |
@@ -1060,13 +1060,13 @@ further edits.
 | `callers` | local in NoteSignal | Return addresses read from the guest stack. | `src/xenia/kernel/xevent.cc` | 76, 80, 95, 96 | 4 |
 | `caller_frame` | local in NoteSignal | Back chain of the current guest stack frame. | `src/xenia/kernel/xevent.cc` | 85, 87, 91, 92 | 5 |
 | `metal_hud` | cvar; iOS settings key | Show the Metal performance HUD (developerHUDProperties mode; MTL_HUD_ENABLED unset when off). Settings > Display > Metal Performance HUD. | `src/xenia/ui/metal/metal_presenter.mm` | 50, 911, 914 | 3 |
-| `metal_hud` | cvar; iOS settings key | Show the Metal performance HUD (developerHUDProperties mode; MTL_HUD_ENABLED unset when off). Settings > Display > Metal Performance HUD. | `src/xenia/app/xenia_main_ios.mm` | 80, 184 | 2 |
+| `metal_hud` | cvar; iOS settings key | Show the Metal performance HUD (developerHUDProperties mode; MTL_HUD_ENABLED unset when off). Settings > Display > Metal Performance HUD. | `src/xenia/app/xenia_main_ios.mm` | 82, 186 | 2 |
 | `metal_hud` | cvar; iOS settings key | Show the Metal performance HUD (developerHUDProperties mode; MTL_HUD_ENABLED unset when off). Settings > Display > Metal Performance HUD. | `src/xenia/ui/windowed_app_main_ios.mm` | 3543 | 1 |
 | `metal_hud_elements` | cvar; iOS settings key | MTL_HUD_ELEMENTS for the HUD, set after the config is read (empty: Apple default). Settings > Display > HUD Contents. | `src/xenia/ui/metal/metal_presenter.mm` | 54 | 1 |
-| `metal_hud_elements` | cvar; iOS settings key | MTL_HUD_ELEMENTS for the HUD, set after the config is read (empty: Apple default). Settings > Display > HUD Contents. | `src/xenia/app/xenia_main_ios.mm` | 82, 185, 186 | 3 |
+| `metal_hud_elements` | cvar; iOS settings key | MTL_HUD_ELEMENTS for the HUD, set after the config is read (empty: Apple default). Settings > Display > HUD Contents. | `src/xenia/app/xenia_main_ios.mm` | 84, 187, 188 | 3 |
 | `metal_hud_elements` | cvar; iOS settings key | MTL_HUD_ELEMENTS for the HUD, set after the config is read (empty: Apple default). Settings > Display > HUD Contents. | `src/xenia/ui/windowed_app_main_ios.mm` | 3548 | 1 |
 | `metal_hud_alignment` | cvar; iOS settings key | MTL_HUD_ALIGNMENT for the HUD. Settings > Display > HUD Position. | `src/xenia/ui/metal/metal_presenter.mm` | 60 | 1 |
-| `metal_hud_alignment` | cvar; iOS settings key | MTL_HUD_ALIGNMENT for the HUD. Settings > Display > HUD Position. | `src/xenia/app/xenia_main_ios.mm` | 81, 188, 189 | 3 |
+| `metal_hud_alignment` | cvar; iOS settings key | MTL_HUD_ALIGNMENT for the HUD. Settings > Display > HUD Position. | `src/xenia/app/xenia_main_ios.mm` | 83, 190, 191 | 3 |
 | `metal_hud_alignment` | cvar; iOS settings key | MTL_HUD_ALIGNMENT for the HUD. Settings > Display > HUD Position. | `src/xenia/ui/windowed_app_main_ios.mm` | 3559 | 1 |
 | `ios_device_status` | cvar; iOS settings key | Show the iOS version and thermal state while a game runs. Settings > Display > Device Status. | `src/xenia/ui/windowed_app_main_ios.mm` | 70, 3567, 9971 | 3 |
 | `device_status_label_` | ivar of XeniaViewController | The device status label (top left, below menus). | `src/xenia/ui/windowed_app_main_ios.mm` | 9118, 9154, 9155, 9156, 9158, 9159, 9160, 9161, 9162, 9164, 9166, 9168, 9996, 9999, 10002, 10003 | 16 |
@@ -1151,9 +1151,23 @@ further edits.
 | `id_pos` | local in GetArgumentBufferLayoutKey | Position of a member's `[[id(` attribute. | `src/xenia/gpu/metal/msl_shader.cc` | 340, 341, 347, 361 | 4 |
 | `name_begin` | local in GetArgumentBufferLayoutKey | Start of the member name left out of the key. | `src/xenia/gpu/metal/msl_shader.cc` | 351, 352, 353, 354, 355, 357, 360 | 7 |
 | `device_address` | local in GetArgumentBufferLayoutKey | The device pointer, hashed into the key. | `src/xenia/gpu/metal/msl_shader.cc` | 369, 370, 371 | 3 |
-| `unresolved_calls` | static local in ResolveFunction (a64) | How many calls the a64 resolve thunk could not resolve (no function at the guest address); the first 16 are logged with the address and guest lr. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 878, 879 | 2 |
+| `unresolved_calls` | static local in ResolveFunction (a64) | How many calls the a64 resolve thunk could not resolve (no function at the guest address); the first 16 are logged with the address and guest lr. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 898, 899 | 2 |
 | `host_crash_context` | local in Emulator::ExceptionCallback (ARM64) | Host registers of the fault, for the host PC, link register and JIT state registers in the crash dump. | `src/xenia/emulator.cc` | 1744, 1755, 1756, 1757, 1758 | 8 |
 | `host_code_start` | local in Emulator::ExceptionCallback (ARM64) | Start of the machine code of the guest function the host PC was mapped to, for the offset in the crash dump. | `src/xenia/emulator.cc` | 1745, 1751, 1752, 1753, 1754 | 6 |
+| `longjmp_resumes` | static local in ResolveFunction (a64) | How many calls resumed inside a live frame (longjmp); the first 16 are logged with the target, its function, the frame and r1. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 872, 873 | 2 |
+| `integer_format` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Texture format from the fetch constant word 1 (bits 0:5). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2411, 2424 | 2 |
+| `integer_format_is_any` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) (lambda) | Whether integer_format is one of a list of formats. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2419, 2433, 2439 | 3 |
+| `integer_8` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The format has 8 bits in every component. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2433, 2453, 2459 | 3 |
+| `integer_16` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The format has 16 bits in every component. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2439, 2451, 2457 | 3 |
+| `integer_word_3` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Fetch constant word 3 as uint (num_format bit 0, swizzle bits 1:12). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2442, 2447, 2473 | 3 |
+| `integer_num_format` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The fetch reads the components as integers (num_format). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2444, 2499 | 2 |
+| `integer_unsigned_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | 2^bits - 1 for the format, or 1. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2450, 2495 | 2 |
+| `integer_signed_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | 2^(bits - 1) - 1 for the format, or 1. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2456, 2488 | 2 |
+| `integer_remaining_components` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Result components still to scale. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2462, 2465, 2467 | 3 |
+| `integer_component_index` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The result component being scaled. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2464, 2466, 2468, 2474, 2477, 2501, 2503 | 7 |
+| `integer_is_component` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Its swizzle selects a component (not constant 0 or 1). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2470, 2499 | 2 |
+| `integer_sign` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Its sign (unsigned, signed, biased, gamma). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2477, 2483, 2485, 2492 | 4 |
+| `integer_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The factor applied to it. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2478, 2496, 2500, 2504 | 4 |
 
 ## Total references per name
 
@@ -1989,6 +2003,20 @@ further edits.
 | `unresolved_calls` | 2 |
 | `host_crash_context` | 8 |
 | `host_code_start` | 6 |
+| `longjmp_resumes` | 2 |
+| `integer_format` | 2 |
+| `integer_format_is_any` | 3 |
+| `integer_8` | 3 |
+| `integer_16` | 3 |
+| `integer_word_3` | 3 |
+| `integer_num_format` | 2 |
+| `integer_unsigned_scale` | 2 |
+| `integer_signed_scale` | 2 |
+| `integer_remaining_components` | 3 |
+| `integer_component_index` | 7 |
+| `integer_is_component` | 2 |
+| `integer_sign` | 4 |
+| `integer_scale` | 4 |
 
 ## Checks
 
@@ -2178,3 +2206,11 @@ further edits.
 - The a64 thunk order change (resolve thunk first) and the
   user_language/user_country fix (xboxkrnl_xconfig.cc now reads XConfig's
   int32 cvars; the string definitions are gone) add no names.
+- iOS title relaunch (xenia_main_ios.mm): `relaunch_extension`,
+  `relaunch_target_is_xex`, `relaunch_target_error` and
+  `relaunch_target_is_directory` have the same names and roles in XeniOS HEAD
+  (`refs/remotes/xenios/HEAD`), where the container case comes from, so they
+  are not listed. Clearing the stale title stop request uses the existing
+  Processor::ClearTitleStopRequestIOS. The resolve.xesli unsigned integer
+  scale, the metal_presenter.mm swap through gamma_output_texture_ and the
+  ResolveFunction first-instruction skip (XeniOS 6e304ab86) add no names.
