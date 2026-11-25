@@ -50,6 +50,16 @@ DEFINE_bool(
     "differently in a depth pre-pass and the pass drawing over it, and "
     "equal-depth tests and decals flicker (z-fighting).",
     "GPU");
+DEFINE_bool(
+    metal_shader_fast_math, true,
+    "Compile Metal shaders with fast math, which lets the compiler assume no "
+    "value is NaN or infinite. Xbox 360 shaders use infinities (1/0, log of "
+    "0) and rely on 0 times anything being 0, and the checks for that may be "
+    "optimized away under fast math. Off: IEEE math, exact with infinities "
+    "but slower shaders; try it per game if geometry stretches out to "
+    "infinity or glow and bloom effects are missing. Applies to shaders "
+    "compiled afterwards.",
+    "GPU");
 DEFINE_string(
     metal_log_shader_hashes, "",
     "Comma-separated vertex or pixel shader ucode hashes (hex, as logged, for "
@@ -1411,9 +1421,8 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
   auto* source_str =
       NS::String::string(msl_source_.c_str(), NS::UTF8StringEncoding);
   auto* compile_options = MTL::CompileOptions::alloc()->init();
-  // Use fast math for better performance (matches Xbox 360 behavior better
-  // than strict IEEE — the 360's ALU doesn't fully conform to IEEE anyway).
-  compile_options->setFastMathEnabled(true);
+  // Fast math is faster but assumes no NaN or infinity (metal_shader_fast_math).
+  compile_options->setFastMathEnabled(cvars::metal_shader_fast_math);
   // SPIRV-Cross marks the position [[invariant]]; Metal only honours that
   // with invariance preserved (iOS 14+).
   compile_options->setPreserveInvariance(

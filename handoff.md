@@ -2843,6 +2843,43 @@ sleep_zero_backoff_us stays 50: XThread10E03 in GTA IV now sleeps in it
 (__semwait_signal) instead of yielding; the frame-time change is the pass
 splitting above. A/B with 0 if stutter remains.
 
+### Spider-Man: Edge of Time frame anatomy (trace 9675 08-38-17, frame 1) and the fast-math A/B
+
+Owner: lighting present, but some lighting effects, post-processing and the
+time chamber's blue glow missing; vertex explosions at one chamber angle and
+on web-construct heavy attacks. Same on every build so far.
+
+Frame (tools in the scratchpad: xtr_pass.py passes with xxh3 VS/PS hashes,
+xtr_regs.py, xtr_bools.py, xtr_find_shader.py, xenos_ops.py opcode counts,
+xenos_cf.py control flow; xtr_replay.py is the importable memory replay):
+- G-buffer D115 (16_16_16_16_FLOAT + depth D24FS8 at 1120x632), depth resolved
+  as raw 32-bit (fast copy path) and read back as 24_8_FLOAT integer fetch.
+- Lights D256-D284: stencil-only volume (mode 5) then additive light into a
+  16_16_16_16 fixed target (-32..32, emulated via exp bias -5), resolved with
+  exp bias 11 to 16x4 unsigned integers, read back with exp_adjust -11.
+- Emissive/transparent pass D443 (47 draws, VS ACFEB0B41C1457D7 with an
+  aL loop, loop constant L0 = 1 iteration), glow mask D499 (8 additive draws
+  into an 8_8_8_8_GAMMA target, resolved as k_8), glow extraction D526 (PS
+  859476699225B6B3: HDR scene + depth, 3 IEEE rcp) and blur to 0628C000,
+  bloom 288x158 / 160x79 chain (PS BF0D2886..., D8105EC2..., E48E4905...).
+- Composite D532 PS 126C706122A7280B: an uber-shader with feature bools
+  b128-b140; this frame b129 (glow t5 + depth t4), b130 (bloom t1), b131,
+  b133 (t2 mask, 4 taps), b135 (t7). The "No valid binding for fetch 9/10/11"
+  warnings are blocks b138-b140, off here. It uses 9 IEEE log and 12 exp
+  (pow), lights use IEEE rsq/rcp/log/exp.
+- Checked and fine: every draw encoded (no compile skips), 16-bit fixed
+  range, integer resolves/fetches, depth resolves raw, gamma output and gamma
+  fetch on the SPIR-V path (gamma RTs blend in gamma space, a known
+  inaccuracy that brightens, not removes), clip-disabled draws are only
+  screen-space quads.
+- Lead: Metal fast math (on for all translated shaders, as upstream) lets
+  the compiler assume no NaN/infinity, so the translator's SM3 checks
+  (0 x anything = 0) and infinities from rcp/rsq/log can be folded away:
+  exploding vertices and NaN/zero HDR terms. New metal_shader_fast_math
+  (default on) to A/B per game.
+- Next data needed: photos of the time chamber and a web-construct attack
+  with a GPU trace at that moment, with metal_shader_fast_math on and off.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings
