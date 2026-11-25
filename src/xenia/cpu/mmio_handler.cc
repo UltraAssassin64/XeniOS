@@ -490,10 +490,28 @@ bool MMIOHandler::ExceptionCallback(Exception* ex) {
     }
     // The address is not found within any range, so either a write watch or an
     // actual access violation.
-    if (access_violation_callback_) {
-      return access_violation_callback_(std::move(lock),
-                                        access_violation_callback_context_,
-                                        fault_host_address, is_write);
+    if (access_violation_callback_ &&
+        access_violation_callback_(std::move(lock),
+                                   access_violation_callback_context_,
+                                   fault_host_address, is_write)) {
+      return true;
+    }
+    // Not a watch: a guest page that is protected or never committed. Say
+    // which one (the host fault log that follows has the code involved). The
+    // fault repeats while the instruction is retried, so only the first ten.
+    static std::atomic<uint32_t> unhandled_guest_fault_count{0};
+    if (unhandled_guest_fault_count.fetch_add(1, std::memory_order_relaxed) <
+        10) {
+      XELOGE(
+          "MMIOHandler: {} of guest {} address {:08X} hit neither an MMIO "
+          "range nor a watch (host page access {})",
+          is_write ? "write" : "read",
+          ex->fault_address() < uint64_t(physical_membase_) ? "virtual"
+                                                            : "physical",
+          ex->fault_address() < uint64_t(physical_membase_)
+              ? fault_guest_virtual_address
+              : uint32_t(ex->fault_address() - uint64_t(physical_membase_)),
+          uint32_t(cur_access));
     }
     return false;
   }

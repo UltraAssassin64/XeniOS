@@ -2880,6 +2880,55 @@ xenos_cf.py control flow; xtr_replay.py is the importable memory replay):
 - Next data needed: photos of the time chamber and a web-construct attack
   with a GPU trace at that moment, with metal_shader_fast_math on and off.
 
+### Owner's runs on build 9677 (zips "9677_logs" and "EoT-1": EoT 11-30-29 with 5 stream traces and photos 3923-3953, EoT 12-52-40, Arkham City 12-54-11, GTA IV 13-00-39) and the next build
+
+Confirmed by the owner: Arkham City now passes the dialogue line on the
+default decoder (the XMA silence fix), and the profile stays signed in across
+app restarts.
+
+- Arkham City, new: during the camera sweep to the warehouse the GPU
+  Commands thread (01000010) faults in a system library (pc 0x21FEE9290, lr
+  0x21FEED8C4, both in the shared cache, probably memmove), address
+  0x4292E4000 (page aligned), retried 6 million times = the hang. No
+  "Unable to decode MMIO" line, so not an MMIO range. If guest memory was at
+  host 0x3092E4000 the address is the first byte past guest physical memory
+  (a copy running past 512 MB), but the base was never logged. Metal shared
+  memory is zero copy here, so it is not UploadRanges. Diagnostics added: the
+  first unhandled fault logs read/write and a named frame-pointer backtrace,
+  MMIOHandler logs the guest address of a guest-memory fault that is neither
+  MMIO nor a watch, Memory logs the host address of guest memory. Next run
+  of the sweep names the caller.
+- EoT with metal_shader_fast_math=false per game (the log confirms it was
+  applied, and MSL shaders are compiled from source each run, so it took
+  effect): no change. Photos: big spikes on the skinned enemies, growing
+  with each event. The skinning VS (e.g. 03492900938ABAFD, 0F5D17BB987908DA)
+  builds the bone index from an 8_8_8_8 integer fetch times c254 (mulsc) and
+  maxas (rounds, writes only a0), reads c[66+a0].. c[68+a0]: exact, and the
+  VS constants in all 5 traces are finite (max 1849). Several skinned VS add
+  a second stream, fc94 (32_32_32_FLOAT, stride 3, at 0327B000, 13917 words,
+  shared by most skinned draws), to the position: a per-vertex offset buffer
+  the CPU writes, the likeliest place for an error that grows over time. The
+  stream traces hold no vertex data (all zeros): Metal never recorded the
+  memory draws read. Ported XeniOS HEAD's WriteMemoryRead per upload range in
+  MetalSharedMemory, so the next trace shows fc94 frame by frame. No EoT VS
+  uses memexport. The recomp (goliathret/EdgeOfTimeRecomp) is a D3D-level
+  reimplementation (not Xenos), with gpu_allow_invalid_fetch_constants,
+  execute_unclipped_draw_vs_on_cpu and readback_memexport off in its config;
+  its credits say Boma (goldislead) fixed EoT on xenia-edge, and their
+  xenia-edge GPU commits include scalar maxas clamped to [0, 255] (we clamp
+  to [-256, 255]), out-of-range vertex fetch words read as 0 (9e9d3cdd3),
+  and 21-bit rounding of scalar approximations (3a44f20c7, which we have).
+- A64 note: RSQRT_V128/F64 here still call the C lane functions with a bare
+  blr; XeniOS a3a4cd468 replaced them with emitted helpers because guest
+  values in v8-v31 are not preserved across a C call (safe only while the
+  callees compile to integer code).
+- GTA IV: in town, frames 90-113 ms, GPU 37-43% busy, uploads ~0.6 MB a
+  frame, CPU bound: XThreadE913 48-83% (hot 8216D90C, 828C6790, 828C2D78;
+  ff_wma decode also there, so likely the audio/stream thread), Main and
+  XThreadE003/14F07 share 829CFED0 (hot). The hotspot sampler now keeps
+  totals since launch and logs the code around each top function's hottest
+  instruction once, so the hot paths can be disassembled offline.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

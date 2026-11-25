@@ -633,6 +633,13 @@ void LogGuestThreadHotspots() {
   }
   auto* hotspot_code_cache =
       kernel_state()->processor()->backend()->code_cache();
+  // Samples since launch, by guest function and by function and instruction
+  // (function << 32 | instruction), so the functions a game spends its time
+  // in stand out over the few samples of one report. Only the perf logging
+  // thread calls this.
+  static std::map<uint32_t, uint32_t> hotspot_totals;
+  static std::map<uint64_t, uint32_t> hotspot_total_lines;
+  static std::unordered_set<uint32_t> hotspot_dumped;
   // Each round stops every thread just long enough to read its program
   // counter; the lookups run after it has resumed.
   constexpr uint32_t kHotspotRounds = 16;
@@ -653,6 +660,10 @@ void LogGuestThreadHotspots() {
               hotspot_code_cache->LookupFunction(hotspot_pc)) {
         hotspot_place = fmt::format("{:08X}", hotspot_function->address());
         ++hotspot_thread.guest_samples;
+        ++hotspot_totals[hotspot_function->address()];
+        ++hotspot_total_lines[uint64_t(hotspot_function->address()) << 32 |
+                              hotspot_function->MapMachineCodeToGuestAddress(
+                                  uintptr_t(hotspot_pc))];
       } else {
         Dl_info hotspot_symbol;
         if (dladdr(reinterpret_cast<void*>(hotspot_pc), &hotspot_symbol) &&
@@ -693,6 +704,59 @@ void LogGuestThreadHotspots() {
         "Guest thread hotspots {:08X} ({}): {}/{} samples in guest code;{}",
         hotspot_thread.xthread->handle(), hotspot_thread.host_thread->name(),
         hotspot_thread.guest_samples, hotspot_thread.samples, hotspot_text);
+  }
+  // The top functions since launch, all threads together, each with its most
+  // sampled instruction; the code around that instruction is logged once per
+  // function, for reading the game's hot paths offline.
+  std::vector<std::pair<uint32_t, uint32_t>> hotspot_sorted;
+  uint32_t hotspot_total = 0;
+  for (const auto& [hotspot_address, hotspot_count] : hotspot_totals) {
+    hotspot_sorted.emplace_back(hotspot_count, hotspot_address);
+    hotspot_total += hotspot_count;
+  }
+  std::sort(hotspot_sorted.rbegin(), hotspot_sorted.rend());
+  std::string hotspot_text;
+  auto* hotspot_memory = kernel_state()->memory();
+  for (size_t i = 0; i < std::min<size_t>(hotspot_sorted.size(), 16); ++i) {
+    const uint32_t hotspot_address = hotspot_sorted[i].second;
+    uint32_t hotspot_line = hotspot_address;
+    uint32_t hotspot_line_count = 0;
+    for (auto it =
+             hotspot_total_lines.lower_bound(uint64_t(hotspot_address) << 32);
+         it != hotspot_total_lines.end() &&
+         (it->first >> 32) == hotspot_address;
+         ++it) {
+      if (it->second > hotspot_line_count) {
+        hotspot_line_count = it->second;
+        hotspot_line = uint32_t(it->first);
+      }
+    }
+    hotspot_text += fmt::format("{} {:08X} {:.1f}% (at {:08X} x{})",
+                                i ? "," : "", hotspot_address,
+                                100.0 * hotspot_sorted[i].first / hotspot_total,
+                                hotspot_line, hotspot_line_count);
+    if (i < 8 && hotspot_sorted[i].first >= 32 &&
+        hotspot_dumped.insert(hotspot_address).second) {
+      // 64 words: from 32 before the hot instruction (not before the
+      // function), eight a line.
+      const uint32_t hotspot_start =
+          std::max(hotspot_address, hotspot_line - 32 * 4);
+      for (uint32_t row = 0; row < 8; ++row) {
+        std::string hotspot_words;
+        for (uint32_t word = 0; word < 8; ++word) {
+          hotspot_words += fmt::format(
+              " {:08X}",
+              xe::load_and_swap<uint32_t>(hotspot_memory->TranslateVirtual(
+                  hotspot_start + (row * 8 + word) * 4)));
+        }
+        XELOGI("Guest hotspot code {:08X}:{}", hotspot_start + row * 32,
+               hotspot_words);
+      }
+    }
+  }
+  if (hotspot_total) {
+    XELOGI("Guest hotspots since launch ({} samples):{}", hotspot_total,
+           hotspot_text);
   }
 #endif  // XE_PLATFORM_APPLE && XE_ARCH_ARM64
 }

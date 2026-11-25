@@ -1618,7 +1618,8 @@ bool MetalCommandProcessor::SetupContext() {
 #endif  // METAL_SHADER_CONVERTER_AVAILABLE
 
   // Initialize shared memory
-  shared_memory_ = std::make_unique<MetalSharedMemory>(*this, *memory_);
+  shared_memory_ =
+      std::make_unique<MetalSharedMemory>(*this, *memory_, trace_writer_);
   if (!shared_memory_->Initialize()) {
     XELOGE("Failed to initialize shared memory");
     return false;

@@ -21,8 +21,10 @@ namespace gpu {
 namespace metal {
 
 MetalSharedMemory::MetalSharedMemory(MetalCommandProcessor& command_processor,
-                                     Memory& memory)
-    : SharedMemory(memory), command_processor_(command_processor) {}
+                                     Memory& memory, TraceWriter& trace_writer)
+    : SharedMemory(memory),
+      command_processor_(command_processor),
+      trace_writer_(trace_writer) {}
 
 MetalSharedMemory::~MetalSharedMemory() { Shutdown(); }
 
@@ -156,6 +158,8 @@ bool MetalSharedMemory::UploadRanges(
     if (end > kBufferSize) {
       end = kBufferSize;
     }
+    // A trace records the guest memory draws read, as D3D12 and Vulkan do.
+    trace_writer_.WriteMemoryRead(start, end - start);
 
     if (!have_merged) {
       merged_start = start;

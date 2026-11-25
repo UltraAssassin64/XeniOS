@@ -241,6 +241,10 @@ bool Memory::Initialize() {
 #endif
   virtual_membase_ = mapping_base_;
   physical_membase_ = mapping_base_ + 0x100000000ull;
+  // For reading host fault addresses in logs back as guest addresses.
+  XELOGI("Guest memory: virtual at host {}, physical at host {}",
+         static_cast<void*>(virtual_membase_),
+         static_cast<void*>(physical_membase_));
 
   // Prepare virtual heaps.
   heaps_.v00000000.Initialize(this, virtual_membase_, HeapType::kGuestVirtual,

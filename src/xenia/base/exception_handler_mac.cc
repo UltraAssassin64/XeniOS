@@ -11,6 +11,8 @@
 
 #include "xenia/base/exception_handler.h"
 
+#include <dlfcn.h>
+#include <pthread.h>
 #include <signal.h>
 #include <ucontext.h>
 #include <atomic>
@@ -235,6 +237,54 @@ static void ExceptionHandlerCallback(int signal_number, siginfo_t* signal_info,
         signal_number, uint64_t(ex.pc()),
         reinterpret_cast<uint64_t>(signal_info->si_addr), thread_context.x[30],
         thread_context.sp, unhandled_count);
+    if (unhandled_count == 1) {
+      // Name the host code involved: the faulting instruction, the link
+      // register and the return address of each frame, walking the frame
+      // pointer chain (which Apple's ARM64 ABI always keeps) only within this
+      // thread's stack. Return addresses into system libraries carry a pointer
+      // authentication code in the upper bits, which the mask removes.
+      Dl_info unhandled_symbol;
+      std::string unhandled_backtrace;
+      auto unhandled_name = [&](uint64_t address) {
+        address &= UINT64_C(0x0000007FFFFFFFFF);
+        if (dladdr(reinterpret_cast<void*>(address), &unhandled_symbol) &&
+            unhandled_symbol.dli_sname) {
+          unhandled_backtrace +=
+              fmt::format(" {}+{:X}", unhandled_symbol.dli_sname,
+                          address - uint64_t(unhandled_symbol.dli_saddr));
+        } else {
+          unhandled_backtrace += fmt::format(" {:X}", address);
+        }
+      };
+      unhandled_name(ex.pc());
+      unhandled_name(thread_context.x[30]);
+      const uint64_t unhandled_stack_top =
+          uint64_t(pthread_get_stackaddr_np(pthread_self()));
+      uint64_t unhandled_frame = thread_context.x[29];
+      for (uint32_t unhandled_depth = 0;
+           unhandled_depth < 16 && unhandled_frame >= thread_context.sp &&
+           unhandled_frame + 16 <= unhandled_stack_top &&
+           !(unhandled_frame & 7);
+           ++unhandled_depth) {
+        unhandled_name(reinterpret_cast<const uint64_t*>(unhandled_frame)[1]);
+        if (reinterpret_cast<const uint64_t*>(unhandled_frame)[0] <=
+            unhandled_frame) {
+          break;
+        }
+        unhandled_frame = reinterpret_cast<const uint64_t*>(unhandled_frame)[0];
+      }
+      XELOGE("Unhandled host exception: {}; host code (pc, lr, frames):{}",
+             ex.code() != Exception::Code::kAccessViolation
+                 ? "not an access violation"
+             : ex.access_violation_operation() ==
+                     Exception::AccessViolationOperation::kWrite
+                 ? "write"
+             : ex.access_violation_operation() ==
+                     Exception::AccessViolationOperation::kRead
+                 ? "read"
+                 : "unknown access",
+             unhandled_backtrace);
+    }
 #else
     XELOGE(
         "Unhandled host exception: signal={} pc=0x{:016X} address=0x{:016X} "
