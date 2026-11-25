@@ -3705,7 +3705,8 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
               vfetch_index, buffer_offset, buffer_length);
           return false;
         }
-        if (!shared_memory_->RequestRange(buffer_offset, buffer_length)) {
+        if (!shared_memory_->RequestRangeForGpuRead(buffer_offset,
+                                                    buffer_length)) {
           XELOGE(
               "Failed to request vertex buffer at 0x{:08X} (size {}) in shared "
               "memory",
@@ -4343,8 +4344,8 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
           static_cast<uint32_t>(index_base), index_length, index_count);
       return false;
     }
-    return shared_memory_->RequestRange(static_cast<uint32_t>(index_base),
-                                        static_cast<uint32_t>(index_length));
+    return shared_memory_->RequestRangeForGpuRead(
+        static_cast<uint32_t>(index_base), static_cast<uint32_t>(index_length));
   };
 
   if (use_tessellation_emulation) {
@@ -4941,7 +4942,8 @@ bool MetalCommandProcessor::IssueDrawMsl(
               vfetch_index, buffer_offset, buffer_length);
           return false;
         }
-        if (!shared_memory_->RequestRange(buffer_offset, buffer_length)) {
+        if (!shared_memory_->RequestRangeForGpuRead(buffer_offset,
+                                                    buffer_length)) {
           XELOGE(
               "SPIRV-Cross: Failed to request vertex buffer at 0x{:08X} "
               "(size {}) in shared memory",
@@ -6283,8 +6285,9 @@ bool MetalCommandProcessor::IssueDrawMsl(
           SharedMemory::kBufferSize - index_base < index_length) {
         return false;
       }
-      return shared_memory_->RequestRange(static_cast<uint32_t>(index_base),
-                                          static_cast<uint32_t>(index_length));
+      return shared_memory_->RequestRangeForGpuRead(
+          static_cast<uint32_t>(index_base),
+          static_cast<uint32_t>(index_length));
     };
 
     bool use_expansion_triangle_list_fallback = false;

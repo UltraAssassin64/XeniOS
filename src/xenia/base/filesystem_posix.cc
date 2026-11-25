@@ -15,6 +15,7 @@
 
 #include <assert.h>
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
 #include <pwd.h>
@@ -138,6 +139,22 @@ static uint64_t convertUnixtimeToWinFiletime(time_t unixtime) {
   return filetime;
 }
 
+// A 0 FILETIME leaves the time alone.
+static timespec convertWinFiletimeToTimespec(uint64_t filetime) {
+  if (!filetime) {
+    return {0, UTIME_OMIT};
+  }
+  int64_t ticks = int64_t(filetime) - 116444736000000000LL;
+  int64_t seconds = ticks / 10000000;
+  int64_t remainder = ticks % 10000000;
+  // tv_nsec can't be negative, so a time before 1970 borrows a second.
+  if (remainder < 0) {
+    seconds -= 1;
+    remainder += 10000000;
+  }
+  return {time_t(seconds), long(remainder * 100)};
+}
+
 bool CreateEmptyFile(const std::filesystem::path& path) {
   int file = creat(path.c_str(), 0774);
   if (file >= 0) {
@@ -149,8 +166,10 @@ bool CreateEmptyFile(const std::filesystem::path& path) {
 
 class PosixFileHandle : public FileHandle {
  public:
-  PosixFileHandle(std::filesystem::path path, int handle)
-      : FileHandle(std::move(path)), handle_(handle) {}
+  PosixFileHandle(std::filesystem::path path, int handle, bool append_only)
+      : FileHandle(std::move(path)),
+        handle_(handle),
+        append_only_(append_only) {}
   ~PosixFileHandle() override {
     close(handle_);
     handle_ = -1;
@@ -168,7 +187,9 @@ class PosixFileHandle : public FileHandle {
   }
   bool Write(size_t file_offset, const void* buffer, size_t buffer_length,
              size_t* out_bytes_written) override {
-    ssize_t out = pwrite(handle_, buffer, buffer_length, file_offset);
+    ssize_t out = append_only_
+                      ? write(handle_, buffer, buffer_length)
+                      : pwrite(handle_, buffer, buffer_length, file_offset);
     if (out >= 0) {
       *out_bytes_written = out;
       return true;
@@ -180,42 +201,60 @@ class PosixFileHandle : public FileHandle {
   bool SetLength(size_t length) override {
     return ftruncate(handle_, length) >= 0 ? true : false;
   }
+  bool SetTimes(uint64_t create_timestamp, uint64_t access_timestamp,
+                uint64_t write_timestamp) override {
+    // There's no creation time to set.
+    const timespec times[2] = {convertWinFiletimeToTimespec(access_timestamp),
+                               convertWinFiletimeToTimespec(write_timestamp)};
+    return futimens(handle_, times) == 0;
+  }
   void Flush() override { fsync(handle_); }
 
  private:
   int handle_ = -1;
+  bool append_only_ = false;
 };
 
 std::unique_ptr<FileHandle> FileHandle::OpenExisting(
     const std::filesystem::path& path, uint32_t desired_access) {
-  int open_access = 0;
-  if (desired_access & FileAccess::kGenericRead) {
-    open_access |= O_RDONLY;
+  // O_RDONLY/O_WRONLY/O_RDWR are a 2-bit access mode, not OR-able flags.
+  // Reduce to read/write intent, then pick the mode. kGenericExecute has no
+  // POSIX open equivalent and falls back to read.
+  const bool wants_read =
+      desired_access & (FileAccess::kGenericRead | FileAccess::kFileReadData |
+                        FileAccess::kGenericExecute | FileAccess::kGenericAll);
+  const bool wants_write =
+      desired_access & (FileAccess::kGenericWrite | FileAccess::kFileWriteData |
+                        FileAccess::kFileAppendData | FileAccess::kGenericAll);
+  int open_access;
+  if (wants_read && wants_write) {
+    open_access = O_RDWR;
+  } else if (wants_write) {
+    open_access = O_WRONLY;
+  } else {
+    open_access = O_RDONLY;
   }
-  if (desired_access & FileAccess::kGenericWrite) {
-    open_access |= O_WRONLY;
-  }
-  if (desired_access & FileAccess::kGenericExecute) {
-    open_access |= O_RDONLY;
-  }
-  if (desired_access & FileAccess::kGenericAll) {
-    open_access |= O_RDWR;
-  }
-  if (desired_access & FileAccess::kFileReadData) {
-    open_access |= O_RDONLY;
-  }
-  if (desired_access & FileAccess::kFileWriteData) {
-    open_access |= O_WRONLY;
-  }
-  if (desired_access & FileAccess::kFileAppendData) {
+  // pwrite(2) ignores the offset on an O_APPEND descriptor.
+  bool append_only = (desired_access & FileAccess::kFileAppendData) &&
+                     !(desired_access &
+                       (FileAccess::kGenericWrite | FileAccess::kFileWriteData |
+                        FileAccess::kGenericAll));
+  if (append_only) {
     open_access |= O_APPEND;
   }
   int handle = open(path.c_str(), open_access);
+  if (handle == -1 && errno == EISDIR) {
+    // Win32 hands out a directory handle for any access through
+    // FILE_FLAG_BACKUP_SEMANTICS, and neither platform can write file data
+    // through one, so drop the write intent rather than fail.
+    append_only = false;
+    handle = open(path.c_str(), O_RDONLY | O_DIRECTORY);
+  }
   if (handle == -1) {
     // TODO(benvanik): pick correct response.
     return nullptr;
   }
-  return std::make_unique<PosixFileHandle>(path, handle);
+  return std::make_unique<PosixFileHandle>(path, handle, append_only);
 }
 
 std::optional<FileInfo> GetInfo(const std::filesystem::path& path) {
@@ -273,20 +312,6 @@ std::vector<FileInfo> ListFiles(const std::filesystem::path& path) {
   }
   closedir(dir);
   return std::move(result);
-}
-
-bool SetAttributes(const std::filesystem::path& path, uint64_t attributes) {
-  struct stat st;
-  if (stat(path.c_str(), &st) != 0) {
-    return false;
-  }
-  mode_t mode = st.st_mode;
-  if (attributes & X_FILE_ATTRIBUTE_READONLY) {
-    mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
-  } else {
-    mode |= S_IWUSR;
-  }
-  return chmod(path.c_str(), mode) == 0;
 }
 
 }  // namespace filesystem

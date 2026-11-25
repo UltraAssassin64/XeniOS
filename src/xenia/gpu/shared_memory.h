@@ -76,6 +76,11 @@ class SharedMemory {
   // ensures the host GPU memory backing the range are resident. Returns true if
   // the range has been fully updated and is usable.
   bool RequestRange(uint32_t start, uint32_t length);
+  // For vertex and index data the GPU reads straight from the buffer, with
+  // nothing derived from it cached. When the buffer is the guest memory itself
+  // there is nothing to upload for such a range, so it doesn't need valid
+  // pages or the write watch that comes with them. RequestRange otherwise.
+  bool RequestRangeForGpuRead(uint32_t start, uint32_t length);
 
   void TryFindUploadRange(const uint32_t& block_first,
                           const uint32_t& block_last,
@@ -107,6 +112,8 @@ class SharedMemory {
 
  protected:
   SharedMemory(Memory& memory);
+  // Set by an implementation whose buffer aliases the guest memory.
+  bool buffer_is_guest_memory_ = false;
   // Call in implementation-specific initialization.
   bool InitializeCommon();
   void InitializeSparseHostGpuMemory(uint32_t granularity_log2);

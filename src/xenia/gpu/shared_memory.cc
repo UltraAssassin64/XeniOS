@@ -485,6 +485,16 @@ void SharedMemory::UnlinkWatchRange(WatchRange* range) {
 }
 
 // todo: optimize, an enormous amount of cpu time (1.34%) is spent here.
+bool SharedMemory::RequestRangeForGpuRead(uint32_t start, uint32_t length) {
+  if (buffer_is_guest_memory_) {
+    if (length && (start > kBufferSize || (kBufferSize - start) < length)) {
+      return false;
+    }
+    return true;
+  }
+  return RequestRange(start, length);
+}
+
 bool SharedMemory::RequestRange(uint32_t start, uint32_t length) {
   if (!length) {
     // Some texture or buffer is empty, for example - safe to draw in this case.
@@ -672,7 +682,9 @@ std::pair<uint32_t, uint32_t> SharedMemory::MemoryInvalidationCallback(
 
   auto global_lock = global_critical_region_.Acquire();
 
-  if (!exact_range) {
+  // With the buffer aliasing guest memory there is nothing to upload, so
+  // widening only saves faults, and costs every texture nearby a reload.
+  if (!exact_range && !buffer_is_guest_memory_) {
     // Check if a somewhat wider range (up to 256 KB with 4 KB pages) can be
     // invalidated - if no GPU-written data nearby that was not intended to be
     // invalidated since it's not in sync with CPU memory and can't be

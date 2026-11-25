@@ -162,6 +162,15 @@ class Win32FileHandle : public FileHandle {
     }
     return true;
   }
+  bool SetTimes(uint64_t create_timestamp, uint64_t access_timestamp,
+                uint64_t write_timestamp) override {
+    FILETIME create = {DWORD(create_timestamp), DWORD(create_timestamp >> 32)};
+    FILETIME access = {DWORD(access_timestamp), DWORD(access_timestamp >> 32)};
+    FILETIME write = {DWORD(write_timestamp), DWORD(write_timestamp >> 32)};
+    return SetFileTime(handle_, create_timestamp ? &create : nullptr,
+                       access_timestamp ? &access : nullptr,
+                       write_timestamp ? &write : nullptr) != FALSE;
+  }
   void Flush() override { FlushFileBuffers(handle_); }
 
  private:
@@ -263,10 +272,6 @@ std::vector<FileInfo> ListFiles(const std::filesystem::path& path) {
   FindClose(handle);
 
   return result;
-}
-
-bool SetAttributes(const std::filesystem::path& path, uint64_t attributes) {
-  return SetFileAttributes(path.c_str(), static_cast<DWORD>(attributes));
 }
 
 }  // namespace filesystem

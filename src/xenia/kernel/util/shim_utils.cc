@@ -724,29 +724,28 @@ void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context) {
   kernel_call_this_thread->in_call = true;
   const uint64_t kernel_call_total = ++kernel_call_this_thread->call_count;
 
-  // The last 32 calls on this thread with their guest return addresses,
-  // newest at index 0, and for each cycle length 1 to 8 how many calls in a
-  // row have matched the call that many places earlier.
+  // The last 32 calls on this thread with their guest return addresses, a
+  // ring written at kernel_call_history_head (the call k places before the
+  // newest is at (head - 1 - k) & 31), and for each cycle length 1 to 8 how
+  // many calls in a row have matched the call that many places earlier. A
+  // ring rather than a shift: this runs on every kernel call.
   thread_local const cpu::Export* kernel_call_history[32] = {};
   thread_local uint32_t kernel_call_history_lr[32] = {};
+  thread_local uint32_t kernel_call_history_head = 0;
   thread_local uint32_t kernel_call_runs[9] = {};
   for (uint32_t kernel_call_period = 1; kernel_call_period <= 8;
        ++kernel_call_period) {
-    if (kernel_call_history[kernel_call_period - 1] == export_entry) {
+    if (kernel_call_history[(kernel_call_history_head - kernel_call_period) &
+                            31] == export_entry) {
       ++kernel_call_runs[kernel_call_period];
     } else {
       kernel_call_runs[kernel_call_period] = 0;
     }
   }
-  for (uint32_t kernel_call_index = 31; kernel_call_index;
-       --kernel_call_index) {
-    kernel_call_history[kernel_call_index] =
-        kernel_call_history[kernel_call_index - 1];
-    kernel_call_history_lr[kernel_call_index] =
-        kernel_call_history_lr[kernel_call_index - 1];
-  }
-  kernel_call_history[0] = export_entry;
-  kernel_call_history_lr[0] = uint32_t(ppc_context->lr);
+  kernel_call_history[kernel_call_history_head & 31] = export_entry;
+  kernel_call_history_lr[kernel_call_history_head & 31] =
+      uint32_t(ppc_context->lr);
+  ++kernel_call_history_head;
 
   const uint32_t kernel_call_threshold = cvars::kernel_call_repeat_threshold;
   XThread* kernel_call_thread = XThread::GetCurrentThread();
@@ -765,12 +764,14 @@ void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context) {
       std::string kernel_call_names;
       for (uint32_t kernel_call_index = 32; kernel_call_index;
            --kernel_call_index) {
-        if (!kernel_call_history[kernel_call_index - 1]) {
+        const uint32_t kernel_call_slot =
+            (kernel_call_history_head - kernel_call_index) & 31;
+        if (!kernel_call_history[kernel_call_slot]) {
           continue;
         }
         kernel_call_names += fmt::format(
-            " {}@{:08X}", kernel_call_history[kernel_call_index - 1]->name,
-            kernel_call_history_lr[kernel_call_index - 1]);
+            " {}@{:08X}", kernel_call_history[kernel_call_slot]->name,
+            kernel_call_history_lr[kernel_call_slot]);
       }
       XELOGW(
           "Kernel call storm on thread {:08X}: 1000000 calls in {} ms ({} in "
@@ -808,7 +809,10 @@ void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context) {
     bool kernel_call_only_sleeps = true;
     for (uint32_t kernel_call_index = 0; kernel_call_index < kernel_call_period;
          ++kernel_call_index) {
-      if (std::strcmp(kernel_call_history[kernel_call_index]->name,
+      if (std::strcmp(kernel_call_history[(kernel_call_history_head - 1 -
+                                           kernel_call_index) &
+                                          31]
+                          ->name,
                       "KeDelayExecutionThread")) {
         kernel_call_only_sleeps = false;
       }
@@ -822,7 +826,10 @@ void NoteKernelCall(const cpu::Export* export_entry, PPCContext* ppc_context) {
       if (!kernel_call_names.empty()) {
         kernel_call_names += " -> ";
       }
-      kernel_call_names += kernel_call_history[kernel_call_index - 1]->name;
+      kernel_call_names +=
+          kernel_call_history[(kernel_call_history_head - kernel_call_index) &
+                              31]
+              ->name;
     }
     XELOGW(
         "Kernel calls repeating {} times in a row on thread {:08X}: {}; guest "

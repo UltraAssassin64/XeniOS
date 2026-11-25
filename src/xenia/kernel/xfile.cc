@@ -286,6 +286,11 @@ X_STATUS XFile::SetLength(size_t length) {
   std::lock_guard<std::mutex> lock(file_lock_);
   return file_->SetLength(length);
 }
+X_STATUS XFile::SetTimes(uint64_t create_timestamp, uint64_t access_timestamp,
+                         uint64_t write_timestamp) {
+  std::lock_guard<std::mutex> lock(file_lock_);
+  return file_->SetTimes(create_timestamp, access_timestamp, write_timestamp);
+}
 X_STATUS XFile::Rename(const std::filesystem::path file_path) {
   entry()->Rename(file_path);
   return X_STATUS_SUCCESS;

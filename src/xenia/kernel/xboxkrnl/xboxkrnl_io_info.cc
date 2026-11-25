@@ -202,24 +202,19 @@ dword_result_t NtSetInformationFile_entry(
   switch (info_class) {
     case XFileBasicInformation: {
       auto info = info_ptr.as<X_FILE_BASIC_INFORMATION*>();
-
-      bool basic_result = true;
-      if (info->creation_time) {
-        basic_result &= file->entry()->SetCreateTimestamp(info->creation_time);
+      // Of the attributes only the directory bit is kept, which a file can't
+      // take.
+      if ((info->attributes & vfs::kFileAttributeDirectory) &&
+          !(file->entry()->attributes() & vfs::kFileAttributeDirectory)) {
+        result = X_STATUS_INVALID_PARAMETER;
+        break;
       }
 
-      if (info->last_access_time) {
-        basic_result &=
-            file->entry()->SetAccessTimestamp(info->last_access_time);
-      }
-
-      if (info->last_write_time) {
-        basic_result &= file->entry()->SetWriteTimestamp(info->last_write_time);
-      }
-
-      basic_result &= file->entry()->SetAttributes(info->attributes);
-      if (!basic_result) {
-        result = X_STATUS_UNSUCCESSFUL;
+      // The change time follows the write time.
+      if (info->creation_time || info->last_access_time ||
+          info->last_write_time) {
+        result = file->SetTimes(info->creation_time, info->last_access_time,
+                                info->last_write_time);
       }
 
       out_length = sizeof(*info);

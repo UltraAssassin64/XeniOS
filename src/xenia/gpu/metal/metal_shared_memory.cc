@@ -56,6 +56,7 @@ bool MetalSharedMemory::Initialize() {
                                   MTL::ResourceStorageModeShared, nullptr);
       if (buffer_) {
         use_zero_copy_ = true;
+        buffer_is_guest_memory_ = true;
         XELOGD("Metal shared memory: using bytes-no-copy buffer");
       } else {
         XELOGW("Metal shared memory: bytes-no-copy buffer creation failed");
@@ -191,6 +192,7 @@ void MetalSharedMemory::Shutdown() {
     buffer_ = nullptr;
   }
   use_zero_copy_ = false;
+  buffer_is_guest_memory_ = false;
 
   ShutdownCommon();  // Base class cleanup
 }

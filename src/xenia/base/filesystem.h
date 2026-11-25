@@ -105,6 +105,10 @@ class FileHandle {
   // Set length of the file in bytes.
   virtual bool SetLength(size_t length) = 0;
 
+  // Sets the FILETIMEs that aren't 0, the others left alone.
+  virtual bool SetTimes(uint64_t create_timestamp, uint64_t access_timestamp,
+                        uint64_t write_timestamp) = 0;
+
   // Flushes any pending write buffers to the underlying filesystem.
   virtual void Flush() = 0;
 
@@ -133,8 +137,6 @@ std::vector<FileInfo> ListFiles(const std::filesystem::path& path);
 std::vector<FileInfo> ListDirectories(const std::filesystem::path& path);
 std::vector<FileInfo> FilterByName(const std::vector<FileInfo>& files,
                                    const std::regex pattern);
-
-bool SetAttributes(const std::filesystem::path& path, uint64_t attributes);
 
 #if XE_PLATFORM_ANDROID
 void AndroidInitialize();

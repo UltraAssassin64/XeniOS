@@ -95,10 +95,13 @@ class Entry {
   uint64_t write_timestamp() const { return write_timestamp_; }
   bool delete_on_close() const { return delete_on_close_; }
 
-  virtual bool SetAttributes(uint64_t attributes) { return false; }
-  virtual bool SetCreateTimestamp(uint64_t timestamp) { return false; }
-  virtual bool SetAccessTimestamp(uint64_t timestamp) { return false; }
-  virtual bool SetWriteTimestamp(uint64_t timestamp) { return false; }
+  virtual bool has_open_files() const { return false; }
+  virtual void RetainFile() {}
+  virtual void ReleaseFile() {}
+  // Empties the file in place. False when it has to be deleted and created
+  // again instead.
+  virtual bool Overwrite() { return false; }
+
   void SetForDeletion(bool delete_on_close) {
     delete_on_close_ = delete_on_close;
   }

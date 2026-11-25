@@ -2600,6 +2600,120 @@ timeout (xenia-edge d287b30be; truncated, a relative timeout waited for
 weeks) and returns on an invalid handle instead of dereferencing null;
 AC Revelations doesn't import it.
 
+### Owner's runs on build 9673 (zip "9673_logs-1", 2026-11-24, logs 21-39-56 .. 22-49-14, 8 GTA IV/other traces) and the next build
+
+Owner's report: Black Ops reaches menus and gameplay; Edge of Time renders
+with lighting (some post-processing missing; vertex explosions at one Time
+Vortex chamber angle and on web-construct heavy attacks); relaunching works
+(Black Ops -> Edge of Time, ACR -> ACR); ACR sound effects in time with
+defaults; Batman AA and AC run with shader-load stutter; AA intro walk
+25/30 FPS; Arkham City story stalls waiting for a dialogue line, and after
+long play all dialogue and music stop and are skipped; GTA IV cutscenes
+12-17 FPS, gameplay pre 70-100+ ms, GPU ~40 ms, run 2 killed the game.
+
+GTA IV run 2 (22-49-14) ended in `XamShowDirtyDiscErrorUI` from the
+streaming thread F8000C60, right after the cache copier (F8001014) wrote
+bronx_e.img and bronx_w.img. The game copies every .img to cache: on every
+boot (89 and 80 files in the two runs) because the times it stamps are lost
+(`SetWriteTimestamp` only logged). Found while reading that path:
+1. **filesystem_posix.cc OpenExisting OR'd O_RDONLY (0) and O_WRONLY (1)**:
+   a read/write handle got a write-only descriptor, so any read through it
+   failed (`HostPathFile::ReadSync` -> END_OF_FILE). Every writable device
+   (cache, content, saves). Fixed as XeniOS HEAD / xenia-edge 1e7c1f677,
+   c9536890c (O_APPEND only for append-only handles), b9e00e6cc.
+2. **Entry::Delete freed an entry with open handles**, and Overwrite /
+   OverwriteIf opens were delete + recreate, so another handle on the file
+   was left with a dangling entry. Ported xenia-edge 494e2ef67's open-file
+   count (RetainFile/ReleaseFile, delete-on-close at the last close) and
+   in-place overwrite.
+3. **File times**: xenia-edge 98fad6f14 (futimens through the title's own
+   handle, 2 s units). Expect "Tried to change write timestamp" lines gone
+   and, from the second boot on, far fewer .img copies.
+4. **X_FILE_BASIC_INFORMATION.attributes** was a 64-bit read of a ULONG +
+   padding (xenia-edge 8a179c7af): set-info chmod'ed by the padding's bit 0,
+   and basic-info queries returned the attributes in the padding.
+Which of 1/2 caused the dirty disc is not proven; both are real.
+
+GTA IV profile (22-49-14, gameplay windows, 120 frames each): frame 58-81
+ms, GPU busy 75-100%, threads XThreadC603 ~78%, GPU Commands 75-89%.
+GPU per frame: draws 24-26 ms (56 passes), rt transfer 23-24 ms (50
+passes), texture load 18-19 ms + upload blit 8 ms (350-430 loads), edram
+dump + resolve ~9 ms. "uploaded" 3-5 GB per 120 frames (~35 MB a frame):
+with zero copy that is pages made valid again after CPU writes, each a
+write-watch fault and re-protect on 16 KB pages.
+- Ported XeniOS 0f21056f3: `RequestRangeForGpuRead` for vertex and index
+  data (both Metal draw paths and PrimitiveProcessor) skips valid pages and
+  the write watch when the buffer is guest memory, and invalidation is not
+  widened to 256 KB then. Expect "uploaded" to drop by most of its size,
+  texture loads per frame to drop, and CPU time on the game threads to fall.
+  Textures, memexport, resolves and the primitive cache keep their watches.
+- Kernel call repeat detector: history as a ring (no 62-entry shift per
+  kernel call). GTA IV threads make over 10^6 kernel calls a second.
+- XMA census (Arkham City): every 10 s an info line "XMA census: N
+  contexts allocated, E enabled, 0 stalled", or a warning with the first
+  stalled context's fields when enabled contexts holding input did not move
+  for 10 s. Theory: UE3 has a fixed voice pool; a voice whose XMA context
+  never ends holds the story line, and once the pool is full new sounds are
+  skipped. If the census shows stalled contexts climbing, the fix is the
+  XMA decoder of XeniOS HEAD = xenia-edge HEAD (identical there; ~20 fixes
+  of Nov 6-10: loop jump stall, XMABlockWhileInUse on a disabled context,
+  split frames waiting on a late buffer, one-shot looping, ...), ~700 lines
+  in xma_context_new.cc plus the context layout (decode_subframe) and the
+  audio system pacing. Not ported blind: ACR now works on ours.
+
+Optimization plan (in order, each measured on GTA IV and Arkham City):
+1. Check this build's upload/texture-load drop.
+2. Texture reloads from 16 KB false sharing: XeniOS d98568820 (hash the
+   guest bytes, skip unchanged reloads) needs Metal load-completion tracking
+   this branch's texture cache lacks (texture_cache.cc diverged ~800 lines).
+3. Batch texture loads (one compute encoder per draw's loads, blits after)
+   and resolves (edram dump + resolve in one encoder): 350-430 passes a
+   frame in GTA IV.
+4. Render target transfers (23 ms in GTA IV, 50 passes): find which
+   ownership transfers repeat per frame from a trace.
+5. Plan items 3 and 5 of the Arkham City section (command buffers, tile
+   resolve).
+6. CPU: the always-on diagnostics (stuck-thread reports, call tracker,
+   hotspot sampler) behind one switch once hangs are rare; JIT code cache
+   persisted per title.
+
+Owner's wishlist (2026-11-24), assessment:
+- Multi-disc (install disc + play disc, e.g. GTA V): feasible. Installed
+  content already persists; needs disc sets in the library, remounting
+  \Device\Cdrom0 at a swap prompt (XamSwapDisc / the game's "insert disc"
+  wait) without a title reset.
+- Options reorganisation: UI only, easy.
+- Customisable touch controls with shareable presets: feasible; XeniOS has
+  an editor and preset format; our iOS UI diverged, so port the layout model
+  and preset JSON, not its view controllers wholesale.
+- Touch input lag: measure first (touch timestamp -> XInputGetState ->
+  present). Likely wins: state updated in the touch handler, 120 Hz touch
+  on ProMotion, fewer frames queued in the presenter.
+- Repeated inputs (QTE mashing): XInput is polled, not interrupt driven; a
+  press and release between two polls is lost. Latch presses so each one is
+  seen by at least one poll, and bump the packet number per change. Small.
+- Toggle to stop tap-to-menu, with a menu button: easy.
+- Portrait layout (screen in the top half, controls below): feasible.
+- Shader cache: we have async compiles, the MSL disk cache and the pipeline
+  binary archive; next is a cache keyed by shader hash + translator version
+  (survives app updates), placeholder draws instead of skipped ones
+  (rainbows), and import/export per title. spirv2air floors at iOS 18.
+- Precompile from the long-press menu: compiling everything a game will
+  use without running it is not possible (shaders appear as the game draws);
+  "compile everything this title has cached so far" in the background is.
+- rexglue-sdk: an ahead-of-time PowerPC -> C++ recompiler (early
+  development; CI for Windows/Linux/macOS, no iOS). Per-game output, a
+  native binary per title, built off device; not an emulator feature.
+  Within reach instead: persist our JIT output per title.
+- Achievements: AchievementManager with the GPD backend already records
+  them; needs an iOS toast (imgui_guest_notification exists) and a list in
+  the profile view.
+- Xbox-style system prompts (keyboard, sign-in) with controller navigation:
+  feasible with the existing ImGui dialogs plus gamepad navigation, behind a
+  toggle.
+- In-app .zar compression: XeniOS has zar_converter.cc and the
+  long-press action; third_party/zarchive is here; a port.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings
