@@ -726,7 +726,7 @@ void EmulatorAppIOS::EmulatorThread(const std::filesystem::path& game_path,
   if (need_profile_mode_transition) {
     if (emulator_initialized_.load(std::memory_order_acquire) &&
         !emulator_cpu_initialized_.load(std::memory_order_acquire) && require_cpu_backend) {
-      XELOGI("iOS: Reinitializing emulator for game mode");
+      XELOGI("iOS: Reinitializing emulator for game mode (fresh kernel per title)");
       // Detach the presenter on the UI thread before tearing down the graphics
       // system, otherwise the window may present using a freed presenter.
       if (!app_context().CallInUIThreadSynchronous([this]() {
@@ -855,6 +855,15 @@ void EmulatorAppIOS::EmulatorThread(const std::filesystem::path& game_path,
     }
 
     X_STATUS launch_result = emulator_->LaunchPath(abs_path);
+    // The kernel, file system and objects now hold this title (its package
+    // mounted on \Device\Cdrom0, its threads and handles). The next launch,
+    // from the library or the title's own XamLoaderLaunchTitle, must start
+    // from a fresh emulator as on the console: reusing this one mounted the
+    // new package behind the old one, so launching Dishonored after AC
+    // Revelations ran AC Revelations again over its leftover state and hung.
+    // Marking the CPU side uninitialized sends it through the Shutdown and
+    // Setup the first game launch uses.
+    emulator_cpu_initialized_.store(false, std::memory_order_release);
     cvars::launch_module = "";
     cvars::launch_flags = 0;
     cvars::launch_data = "";

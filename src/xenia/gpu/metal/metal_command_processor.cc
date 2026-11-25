@@ -11643,6 +11643,43 @@ void MetalCommandProcessor::UpdateSpirvSystemConstantValues(
       uint32_t swizzle_shift = 12 * (i & 1);
       consts.texture_swizzles[i >> 1] |= (texture_swizzle & 0xFFF)
                                          << swizzle_shift;
+
+      // Integer textures (num_format): the width of their components in
+      // bytes, for the shader's integer scale, in the bits 24:27 (even) or
+      // 28:31 (odd) the swizzles leave free. Only formats with 8 or 16 bits in
+      // every component, and not with a constant 1 in the swizzle, which must
+      // stay 1.
+      xenos::xe_gpu_texture_fetch_t texture_fetch = regs.GetTextureFetch(i);
+      if (texture_fetch.num_format) {
+        uint32_t texture_integer_bytes = 0;
+        switch (texture_fetch.format) {
+          case xenos::TextureFormat::k_8:
+          case xenos::TextureFormat::k_8_A:
+          case xenos::TextureFormat::k_8_B:
+          case xenos::TextureFormat::k_8_8:
+          case xenos::TextureFormat::k_8_8_8_8:
+          case xenos::TextureFormat::k_8_8_8_8_A:
+          case xenos::TextureFormat::k_8_8_8_8_AS_16_16_16_16:
+            texture_integer_bytes = 1;
+            break;
+          case xenos::TextureFormat::k_16:
+          case xenos::TextureFormat::k_16_16:
+          case xenos::TextureFormat::k_16_16_16_16:
+            texture_integer_bytes = 2;
+            break;
+          default:
+            break;
+        }
+        for (uint32_t swizzle_component = 0; swizzle_component < 4;
+             ++swizzle_component) {
+          if (((texture_fetch.swizzle >> (3 * swizzle_component)) & 7) ==
+              xenos::XE_GPU_TEXTURE_SWIZZLE_1) {
+            texture_integer_bytes = 0;
+          }
+        }
+        consts.texture_swizzles[i >> 1] |= texture_integer_bytes
+                                           << (24 + 4 * (i & 1));
+      }
     }
   }
 

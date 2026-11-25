@@ -1155,19 +1155,15 @@ further edits.
 | `host_crash_context` | local in Emulator::ExceptionCallback (ARM64) | Host registers of the fault, for the host PC, link register and JIT state registers in the crash dump. | `src/xenia/emulator.cc` | 1744, 1755, 1756, 1757, 1758 | 8 |
 | `host_code_start` | local in Emulator::ExceptionCallback (ARM64) | Start of the machine code of the guest function the host PC was mapped to, for the offset in the crash dump. | `src/xenia/emulator.cc` | 1745, 1751, 1752, 1753, 1754 | 6 |
 | `longjmp_resumes` | static local in ResolveFunction (a64) | How many calls resumed inside a live frame (longjmp); the first 16 are logged with the target, its function, the frame and r1. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 872, 873 | 2 |
-| `integer_format` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Texture format from the fetch constant word 1 (bits 0:5). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2411, 2424 | 2 |
-| `integer_format_is_any` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) (lambda) | Whether integer_format is one of a list of formats. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2419, 2433, 2439 | 3 |
-| `integer_8` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The format has 8 bits in every component. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2433, 2453, 2459 | 3 |
-| `integer_16` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The format has 16 bits in every component. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2439, 2451, 2457 | 3 |
-| `integer_word_3` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Fetch constant word 3 as uint (num_format bit 0, swizzle bits 1:12). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2442, 2447, 2473 | 3 |
-| `integer_num_format` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The fetch reads the components as integers (num_format). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2444, 2499 | 2 |
-| `integer_unsigned_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | 2^bits - 1 for the format, or 1. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2450, 2495 | 2 |
-| `integer_signed_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | 2^(bits - 1) - 1 for the format, or 1. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2456, 2488 | 2 |
-| `integer_remaining_components` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Result components still to scale. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2462, 2465, 2467 | 3 |
-| `integer_component_index` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The result component being scaled. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2464, 2466, 2468, 2474, 2477, 2501, 2503 | 7 |
-| `integer_is_component` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Its swizzle selects a component (not constant 0 or 1). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2470, 2499 | 2 |
-| `integer_sign` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Its sign (unsigned, signed, biased, gamma). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2477, 2483, 2485, 2492 | 4 |
-| `integer_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The factor applied to it. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2478, 2496, 2500, 2504 | 4 |
+| `integer_bytes` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Component width code the CPU put in bits 24:27 / 28:31 of the swizzle word: 0 none, 1 for 8 bits, 2 for 16 bits. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2413, 2429 | 2 |
+| `integer_unsigned_max` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | 2^(8 * integer_bytes) - 1 as uint. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2423, 2435, 2442 | 3 |
+| `integer_unsigned_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | integer_unsigned_max as float, at least 1. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2432, 2464 | 2 |
+| `integer_signed_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Half of integer_unsigned_max (2^(bits - 1) - 1) as float, at least 1. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2437, 2464 | 2 |
+| `integer_remaining_components` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Result components still to scale. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2445, 2448, 2450 | 3 |
+| `integer_component_index` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | The result component being scaled. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2447, 2449, 2451, 2456, 2459, 2461 | 6 |
+| `integer_sign_signed` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Its sign is signed or unsigned biased (takes the signed scale). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2453, 2463 | 2 |
+| `texture_integer_bytes` | local in MetalCommandProcessor::UpdateSpirvSystemConstantValues | For an integer (num_format) fetch: 1 for formats with 8 bits in every component, 2 for 16, else 0 (also 0 with a constant 1 in the swizzle); stored in bits 24:27 / 28:31 of texture_swizzles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 11654, 11663, 11668, 11677, 11680 | 5 |
+| `swizzle_component` | local in MetalCommandProcessor::UpdateSpirvSystemConstantValues (loop) | The guest swizzle component checked for a constant 1. | `src/xenia/gpu/metal/metal_command_processor.cc` | 11673, 11674, 11675 | 4 |
 
 ## Total references per name
 
@@ -2004,19 +2000,15 @@ further edits.
 | `host_crash_context` | 8 |
 | `host_code_start` | 6 |
 | `longjmp_resumes` | 2 |
-| `integer_format` | 2 |
-| `integer_format_is_any` | 3 |
-| `integer_8` | 3 |
-| `integer_16` | 3 |
-| `integer_word_3` | 3 |
-| `integer_num_format` | 2 |
+| `integer_bytes` | 2 |
+| `integer_unsigned_max` | 3 |
 | `integer_unsigned_scale` | 2 |
 | `integer_signed_scale` | 2 |
 | `integer_remaining_components` | 3 |
-| `integer_component_index` | 7 |
-| `integer_is_component` | 2 |
-| `integer_sign` | 4 |
-| `integer_scale` | 4 |
+| `integer_component_index` | 6 |
+| `integer_sign_signed` | 2 |
+| `texture_integer_bytes` | 5 |
+| `swizzle_component` | 4 |
 
 ## Checks
 
@@ -2224,3 +2216,14 @@ further edits.
   `GuestPagenumToSystemPagenum` and EnableAccessCallbacksInner's unused locals
   (`page_table_ptr`, `first_guest_page`, `last_guest_page`, `guest_one`,
   `system_one`, `guest_page_number`), as upstream.
+- Integer texture scale rework (spirv_shader_translator_fetch.cc,
+  metal_command_processor.cc): the shader no longer reads the format; the
+  names `integer_format`, `integer_format_is_any`, `integer_8`, `integer_16`,
+  `integer_word_3`, `integer_num_format`, `integer_is_component`,
+  `integer_sign` and `integer_scale` are gone. `texture_fetch` (a fetch
+  constant read with RegisterFile::GetTextureFetch) has the same name and
+  role in shader_translator.cc here and in xenia-edge and XeniOS HEAD.
+- Socket errors (xsocket.cc): AsioErrorToWSAError's body is xenia-edge
+  250fb40dc as in XeniOS HEAD, no new names. NtRemoveIoCompletion
+  (xboxkrnl_io.cc, xenia-edge d287b30be) and the fresh emulator per title
+  (xenia_main_ios.mm, reusing emulator_cpu_initialized_) add no names.

@@ -2522,6 +2522,84 @@ optimisation lead, not a bug yet. UE3 streams textures in, and the colours
 look like mips or memory not yet uploaded being sampled; samplers already
 clamp the minimum mip level. To look at once the hangs are done.
 
+### Owner's runs on build 9672 (zip "9672logs-1", 2026-11-24, logs 20-18-01 .. 20-47-18, 4 traces) and the next build
+
+Owner: New Vegas faces fixed (write watch port). Dishonored's rainbow on
+first load goes away on a relaunch (shaders compiling, draws skipped until
+then; also when something is overlaid, e.g. confirming a new game): back
+burner. Focus: Black Ops, Edge of Time, AC Revelations sound effects.
+
+Black Ops (logs 20-23-07, 20-24-28, 20-25-07 with Debug level): no relaunch,
+two "A64 ResolveFunction: longjmp" lines per run, both on thread F800007C at
+825B1768 / 825B17B8 in the function at 825B1718, frame 4 of 11/12. That code
+is `li r3,2; bl 82341A90; bl 825FB3A0; cmpwi r3,0`: setjmp on the thread's
+abort jmp_buf, the Quake-family Com_Error recovery. So these are real
+longjmps, landing correctly; the game raised an error twice. In 9670 the
+same point was its XamLoaderLaunchTitle(default.xex): the fatal error path
+restarting the title, not a normal first-boot relaunch. The trigger, in the
+Debug log: F800007C calls NetDll_recvfrom on its non-blocking VDP socket
+(port 1000, remapped to 11000), then NetDll_WSAGetLastError, then the
+longjmp. AsioErrorToWSAError returned the host errno, 35 (EWOULDBLOCK on
+Darwin) instead of WSAEWOULDBLOCK (10035), so an empty socket read as a
+network failure. xenia-edge 250fb40dc maps asio errors to Winsock codes
+(its comment: COD4 MP treats an unrecognized recvfrom error as a hard init
+failure); ported (next build). After the errors F800007C waits on F800006C
+with a zero timeout forever, F80000FC polls handle 0 and the main thread
+loops in KeDelayExecutionThread (824DD8FC) re-trying a path: all downstream.
+Also seen: the game formats \Device\Harddisk0\Cache1 (a NullDevice here)
+twice at every boot and gets C000014F (unrecognized volume) back; xenia-edge
+c628a23df keeps the cache across formats (not ported, not a blocker).
+
+Launching a second game in a session (log 20-25-50): Dishonored (425307E3)
+was launched after AC Revelations and its module reported title 55530879,
+AC Revelations again: MountPath appends the new package to \Device\Cdrom0
+behind the old one and resolution finds the old one first, so the old game
+restarted on its leftover kernel state (its old main thread still in the
+object table) and hung ("last frame, one second of audio, then dead").
+XeniOS tears every title down with Emulator::ResetTitle (xenia-edge: stop
+GPU/audio/scheduler, terminate threads, Shutdown, Setup again). Fix (next
+build): after LaunchPath, EmulatorThread marks the CPU side uninitialized,
+so the next launch (library or the title's own XamLoaderLaunchTitle, whose
+launch data is in cvars) goes through the Shutdown + Setup the first game
+launch uses: a fresh kernel, file system and objects per title. The kernel
+call thread report (shim_utils) never drops threads, so a session's later
+reports still list the earlier title's threads; noise only.
+
+Edge of Time (log 20-20-16, traces 20-20-47, 20-21-43, 20-22-43): renders,
+with a rainbow over it and the scene in three places. 2925 draws failed
+"SPIRV-Cross: Failed to prepare pixel shader": PS 126C706122A7280B (the
+deferred lighting shader, 16 textures) hit "Compiler encountered an internal
+error" in the Metal compiler after 10.6 s. On 9670 it compiled in 747 ms but
+was already 108 KB of SPIR-V and 976 KB of MSL; the integer scale (9672)
+added a fetch-constant load, format compares and selects to every fetch,
++15% SPIR-V over the game's pixel shaders. Without the lighting pass the
+frame shows the G-buffer (likely the rainbow) and leftovers. Fix (next
+build): the CPU (MetalCommandProcessor::UpdateSpirvSystemConstantValues)
+puts the component width code (0 none, 1 = 8 bits, 2 = 16 bits; 0 with a
+constant 1 in the swizzle) in bits 24:27 / 28:31 of texture_swizzles, which
+only used bits 0:23; the shader derives 2^bits - 1 and half of it and picks
+by sign: no format logic in the shader, an exact 1.0 for every other
+texture. The trace also shows what the integers are for: depth packed into
+8888 integers (from 16_16_16_16_FLOAT and 16_16_16_16 targets) read back as
+24_8_FLOAT integer textures, and normals as 16x4 integers (bias 16) read
+back biased with exp_adjust -15. If the three areas remain once lighting
+runs, the next step is the composite's EDRAM placement.
+
+AC Revelations sound effects late in cutscenes (voices and music in time):
+not found yet. The guest XAudio2 mixes every voice before
+XAudioSubmitRenderDriverFrame, so the host queue (apu_max_queued_frames 8,
+~43 ms) delays all sound alike; a kick blocks until the XMA worker finished
+that context, so the dedicated XMA thread adds no start latency either.
+Left: the game's own sound path (its threads run 300%+ of a core in this
+log) or XMA decoder correctness: xenia-edge has ~30 XMA commits from
+Aug-Nov 2026 we lack (loops, seeks, split frames, a stall where "the rest
+came a kick later", plus two ffmpeg updates); a large port to do with data.
+Asked the owner for A/B runs (use_dedicated_xma_thread = false; xma_decoder =
+"old"). Also ported (next build): NtRemoveIoCompletion keeps the 64-bit
+timeout (xenia-edge d287b30be; truncated, a relative timeout waited for
+weeks) and returns on an invalid handle instead of dereferencing null;
+AC Revelations doesn't import it.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

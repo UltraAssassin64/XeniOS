@@ -11,7 +11,6 @@
 
 #include <climits>
 #include <cmath>
-#include <initializer_list>
 
 #include "third_party/fmt/include/fmt/format.h"
 #include "third_party/glslang/SPIRV/GLSL.std.450.h"
@@ -2394,71 +2393,55 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
 
         // Integer textures (fetch constant word 3 bit 0, num_format): the
         // console returns the components' bits as integers, while the host
-        // texture is unorm (or snorm for signed components). For formats with
-        // 8 or 16 bits in every component, scale the results to that range
-        // as XeniOS HEAD does: 2^bits - 1 unsigned, 2^(bits - 1) - 1 signed
-        // and unsigned-biased; constant swizzles and gamma are left alone.
-        // Spider-Man: Edge of Time resolves its HDR scene to 16_16_16_16
-        // integers (exponent bias 11) and samples them as integer textures
-        // with exp_adjust -11; read as unorm, the scene was black.
+        // texture is unorm (or snorm for signed components). The CPU puts the
+        // component width in bits 24:27 (even fetch constant) or 28:31 (odd)
+        // of the host swizzle word, which only uses bits 0:23: 0 for none (the
+        // other textures, an exact 1.0 here), 1 for 8 bits, 2 for 16 bits.
+        // Unsigned components are scaled by 2^bits - 1, signed and biased ones
+        // by 2^(bits - 1) - 1, as XeniOS HEAD. Computed on the CPU, rather
+        // than from the format in the shader, which made a 16-texture
+        // Spider-Man: Edge of Time pixel shader too big for the Metal compiler
+        // (internal error after 10 s, its draws dropped).
         {
           id_vector_temp_.clear();
-          id_vector_temp_.push_back(const_int_0_);
-          id_vector_temp_.push_back(builder_->makeIntConstant(
-              int((fetch_constant_word_0_index + 1) >> 2)));
-          id_vector_temp_.push_back(builder_->makeIntConstant(
-              int((fetch_constant_word_0_index + 1) & 3)));
-          spv::Id integer_format = builder_->createTriOp(
+          id_vector_temp_.push_back(
+              builder_->makeIntConstant(kSystemConstantTextureSwizzles));
+          id_vector_temp_.push_back(
+              builder_->makeIntConstant(fetch_constant_index >> 3));
+          id_vector_temp_.push_back(
+              builder_->makeIntConstant((fetch_constant_index >> 1) & 3));
+          spv::Id integer_bytes = builder_->createTriOp(
               spv::OpBitFieldUExtract, type_uint_,
               builder_->createLoad(
                   builder_->createAccessChain(spv::StorageClassUniform,
-                                              uniform_fetch_constants_,
+                                              uniform_system_constants_,
                                               id_vector_temp_),
                   spv::NoPrecision),
-              const_uint_0_, builder_->makeUintConstant(6));
-          auto integer_format_is_any =
-              [&](std::initializer_list<xenos::TextureFormat> formats) {
-                spv::Id any = spv::NoResult;
-                for (xenos::TextureFormat format : formats) {
-                  spv::Id is = builder_->createBinOp(
-                      spv::OpIEqual, type_bool_, integer_format,
-                      builder_->makeUintConstant(uint32_t(format)));
-                  any = any != spv::NoResult
-                            ? builder_->createBinOp(spv::OpLogicalOr,
-                                                    type_bool_, any, is)
-                            : is;
-                }
-                return any;
-              };
-          spv::Id integer_8 = integer_format_is_any(
-              {xenos::TextureFormat::k_8, xenos::TextureFormat::k_8_A,
-               xenos::TextureFormat::k_8_B, xenos::TextureFormat::k_8_8,
-               xenos::TextureFormat::k_8_8_8_8,
-               xenos::TextureFormat::k_8_8_8_8_A,
-               xenos::TextureFormat::k_8_8_8_8_AS_16_16_16_16});
-          spv::Id integer_16 = integer_format_is_any(
-              {xenos::TextureFormat::k_16, xenos::TextureFormat::k_16_16,
-               xenos::TextureFormat::k_16_16_16_16});
-          spv::Id integer_word_3 = builder_->createUnaryOp(
-              spv::OpBitcast, type_uint_, fetch_constant_word_3_signed);
-          spv::Id integer_num_format = builder_->createBinOp(
-              spv::OpINotEqual, type_bool_,
-              builder_->createBinOp(spv::OpBitwiseAnd, type_uint_,
-                                    integer_word_3,
-                                    builder_->makeUintConstant(1)),
-              const_uint_0_);
-          spv::Id integer_unsigned_scale = builder_->createTriOp(
-              spv::OpSelect, type_float_, integer_16,
-              builder_->makeFloatConstant(65535.0f),
-              builder_->createTriOp(spv::OpSelect, type_float_, integer_8,
-                                    builder_->makeFloatConstant(255.0f),
-                                    const_float_1_));
-          spv::Id integer_signed_scale = builder_->createTriOp(
-              spv::OpSelect, type_float_, integer_16,
-              builder_->makeFloatConstant(32767.0f),
-              builder_->createTriOp(spv::OpSelect, type_float_, integer_8,
-                                    builder_->makeFloatConstant(127.0f),
-                                    const_float_1_));
+              builder_->makeUintConstant(24 + 4 * (fetch_constant_index & 1)),
+              builder_->makeUintConstant(4));
+          // 2^(8 * bytes) - 1: 0, 255 or 65535, at least 1.
+          spv::Id integer_unsigned_max = builder_->createBinOp(
+              spv::OpISub, type_uint_,
+              builder_->createBinOp(
+                  spv::OpShiftLeftLogical, type_uint_,
+                  builder_->makeUintConstant(1),
+                  builder_->createBinOp(spv::OpShiftLeftLogical, type_uint_,
+                                        integer_bytes,
+                                        builder_->makeUintConstant(3))),
+              builder_->makeUintConstant(1));
+          spv::Id integer_unsigned_scale = builder_->createBinBuiltinCall(
+              type_float_, ext_inst_glsl_std_450_, GLSLstd450FMax,
+              builder_->createUnaryOp(spv::OpConvertUToF, type_float_,
+                                      integer_unsigned_max),
+              const_float_1_);
+          spv::Id integer_signed_scale = builder_->createBinBuiltinCall(
+              type_float_, ext_inst_glsl_std_450_, GLSLstd450FMax,
+              builder_->createUnaryOp(
+                  spv::OpConvertUToF, type_float_,
+                  builder_->createBinOp(spv::OpShiftRightLogical, type_uint_,
+                                        integer_unsigned_max,
+                                        builder_->makeUintConstant(1))),
+              const_float_1_);
           uint32_t integer_remaining_components =
               used_result_nonzero_components;
           uint32_t integer_component_index;
@@ -2466,42 +2449,19 @@ void SpirvShaderTranslator::ProcessTextureFetchInstruction(
                                       &integer_component_index)) {
             integer_remaining_components &=
                 ~(UINT32_C(1) << integer_component_index);
-            // A swizzle below 4 selects a component, 4 and 5 are 0 and 1.
-            spv::Id integer_is_component = builder_->createBinOp(
+            // kSigned (1) and kUnsignedBiased (2).
+            spv::Id integer_sign_signed = builder_->createBinOp(
                 spv::OpULessThan, type_bool_,
-                builder_->createTriOp(
-                    spv::OpBitFieldUExtract, type_uint_, integer_word_3,
-                    builder_->makeUintConstant(1 + 3 * integer_component_index),
-                    builder_->makeUintConstant(3)),
-                builder_->makeUintConstant(4));
-            spv::Id integer_sign = swizzled_signs[integer_component_index];
-            spv::Id integer_scale = builder_->createTriOp(
-                spv::OpSelect, type_float_,
-                builder_->createBinOp(
-                    spv::OpLogicalOr, type_bool_,
-                    builder_->createBinOp(spv::OpIEqual, type_bool_,
-                                          integer_sign, const_uint_sign_signed),
-                    builder_->createBinOp(
-                        spv::OpIEqual, type_bool_, integer_sign,
-                        builder_->makeUintConstant(
-                            uint32_t(xenos::TextureSign::kUnsignedBiased)))),
-                integer_signed_scale,
-                builder_->createTriOp(
-                    spv::OpSelect, type_float_,
-                    builder_->createBinOp(
-                        spv::OpIEqual, type_bool_, integer_sign,
-                        builder_->makeUintConstant(
-                            uint32_t(xenos::TextureSign::kUnsigned))),
-                    integer_unsigned_scale, const_float_1_));
-            integer_scale = builder_->createTriOp(
-                spv::OpSelect, type_float_,
-                builder_->createBinOp(spv::OpLogicalAnd, type_bool_,
-                                      integer_num_format, integer_is_component),
-                integer_scale, const_float_1_);
+                builder_->createBinOp(spv::OpISub, type_uint_,
+                                      swizzled_signs[integer_component_index],
+                                      builder_->makeUintConstant(1)),
+                builder_->makeUintConstant(2));
             result[integer_component_index] =
                 builder_->createNoContractionBinOp(
                     spv::OpFMul, type_float_, result[integer_component_index],
-                    integer_scale);
+                    builder_->createTriOp(
+                        spv::OpSelect, type_float_, integer_sign_signed,
+                        integer_signed_scale, integer_unsigned_scale));
           }
         }
 
