@@ -89,6 +89,9 @@ struct A64BackendContext {
   // bit 1 = got reserve
   unsigned int flags;
   unsigned int Ox1000;  // constant 0x1000
+  // Spin-wait release state (a64_seq_memory.cc).
+  unsigned int db16cyc_count;
+  uint64_t db16cyc_last_tick;
 };
 
 // Default FPCR for FPU mode (round to nearest, no flush to zero).

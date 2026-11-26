@@ -502,8 +502,19 @@ uint32_t TextureCache::GetUsedTexturePotentialLoadMask(
       continue;
     }
 
-    // Conservative estimate for unsynchronized slots: if key/signedness shape
-    // changed, RequestTextures may enqueue a load for a different texture view.
+    // Unsynchronized slots: if the key or signedness changed, RequestTextures
+    // enqueues the texture for that key, which loads only if it is new or
+    // outdated (a resolve over it invalidates it). With resolution scaling the
+    // key may change to a scaled one, so that case stays conservative.
+    auto would_load = [this](const TextureKey& key) {
+      if (IsDrawResolutionScaled()) {
+        return true;
+      }
+      auto texture_it = textures_.find(key);
+      return texture_it == textures_.end() ||
+             texture_it->second->base_outdated_lockless() ||
+             texture_it->second->mips_outdated_lockless();
+    };
     const TextureKey& old_key = binding.key;
     const bool key_changed = old_key != new_key;
     const bool any_sign_was_not_signed =
@@ -517,11 +528,16 @@ uint32_t TextureCache::GetUsedTexturePotentialLoadMask(
 
     bool may_load = false;
     if (IsSignedVersionSeparateForFormat(new_key)) {
-      may_load |=
-          any_sign_is_not_signed && (key_changed || !any_sign_was_not_signed);
-      may_load |= any_sign_is_signed && (key_changed || !any_sign_was_signed);
+      may_load |= any_sign_is_not_signed &&
+                  (key_changed || !any_sign_was_not_signed) &&
+                  would_load(new_key);
+      if (any_sign_is_signed && (key_changed || !any_sign_was_signed)) {
+        TextureKey signed_key = new_key;
+        signed_key.signed_separate = 1;
+        may_load |= would_load(signed_key);
+      }
     } else {
-      may_load |= key_changed;
+      may_load |= key_changed && would_load(new_key);
     }
     if (may_load) {
       load_mask |= index_bit;

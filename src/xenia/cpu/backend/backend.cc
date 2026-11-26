@@ -13,6 +13,11 @@
 
 #include "xenia/base/cvar.h"
 
+DEFINE_bool(release_core_in_spin_waits, true,
+            "Release the host core from guest db16cyc spin-wait loops, "
+            "instead of spinning on it while the thread they wait on may "
+            "need it. Only the a64 backend does.",
+            "CPU");
 DEFINE_bool(record_mmio_access_exceptions, true,
             "For guest addresses records whether we caught any MMIO accesses "
             "for them. This info can then be used on a subsequent run to "

@@ -2929,6 +2929,56 @@ app restarts.
   totals since launch and logs the code around each top function's hottest
   instruction once, so the hot paths can be disassembled offline.
 
+### Owner's runs on build 9679 (zips "9679_logs" and "gpu": Arkham City 21-03-34/21-06-12, EoT 21-25-31/21-29-37/11-15-09 with 3 stream traces, GTA IV 11-20-04..11-45-42 with one trace) and the next build
+
+- Guest memory is mapped at host 0x2A0000000 (virtual) / 0x3A0000000
+  (physical) in every run, so it ends at 0x3C0000000. If 9677 used the same
+  base, Arkham City's fault at 0x4292E4000 was outside guest memory: a host
+  buffer (a memmove past the end of one), not guest memory. It did not recur
+  (the owner corrected the place: a camera sweep down a street to the
+  courthouse). The backtrace logging stays for the next time.
+- Hotspot totals: the top function in all three games is the same Xbox D3D
+  library routine, a spin-wait for command ring space (4 x 8 `or
+  r31,r31,r31` (db16cyc), then read the read pointer at 0x2B10/0x2A90 of the
+  device): EoT 82231CF0 59% (+ its caller 82231310 22%), GTA IV 829CFED0
+  11-20%, Arkham City 82247140 7%. db16cyc compiled to `yield`, a no-op on
+  Apple cores, so the waiting thread held a P core (EoT XThread15403 99%)
+  from the GPU Commands thread it waits on. Ported XeniOS 9ae719d98: two
+  db16cyc less than 1 us apart sleep the host thread 60 us
+  (release_core_in_spin_waits, default on). Other hot code: Arkham City
+  82CFDxxx is an FPU abs/fsel peak scan (audio meter); GTA IV 8216D90C
+  (audio thread E913) a VMX vmaddfp filter loop.
+- GTA IV and metal_resolve_keep_command_buffer: the owner's "near 30 fps
+  then 15-17" is visible: keep-CB on gives ~5 command buffers a frame
+  instead of ~40 and frames of 30-40 ms at first (55-65 ms off), but draw
+  passes per frame climb 80 -> 150 -> 390 and attachment traffic to ~4.4 GB
+  a frame, frames 70-80 ms. Cause: the restart check ran whenever any used
+  slot was out of sync (every binding change) and the slot's memory had been
+  resolved at any time in the frame (resolved_memory_ranges_ is per frame and
+  merges ranges past its cap), even when the texture was already loaded since
+  the resolve. Now (keep-CB only) it checks only the slots
+  GetUsedTexturePotentialLoadMask reports, which now looks the texture up for
+  a changed key: no restart unless a load (new or outdated texture) will
+  happen. Off by default still; the ACR save-menu flicker with keep-CB is not
+  explained (the swap is safe: RequestSwapTexture runs after the commit;
+  texture loads with a render pass open go to a separate earlier command
+  buffer, which is why the pass must end). XeniOS HEAD instead guards resolve
+  output with a read watch (237a78443), not ported.
+- apu_max_queued_frames: runs at 8, 24, 32, 16 (all different routes, so no
+  clean A/B in the logs). The value is the audio worker's semaphore depth
+  (frames of 256 samples, 5.3 ms each): more lets the guest's audio callback
+  run ahead in bursts; latency grows (16 = 85 ms, 32 = 171 ms).
+- EoT: GPU bound (GPU busy ~110%, 50 ms frames): draws 28.5 ms, render
+  target transfers 25.4 ms (31 passes, 5 ms of it shader time), texture
+  loads 5.9, EDRAM dump 4.5, upload blits 3.9, resolves 3.5; 6 MB uploaded a
+  frame.
+- EoT traces still hold no vertex data: with zero-copy shared memory, vertex
+  fetches go through RequestRangeForGpuRead, which returns at once, so the
+  upload path never records them (7677 memory records, none for fc94 at
+  032FF000 or the vertex streams). IssueDrawMsl now records each vertex
+  fetch range with WriteMemoryReadCached when a trace is open, and the
+  writer clears that cache at every swap, so each frame records them once.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

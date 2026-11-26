@@ -4857,14 +4857,22 @@ bool MetalCommandProcessor::IssueDrawMsl(
   // resolves, so a texture to be loaded from what a resolve in it wrote must
   // be loaded in it, after the resolve: the render pass is ended for the load
   // (texture uploads go into the current command buffer when no render
-  // encoder is open) and begun again, its attachments loaded.
+  // encoder is open) and begun again, its attachments loaded. Only the slots
+  // whose texture would actually be loaded (new, or outdated by a write such
+  // as a resolve) are checked; a texture already loaded since the resolve,
+  // only bound again, needs no new pass. Checking every used slot whose
+  // memory had ever been resolved this frame restarted the pass at nearly
+  // every such draw (GTA IV: 150-390 passes a frame instead of ~60).
   const bool resolve_keep_command_buffer =
       cvars::metal_resolve_keep_command_buffer &&
       cvars::metal_texture_upload_via_blit;
-  if (copy_resolve_writes_pending_ && used_texture_mask &&
-      (!resolve_keep_command_buffer ||
-       (texture_cache_ &&
-        texture_cache_->AnyUsedTextureRequestWorkPending(used_texture_mask)))) {
+  const uint32_t resolve_check_mask =
+      !copy_resolve_writes_pending_  ? 0
+      : !resolve_keep_command_buffer ? used_texture_mask
+      : texture_cache_
+          ? texture_cache_->GetUsedTexturePotentialLoadMask(used_texture_mask)
+          : 0;
+  if (resolve_check_mask) {
     auto overlaps_resolved_texture_ranges = [&](uint32_t texture_fetch_mask) {
       uint32_t remaining_fetch_bits = texture_fetch_mask;
       uint32_t fetch_index = 0;
@@ -4901,7 +4909,7 @@ bool MetalCommandProcessor::IssueDrawMsl(
       }
       return false;
     };
-    if (overlaps_resolved_texture_ranges(used_texture_mask)) {
+    if (overlaps_resolved_texture_ranges(resolve_check_mask)) {
       if (resolve_keep_command_buffer) {
         EndRenderEncoder();
         texture_cache_->RequestTextures(used_texture_mask);
@@ -4975,6 +4983,11 @@ bool MetalCommandProcessor::IssueDrawMsl(
               "(size {}) in shared memory",
               buffer_offset, buffer_length);
           return false;
+        }
+        // Zero-copy vertex buffers are read in place, never uploaded, so a
+        // trace records them here, once a frame.
+        if (trace_writer_.is_open() && shared_memory_->is_zero_copy()) {
+          trace_writer_.WriteMemoryReadCached(buffer_offset, buffer_length);
         }
       }
     }

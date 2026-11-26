@@ -9,9 +9,12 @@
 
 #include "xenia/cpu/backend/a64/a64_sequences.h"
 
+#include <algorithm>
+
 #include "xenia/base/clock.h"
 #include "xenia/base/cvar.h"
 #include "xenia/base/memory.h"
+#include "xenia/base/threading.h"
 #include "xenia/cpu/backend/a64/a64_backend.h"
 #include "xenia/cpu/backend/a64/a64_emitter.h"
 #include "xenia/cpu/backend/a64/a64_op.h"
@@ -25,6 +28,7 @@
 
 DECLARE_bool(emit_mmio_aware_stores_for_recorded_exception_addresses);
 DECLARE_bool(emit_inline_mmio_checks);
+DECLARE_bool(release_core_in_spin_waits);
 
 namespace xe {
 namespace cpu {
@@ -53,9 +57,67 @@ static bool IsPossibleMMIOInstruction(A64Emitter& e, const hir::Instr* i) {
 // ============================================================================
 // OPCODE_DELAY_EXECUTION
 // ============================================================================
+// db16cyc (or r31,r31,r31) is a hint the host does not honour (yield is a
+// no-op on Apple cores), so a guest spin-wait built on it holds a host core for
+// as long as it waits, taken from the thread it waits for (Spider-Man: Edge of
+// Time polls the GPU ring buffer this way, one core at 99%). As in XeniOS
+// 9ae719d98, the kDb16cycReleaseAfter-th of consecutive delays less than
+// kDb16cycGapNs apart releases the core for kSpinWaitReleaseNs.
+static constexpr uint64_t kSpinWaitReleaseNs = 60000;
+static constexpr uint32_t kDb16cycReleaseAfter = 2;
+static constexpr uint64_t kDb16cycGapNs = 1000;
+
+// The generated code reads CNTVCT_EL0, which counts at CNTFRQ_EL0.
+static uint64_t SpinWaitTimerFrequency() {
+  static const uint64_t frequency = Clock::host_tick_frequency_raw();
+  return frequency;
+}
+
+static void SpinWaitRelease(void* raw_context) {
+  xe::threading::NanoSleep(int64_t(kSpinWaitReleaseNs));
+}
+
 struct DELAY_EXECUTION
     : Sequence<DELAY_EXECUTION, I<OPCODE_DELAY_EXECUTION, VoidOp>> {
-  static void Emit(A64Emitter& e, const EmitArgType& i) { e.yield(); }
+  static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (cvars::release_core_in_spin_waits) {
+      EmitDb16cycCount(e);
+    }
+    e.yield();
+  }
+
+  // Counts consecutive delays, releasing the core on the
+  // kDb16cycReleaseAfter-th.
+  static void EmitDb16cycCount(A64Emitter& e) {
+    const int32_t count_offset =
+        static_cast<int32_t>(offsetof(A64BackendContext, db16cyc_count));
+    const int32_t last_tick_offset =
+        static_cast<int32_t>(offsetof(A64BackendContext, db16cyc_last_tick));
+    const uint64_t gap_ticks = std::max<uint64_t>(
+        1, kDb16cycGapNs * SpinWaitTimerFrequency() / 1000000000ull);
+    auto& done = e.NewCachedLabel();
+    auto& release = e.AddToTail(
+        [count_offset, &done](A64Emitter& e, Xbyak_aarch64::Label&) {
+          e.str(e.wzr, ptr(e.GetBackendCtxReg(), count_offset));
+          e.CallNativeSafe(reinterpret_cast<void*>(SpinWaitRelease));
+          e.b(done);
+        });
+    // x16 = CNTVCT_EL0, x17 = ticks since the previous delay.
+    e.mrs(e.x16, 3, 3, 14, 0, 2);
+    e.ldr(e.x17, ptr(e.GetBackendCtxReg(), last_tick_offset));
+    e.str(e.x16, ptr(e.GetBackendCtxReg(), last_tick_offset));
+    e.sub(e.x17, e.x16, e.x17);
+    e.mov(e.x16, gap_ticks);
+    e.cmp(e.x17, e.x16);
+    // w16 = 1 if not consecutive, else the count plus one.
+    e.ldr(e.w16, ptr(e.GetBackendCtxReg(), count_offset));
+    e.csel(e.w16, e.wzr, e.w16, HI);
+    e.add(e.w16, e.w16, 1);
+    e.cmp(e.w16, kDb16cycReleaseAfter);
+    e.b(HS, release);
+    e.str(e.w16, ptr(e.GetBackendCtxReg(), count_offset));
+    e.L(done);
+  }
 };
 EMITTER_OPCODE_TABLE(OPCODE_DELAY_EXECUTION, DELAY_EXECUTION);
 

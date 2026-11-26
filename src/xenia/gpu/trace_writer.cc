@@ -267,6 +267,11 @@ void TraceWriter::WriteEvent(EventCommand::Type event_type) {
   if (!file_) {
     return;
   }
+  // Ranges recorded with WriteMemoryReadCached are recorded again in the next
+  // frame, which may have changed them (Metal's zero-copy vertex buffers).
+  if (event_type == EventCommand::Type::kSwap) {
+    cached_memory_reads_.clear();
+  }
   EventCommand cmd = {
       TraceCommandType::kEvent,
       event_type,
