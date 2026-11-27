@@ -3136,6 +3136,38 @@ For phase 2:
   that is only an undecodable frame (logged "Error sending packet").
   If Arkham City's dialogue stalls again, compare against XmaContextNew's
   first-frame handling (handoff: "Arkham City root cause").
+- EoT hypersense copies still missing on 9684 (vertex fast math off), so
+  that was not the cause. Registers of the copies (9682 trace 23-18-17 frame
+  1, tools/xtr_regs2.py): depth-only passes bind only the D24FS8 depth at
+  0x460, colour passes bind c0 = 16_16_16_16 (fixed, -32...32) at 0 with the
+  same depth; no alpha test (RB_COLORCONTROL 87000006), no depth export or
+  kill in either pixel shader, same viewport (the Metal viewport doesn't
+  depend on the bound target size; only the scissor is clamped). The
+  colour pass blends src * src alpha + dst (01060106). With
+  snorm16_render_target_full_range (default) the host holds 16_16_16_16 as
+  RGBA16Snorm -1...1 and color_exp_bias divides the whole output, alpha
+  included, by 32, so the source factor was a/32 and each copy added 1/32 of
+  what it should. Spider-Man's glow draws (VS 919AF99E40E818A3 and others in
+  the same pass, also 01060106 into c0) the same. The 9684 traces
+  (08-07-30, 08-08-05) have no hypersense draws.
+- Fix: where only the source factors read the source and the ops are
+  add/subtract (GetFixed16SourceFactorPremult), the pixel shader
+  pre-multiplies the output by the source factor (the MIN/MAX pre-multiply,
+  rt0_blend_*_factor_for_premult), taken from the output times 32
+  (kSysFlag_Color0Fixed16Scaled), and the pipeline's source factor is one
+  (ApplyFixed16SourceFactorPremult in CreateMslPipelineState, the tess
+  pipeline and the archive prewarm). Exact for src * f(src) + dst * g(dst or
+  constant). Still wrong: a destination factor that reads the source (plain
+  alpha blending 07060706 into these targets keeps a/32 there), and
+  factors reading the destination (stored /32). XeniOS 2bc0867b6
+  (metal_rt16_fetch_blend) blends these targets in the shader through
+  framebuffer fetch with the console's encode, on its gamma fetch blending
+  (b22a84286) and its spirv2air compiler; a candidate larger change (would
+  need SPIRV-Cross framebuffer fetch here).
+- release_core_in_spin_waits is read when a function is compiled, so
+  changing it in game only affects code compiled after; all GTA IV runs
+  here launched with it on. A fair A/B needs it set before launch.
+
 
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 

@@ -596,6 +596,76 @@ MTL::BlendFactor ToMetalBlendFactorAlpha(xenos::BlendFactor blend_factor) {
   return kBlendFactorAlphaMap[uint32_t(blend_factor) & 0x1F];
 }
 
+// snorm16_render_target_full_range: 16_16 and 16_16_16_16 render targets hold
+// the guest's -32...32 as -1...1, so the shader output, alpha included, is
+// divided by 32 (color_exp_bias), and a blend factor taken from it is 32 times
+// too small: an additive src * src alpha blend, as Spider-Man: Edge of Time
+// draws its hypersense copies, added 1/32 of what the guest adds. Where only
+// the source factor reads the source, the pixel shader multiplies its output
+// by that factor of the unscaled output (kSysFlag_Color0Fixed16Scaled) and the
+// host source factor is one. Render target 0 only, as the pre-multiply. Sets
+// the factors to pre-multiply by (kOne for a channel left as it is) and
+// returns whether either is used.
+bool GetFixed16SourceFactorPremult(reg::RB_BLENDCONTROL blendcontrol,
+                                   xenos::BlendFactor& rgb_factor_out,
+                                   xenos::BlendFactor& a_factor_out) {
+  rgb_factor_out = xenos::BlendFactor::kOne;
+  a_factor_out = xenos::BlendFactor::kOne;
+  if (!cvars::snorm16_render_target_full_range) {
+    return false;
+  }
+  auto linear_op = [](xenos::BlendOp op) {
+    return op == xenos::BlendOp::kAdd || op == xenos::BlendOp::kSubtract ||
+           op == xenos::BlendOp::kRevSubtract;
+  };
+  auto reads_source = [](xenos::BlendFactor factor) {
+    return factor == xenos::BlendFactor::kSrcColor ||
+           factor == xenos::BlendFactor::kOneMinusSrcColor ||
+           factor == xenos::BlendFactor::kSrcAlpha ||
+           factor == xenos::BlendFactor::kOneMinusSrcAlpha ||
+           factor == xenos::BlendFactor::kSrcAlphaSaturate;
+  };
+  if (!linear_op(blendcontrol.color_comb_fcn) ||
+      !linear_op(blendcontrol.alpha_comb_fcn) ||
+      reads_source(blendcontrol.color_destblend) ||
+      reads_source(blendcontrol.alpha_destblend)) {
+    return false;
+  }
+  // Source alpha saturate also reads the destination alpha.
+  if (reads_source(blendcontrol.color_srcblend) &&
+      blendcontrol.color_srcblend != xenos::BlendFactor::kSrcAlphaSaturate) {
+    rgb_factor_out = blendcontrol.color_srcblend;
+  }
+  if (reads_source(blendcontrol.alpha_srcblend) &&
+      blendcontrol.alpha_srcblend != xenos::BlendFactor::kSrcAlphaSaturate) {
+    a_factor_out = blendcontrol.alpha_srcblend;
+  }
+  return rgb_factor_out != xenos::BlendFactor::kOne ||
+         a_factor_out != xenos::BlendFactor::kOne;
+}
+
+// The host source factors of render target 0 for GetFixed16SourceFactorPremult
+// (16_16 and 16_16_16_16 targets are RG16Snorm and RGBA16Snorm).
+void ApplyFixed16SourceFactorPremult(MTL::PixelFormat format,
+                                     reg::RB_BLENDCONTROL blendcontrol,
+                                     MTL::BlendFactor& src_rgb,
+                                     MTL::BlendFactor& src_alpha) {
+  if (format != MTL::PixelFormatRG16Snorm &&
+      format != MTL::PixelFormatRGBA16Snorm) {
+    return;
+  }
+  xenos::BlendFactor rgb_premult, a_premult;
+  if (!GetFixed16SourceFactorPremult(blendcontrol, rgb_premult, a_premult)) {
+    return;
+  }
+  if (rgb_premult != xenos::BlendFactor::kOne) {
+    src_rgb = MTL::BlendFactorOne;
+  }
+  if (a_premult != xenos::BlendFactor::kOne) {
+    src_alpha = MTL::BlendFactorOne;
+  }
+}
+
 // Performance diagnostics: host CPU time of every thread in the process
 // since the previous call, as a share of window_us of wall time, busiest
 // first. Each entry is "name#id/priority=percent" (thread name, low bits of
@@ -1089,6 +1159,10 @@ MTL::RenderPipelineState* MetalCommandProcessor::CreateMslPipelineState(
         ToMetalBlendFactorAlpha(blendcontrol.alpha_destblend);
     MTL::BlendOperation op_alpha =
         ToMetalBlendOperation(blendcontrol.alpha_comb_fcn);
+    if (i == 0) {
+      ApplyFixed16SourceFactorPremult(request.color_formats[0], blendcontrol,
+                                      src_rgb, src_alpha);
+    }
 
     bool blending_enabled =
         src_rgb != MTL::BlendFactorOne || dst_rgb != MTL::BlendFactorZero ||
@@ -2711,6 +2785,11 @@ void MetalCommandProcessor::PrewarmPipelineBinaryArchive(
           ToMetalBlendFactorAlpha(blendcontrol.alpha_destblend);
       MTL::BlendOperation op_alpha =
           ToMetalBlendOperation(blendcontrol.alpha_comb_fcn);
+      if (i == 0) {
+        ApplyFixed16SourceFactorPremult(
+            static_cast<MTL::PixelFormat>(entry.color_formats[0]),
+            blendcontrol, src_rgb, src_alpha);
+      }
 
       bool blending_enabled = src_rgb != MTL::BlendFactorOne ||
                               dst_rgb != MTL::BlendFactorZero ||
@@ -11128,6 +11207,10 @@ MetalCommandProcessor::GetOrCreateMslTessPipelineState(
         ToMetalBlendFactorAlpha(blendcontrol.alpha_destblend);
     MTL::BlendOperation op_alpha =
         ToMetalBlendOperation(blendcontrol.alpha_comb_fcn);
+    if (i == 0) {
+      ApplyFixed16SourceFactorPremult(color_formats[0], blendcontrol, src_rgb,
+                                      src_alpha);
+    }
     bool blending_enabled =
         src_rgb != MTL::BlendFactorOne || dst_rgb != MTL::BlendFactorZero ||
         op_rgb != MTL::BlendOperationAdd || src_alpha != MTL::BlendFactorOne ||
@@ -11265,6 +11348,27 @@ MetalCommandProcessor::GetCurrentSpirvPixelShaderModification(
     if (rt0_minmax_premult_a_expected) {
       modification.pixel.rt0_blend_a_factor_for_premult =
           xenos::BlendFactor::kSrcAlpha;
+    }
+  }
+  // A source factor of a 16_16 / 16_16_16_16 target the host divides by 32
+  // (GetFixed16SourceFactorPremult).
+  if (shader.writes_color_target(0) && !rt0_minmax_premult_rgb_expected &&
+      !rt0_minmax_premult_a_expected && (normalized_color_mask & 0xF) &&
+      render_target_cache_ &&
+      render_target_cache_->GetPath() ==
+          RenderTargetCache::Path::kHostRenderTargets) {
+    xenos::ColorRenderTargetFormat rt0_format =
+        regs.Get<reg::RB_COLOR_INFO>(reg::RB_COLOR_INFO::rt_register_indices[0])
+            .color_format;
+    xenos::BlendFactor rgb_premult, a_premult;
+    if ((rt0_format == xenos::ColorRenderTargetFormat::k_16_16 ||
+         rt0_format == xenos::ColorRenderTargetFormat::k_16_16_16_16) &&
+        GetFixed16SourceFactorPremult(
+            regs.Get<reg::RB_BLENDCONTROL>(
+                reg::RB_BLENDCONTROL::rt_register_indices[0]),
+            rgb_premult, a_premult)) {
+      modification.pixel.rt0_blend_rgb_factor_for_premult = rgb_premult;
+      modification.pixel.rt0_blend_a_factor_for_premult = a_premult;
     }
   }
   if (rt0_minmax_premult_rgb_expected || rt0_minmax_premult_a_expected) {
@@ -11598,6 +11702,19 @@ void MetalCommandProcessor::UpdateSpirvSystemConstantValues(
         xenos::ColorRenderTargetFormat::k_8_8_8_8_GAMMA) {
       flags |= SpirvShaderTranslator::kSysFlag_ConvertColor0ToGamma << i;
     }
+  }
+  // Blend factors of render target 0 pre-multiplied in the shader are of the
+  // output before it is divided by 32 (GetFixed16SourceFactorPremult).
+  if (render_target_cache_ &&
+      render_target_cache_->GetPath() ==
+          RenderTargetCache::Path::kHostRenderTargets &&
+      ((color_infos[0].color_format ==
+            xenos::ColorRenderTargetFormat::k_16_16 &&
+        !render_target_cache_->IsFixedRG16TruncatedToMinus1To1()) ||
+       (color_infos[0].color_format ==
+            xenos::ColorRenderTargetFormat::k_16_16_16_16 &&
+        !render_target_cache_->IsFixedRGBA16TruncatedToMinus1To1()))) {
+    flags |= SpirvShaderTranslator::kSysFlag_Color0Fixed16Scaled;
   }
 
   // Vertex index loading for VS-based primitive expansion (point sprites,

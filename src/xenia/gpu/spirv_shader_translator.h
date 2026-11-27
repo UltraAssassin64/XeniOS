@@ -95,7 +95,9 @@ class SpirvShaderTranslator : public ShaderTranslator {
       // For host render targets with MIN/MAX blend op - the source blend factor
       // to pre-multiply the shader output by (since Vulkan/D3D12 MIN/MAX
       // ignores blend factors, but Xbox 360 applies them). kOne means no
-      // pre-multiply. Only RT0 is supported for now.
+      // pre-multiply. Only RT0 is supported for now. The Metal backend also
+      // uses it for a source factor of a 16_16 / 16_16_16_16 target the host
+      // divides by 32 (kSysFlag_Color0Fixed16Scaled), with a host factor of 1.
       xenos::BlendFactor rt0_blend_rgb_factor_for_premult : 5;
       xenos::BlendFactor rt0_blend_a_factor_for_premult : 5;
       // For host render targets - which color render targets are actually
@@ -156,6 +158,11 @@ class SpirvShaderTranslator : public ShaderTranslator {
     // half a guest pixel horizontally (4x MSAA) and vertically (2x and 4x).
     kSysFlag_SamplesAsPixelsX_Shift,
     kSysFlag_SamplesAsPixelsY_Shift,
+    // Host render targets: render target 0 is 16_16 or 16_16_16_16 held as
+    // -1...1 (snorm16_render_target_full_range), so its output was divided by
+    // 32, but the guest blends the unscaled values: the rt0_blend_*_for_premult
+    // factors are taken from the output times 32.
+    kSysFlag_Color0Fixed16Scaled_Shift,
 
     kSysFlag_Count,
 
@@ -198,6 +205,7 @@ class SpirvShaderTranslator : public ShaderTranslator {
         1u << kSysFlag_FSIDepthStencilEarlyWrite_Shift,
     kSysFlag_SamplesAsPixelsX = 1u << kSysFlag_SamplesAsPixelsX_Shift,
     kSysFlag_SamplesAsPixelsY = 1u << kSysFlag_SamplesAsPixelsY_Shift,
+    kSysFlag_Color0Fixed16Scaled = 1u << kSysFlag_Color0Fixed16Scaled_Shift,
   };
   static_assert(kSysFlag_Count <= 32, "Too many flags in the system constants");
 

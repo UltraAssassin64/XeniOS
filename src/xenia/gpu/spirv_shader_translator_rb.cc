@@ -1328,10 +1328,27 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
                                                  vec4, uint_vector_temp_);
           };
 
+          // The factors are of the value the guest blends: for a 16_16 /
+          // 16_16_16_16 target held as -1...1, the output before the division
+          // by 32 (kSysFlag_Color0Fixed16Scaled).
+          spv::Id factor_color = builder_->createBinOp(
+              spv::OpVectorTimesScalar, type_float4_, color,
+              builder_->createTriOp(
+                  spv::OpSelect, type_float_,
+                  builder_->createBinOp(
+                      spv::OpINotEqual, type_bool_,
+                      builder_->createBinOp(
+                          spv::OpBitwiseAnd, type_uint_,
+                          main_system_constant_flags_,
+                          builder_->makeUintConstant(
+                              kSysFlag_Color0Fixed16Scaled)),
+                      const_uint_0_),
+                  builder_->makeFloatConstant(32.0f), const_float_1_));
+
           // Get blend factor values.
           auto get_factor_value = [&](xenos::BlendFactor factor,
                                       bool for_alpha) -> spv::Id {
-            spv::Id src_color = color;
+            spv::Id src_color = factor_color;
             switch (factor) {
               case xenos::BlendFactor::kZero:
                 return for_alpha ? const_float_0_ : const_float3_0_;
