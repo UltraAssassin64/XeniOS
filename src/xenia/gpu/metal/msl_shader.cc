@@ -51,6 +51,17 @@ DEFINE_bool(
     "equal-depth tests and decals flicker (z-fighting).",
     "GPU");
 DEFINE_bool(
+    metal_vertex_shader_fast_math, false,
+    "Compile vertex shaders with fast math too (with metal_shader_fast_math). "
+    "Off keeps positions bit-identical between shaders that compute them with "
+    "different but equivalent instructions: games draw a depth pass and then "
+    "the same geometry with an equal-depth test (Spider-Man: Edge of Time's "
+    "hypersense copies), and fast math lets the compiler fold the helpers that "
+    "keep a multiply and an add separately rounded (see "
+    "metal_spirvcross_strip_nocontract_optnone) and fuse them differently in "
+    "each shader, so the second pass fails the depth test.",
+    "GPU");
+DEFINE_bool(
     metal_shader_fast_math, true,
     "Compile Metal shaders with fast math, which lets the compiler assume no "
     "value is NaN or infinite. Xbox 360 shaders use infinities (1/0, log of "
@@ -1421,8 +1432,13 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
   auto* source_str =
       NS::String::string(msl_source_.c_str(), NS::UTF8StringEncoding);
   auto* compile_options = MTL::CompileOptions::alloc()->init();
-  // Fast math is faster but assumes no NaN or infinity (metal_shader_fast_math).
-  compile_options->setFastMathEnabled(cvars::metal_shader_fast_math);
+  // Fast math is faster but assumes no NaN or infinity
+  // (metal_shader_fast_math); vertex shaders only with
+  // metal_vertex_shader_fast_math, for exact positions.
+  compile_options->setFastMathEnabled(
+      cvars::metal_shader_fast_math &&
+      (shader().type() != xenos::ShaderType::kVertex ||
+       cvars::metal_vertex_shader_fast_math));
   // SPIRV-Cross marks the position [[invariant]]; Metal only honours that
   // with invariance preserved (iOS 14+).
   compile_options->setPreserveInvariance(

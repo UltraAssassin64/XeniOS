@@ -3029,6 +3029,67 @@ app restarts.
   every vmaddfp; with FZ flushing inputs it is now fmla in place with the
   NaN fixup in the tail (a64_vmx_nan_fixup_in_tail).
 
+### Owner's runs on build 9682 (zips "9682_logs", "gpu9682.rar": GTA IV 23-02-33 (keep-CB, apu 24) and 23-09-09 (keep-CB), one log 23-16-11 with EoT (trace 23-18-17, 2 frames), Black Ops twice, Arkham City, ACR) and the next build
+
+- EoT hypersense copies still missing; glow and audio fine (owner). Trace
+  frame 1: four copies, each a depth-only pass of Spider-Man's two meshes
+  (1275 and 10869 indices, drawn twice, VS AE830F371BFC7C3F) and then the
+  two meshes drawn additively (blend 01060106) with VS 5B0F2B2D065D0186 /
+  PS 20CC72B645FD9349, both with GEQUAL and depth write (00600466): a copy
+  shows only where its colour pass reproduces the pre-pass depth exactly.
+  The pre-pass VS accumulates every bone-weighted position component with
+  mad; the colour VS computes the c68 row with mul and two adds (its
+  product is used twice). The translator emits mad as NoContraction mul and
+  add, and SPIRV-Cross implements those with fma(l, r, 0)/fma(1, l, r)
+  helpers marked optnone, which this branch (and XeniOS) strips; with fast
+  math Metal may then fold them and fuse differently per shader, so the
+  colour pass fails GEQUAL. New metal_vertex_shader_fast_math (default
+  false): vertex shaders compile without fast math (folding the helpers
+  needs no-signed-zeros), pixel shaders keep it.
+- ACR: no flicker with keep-CB off (its global value; no per-game value in
+  the log), so not yet a sign the keep-CB flicker is fixed.
+- GTA IV 23-09-09 (keep-CB per game): a heavier scene than the 9680 runs
+  (6100 draws a frame), 65-70 ms frames with the GPU 80-95% busy: render
+  target transfers 32 ms for 51 passes (8 ms of it shader time; 9 passes
+  into a 1280x256 2x MSAA target cost 9 ms, 1 ms of fragment), draws 31 ms,
+  texture loads 6.7, EDRAM dump 5.6, resolve 4.8, upload blits 4.0, host
+  depth store 2.2. Audio thread 85%, GPU Commands 65%, main 48%. Routes
+  differ between runs, so the builds cannot be compared from these logs.
+- Black Ops: 543 Metal compiles in the first run (559 s of compiler time,
+  about 1 s each; draws waited up to 466 s in the queue), 371 in the second
+  (83 s): MSL sources are cached, compiled libraries are not. MSL size
+  median 114 KB, p90 227 KB, max 824 KB. CPU bound on its "Backend" thread
+  (90-94%, GPU 40-46%); half of its samples are "host" without a symbol and
+  syscall_thread_switch. The hotspot sampler now labels samples in the JIT
+  code cache outside guest functions "jit glue" (thunks, call resolution).
+- FFmpeg: has207/FFmpeg d1963569 here; XeniOS and xenia-edge HEAD use
+  dfc5a3993 with "play XMA frames whose data ends early" and "fix XMA
+  output running 192 samples late" (owner's decision; not updated). NEON
+  covers the FFT/MDCT (tx_float_neon) and window/vector ops (float_dsp_neon);
+  what stays scalar is the entropy decoding (ff_wma_run_level_decode),
+  which no SIMD helps.
+
+#### Larger changes: plan (2026-11-27)
+
+1. Resolve read watch, to make metal_resolve_keep_command_buffer safe by
+   default (GTA IV ran 30-40 ms frames with it before the pass restarts).
+   XeniOS: command_processor_resolve_readwatch.inc (655 lines), Memory
+   read-watch API (PhysicalAccess, ProvideReadWatchedPage...), commits
+   77f2cca80, 935e03876, 16df25981, b83724656, 34387b31f, 237a78443,
+   d5806a7d2. Phases: memory read-watch API; the include; Metal hookup;
+   default on after ACR and GTA IV runs.
+2. Render target transfers (GTA IV 17-32 ms a frame, EoT 25 ms): first
+   data with metal_frame_detail_log (per transfer source/destination and
+   tiles), then batching or skipping where the destination is cleared or
+   fully drawn over, and cheaper passes (most of the time is not shading).
+3. Shader compile cost (Black Ops): reduce MSL size (find what dominates
+   with dump_shaders), and cache compiled libraries across runs where iOS
+   allows (MTLBinaryArchive holds pipelines, not source compiles).
+4. XMA: decode on a dedicated thread like the hardware (kick returns at
+   once); small gain on GTA IV's audio thread (3-5% of its samples).
+5. Long term: EDRAM through raster order groups (as D3D12's ROV path),
+   which removes transfers entirely.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

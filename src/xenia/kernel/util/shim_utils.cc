@@ -664,6 +664,11 @@ void LogGuestThreadHotspots() {
         ++hotspot_total_lines[uint64_t(hotspot_function->address()) << 32 |
                               hotspot_function->MapMachineCodeToGuestAddress(
                                   uintptr_t(hotspot_pc))];
+      } else if (hotspot_pc - hotspot_code_cache->execute_base_address() <
+                 hotspot_code_cache->total_size()) {
+        // JIT code outside any guest function: the guest/host thunks, call
+        // resolution and other emitted helpers.
+        hotspot_place = "jit glue";
       } else {
         Dl_info hotspot_symbol;
         if (dladdr(reinterpret_cast<void*>(hotspot_pc), &hotspot_symbol) &&

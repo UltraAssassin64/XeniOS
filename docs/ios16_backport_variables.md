@@ -192,56 +192,56 @@ further edits.
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.cc` | 18 | 1 |
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.h` | 16 | 1 |
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.h` | 547, 595 | 2 |
-| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.cc` | 814 | 1 |
+| `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/util/shim_utils.cc` | 819 | 1 |
 | `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.h` | 548, 549, 597 | 3 |
-| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.cc` | 771 | 1 |
-| `kernel_call_history` | thread_local array | The thread's last 32 kernel exports, a ring written at kernel_call_history_head. | `src/xenia/kernel/util/shim_utils.cc` | 796, 802, 809, 833, 837, 876, 894 | 7 |
-| `kernel_call_runs` | thread_local array | For cycle lengths 1-8, how many calls in a row matched the call that many places earlier; only the shortest cycle at the threshold is reported. | `src/xenia/kernel/util/shim_utils.cc` | 799, 804, 806, 860 | 4 |
-| `kernel_call_period` | local | Cycle length being checked (1-8). | `src/xenia/kernel/util/shim_utils.cc` | 800, 801, 802, 804, 806, 858, 859, 860, 874, 888 | 12 |
-| `kernel_call_index` | local | Index into the history. | `src/xenia/kernel/util/shim_utils.cc` | 829, 830, 832, 874, 875, 877, 888, 889, 894 | 12 |
-| `kernel_call_threshold` | local | Copy of the cvar for this call. | `src/xenia/kernel/util/shim_utils.cc` | 814, 863, 868, 869, 905, 929, 930 | 7 |
-| `kernel_call_run` | local | Run length for the cycle length being checked. | `src/xenia/kernel/util/shim_utils.cc` | 860, 863, 868, 869, 901, 905, 929, 930 | 8 |
-| `kernel_call_names` | local | Text of the repeating cycle ("A -> B"), of the last 32 calls in a storm report, or of a listed thread's suspend count, priority, CPU and start address. | `src/xenia/kernel/util/shim_utils.cc` | 404, 409, 418, 429, 828, 836, 847, 887, 890, 891, 893, 902 | 12 |
-| `kernel_call_thread` | local | Current guest XThread, for its handle. | `src/xenia/kernel/util/shim_utils.cc` | 815, 843, 901 | 5 |
-| `kernel_call_memory` | local | Guest memory, for the stack walk and the code dumps. | `src/xenia/kernel/util/shim_utils.cc` | 97, 116, 124, 442, 452, 909, 919 | 7 |
+| `NoteKernelCall` | function, kernel shim | Called at the start of every kernel export trampoline; detects repeating calls per guest thread. | `src/xenia/kernel/util/shim_utils.cc` | 776 | 1 |
+| `kernel_call_history` | thread_local array | The thread's last 32 kernel exports, a ring written at kernel_call_history_head. | `src/xenia/kernel/util/shim_utils.cc` | 801, 807, 814, 838, 842, 881, 899 | 7 |
+| `kernel_call_runs` | thread_local array | For cycle lengths 1-8, how many calls in a row matched the call that many places earlier; only the shortest cycle at the threshold is reported. | `src/xenia/kernel/util/shim_utils.cc` | 804, 809, 811, 865 | 4 |
+| `kernel_call_period` | local | Cycle length being checked (1-8). | `src/xenia/kernel/util/shim_utils.cc` | 805, 806, 807, 809, 811, 863, 864, 865, 879, 893 | 12 |
+| `kernel_call_index` | local | Index into the history. | `src/xenia/kernel/util/shim_utils.cc` | 834, 835, 837, 879, 880, 882, 893, 894, 899 | 12 |
+| `kernel_call_threshold` | local | Copy of the cvar for this call. | `src/xenia/kernel/util/shim_utils.cc` | 819, 868, 873, 874, 910, 934, 935 | 7 |
+| `kernel_call_run` | local | Run length for the cycle length being checked. | `src/xenia/kernel/util/shim_utils.cc` | 865, 868, 873, 874, 906, 910, 934, 935 | 8 |
+| `kernel_call_names` | local | Text of the repeating cycle ("A -> B"), of the last 32 calls in a storm report, or of a listed thread's suspend count, priority, CPU and start address. | `src/xenia/kernel/util/shim_utils.cc` | 404, 409, 418, 429, 833, 841, 852, 892, 895, 896, 898, 907 | 12 |
+| `kernel_call_thread` | local | Current guest XThread, for its handle. | `src/xenia/kernel/util/shim_utils.cc` | 820, 848, 906 | 5 |
+| `kernel_call_memory` | local | Guest memory, for the stack walk and the code dumps. | `src/xenia/kernel/util/shim_utils.cc` | 97, 116, 124, 442, 452, 914, 924 | 7 |
 | `kernel_call_frame` | parameter of LogKernelCallStack | Guest stack frame being walked. | `src/xenia/kernel/util/shim_utils.cc` | 96, 107, 110, 112, 116, 117, 126 | 8 |
 | `kernel_call_stack` | local | Text of the guest return addresses. | `src/xenia/kernel/util/shim_utils.cc` | 98, 111, 122, 129 | 4 |
 | `kernel_call_depth` | local | Depth in the stack walk. | `src/xenia/kernel/util/shim_utils.cc` | 105, 106 | 3 |
 | `kernel_call_caller_frame` | local | Back-chain pointer to the caller's frame. | `src/xenia/kernel/util/shim_utils.cc` | 115, 117, 118, 119, 125, 126 | 6 |
 | `NoteKernelCallDone` | function, kernel shim | Clears the thread's in-call mark after every kernel export returns. | `src/xenia/kernel/util/shim_utils.h` | 550, 627 | 2 |
-| `NoteKernelCallDone` | function, kernel shim | Clears the thread's in-call mark after every kernel export returns. | `src/xenia/kernel/util/shim_utils.cc` | 764 | 1 |
+| `NoteKernelCallDone` | function, kernel shim | Clears the thread's in-call mark after every kernel export returns. | `src/xenia/kernel/util/shim_utils.cc` | 769 | 1 |
 | `kernel_call_noted` | local in the export trampoline | Whether this call was reported to NoteKernelCall (so NoteKernelCallDone is called). | `src/xenia/kernel/util/shim_utils.h` | 595, 596, 626 | 3 |
-| `KernelCallThreadState` | struct (anonymous namespace) | One guest thread's kernel-call state, readable from any thread. | `src/xenia/kernel/util/shim_utils.cc` | 61, 76, 77, 221, 773 | 5 |
-| `kernel_call_threads_mutex` | file-static mutex | Guards kernel_call_threads. | `src/xenia/kernel/util/shim_utils.cc` | 75, 220, 778 | 3 |
-| `kernel_call_threads` | file-static vector | Every thread's KernelCallThreadState; entries are never freed. | `src/xenia/kernel/util/shim_utils.cc` | 76, 221, 779 | 3 |
-| `kernel_call_this_thread` | thread_local pointer | This thread's KernelCallThreadState. | `src/xenia/kernel/util/shim_utils.cc` | 77, 765, 766, 767, 772, 773, 775, 776, 779, 781, 782, 783, 784, 785, 787, 788, 789 | 17 |
-| `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/kernel/util/shim_utils.cc` | 218, 853, 931 | 3 |
-| `kernel_call_now` | local | Current host uptime in ms (in LogKernelCallThreads and in NoteKernelCall). | `src/xenia/kernel/util/shim_utils.cc` | 219, 230, 786, 787, 824, 825 | 6 |
-| `kernel_call_lock` | local | Lock on kernel_call_threads_mutex. | `src/xenia/kernel/util/shim_utils.cc` | 220, 778 | 2 |
+| `KernelCallThreadState` | struct (anonymous namespace) | One guest thread's kernel-call state, readable from any thread. | `src/xenia/kernel/util/shim_utils.cc` | 61, 76, 77, 221, 778 | 5 |
+| `kernel_call_threads_mutex` | file-static mutex | Guards kernel_call_threads. | `src/xenia/kernel/util/shim_utils.cc` | 75, 220, 783 | 3 |
+| `kernel_call_threads` | file-static vector | Every thread's KernelCallThreadState; entries are never freed. | `src/xenia/kernel/util/shim_utils.cc` | 76, 221, 784 | 3 |
+| `kernel_call_this_thread` | thread_local pointer | This thread's KernelCallThreadState. | `src/xenia/kernel/util/shim_utils.cc` | 77, 770, 771, 772, 777, 778, 780, 781, 784, 786, 787, 788, 789, 790, 792, 793, 794 | 17 |
+| `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/kernel/util/shim_utils.cc` | 218, 858, 936 | 3 |
+| `kernel_call_now` | local | Current host uptime in ms (in LogKernelCallThreads and in NoteKernelCall). | `src/xenia/kernel/util/shim_utils.cc` | 219, 230, 791, 792, 829, 830 | 6 |
+| `kernel_call_lock` | local | Lock on kernel_call_threads_mutex. | `src/xenia/kernel/util/shim_utils.cc` | 220, 783 | 2 |
 | `kernel_call_state` | local | Thread state being logged. | `src/xenia/kernel/util/shim_utils.cc` | 221, 222, 223, 230, 234, 238, 244, 275, 276, 277, 280, 281 | 14 |
 | `kernel_call_last` | local | That thread's last export. | `src/xenia/kernel/util/shim_utils.cc` | 222, 225, 226, 236 | 5 |
 | `kernel_call_inside` | local | Whether that thread is inside a kernel call now. | `src/xenia/kernel/util/shim_utils.cc` | 223, 225, 235, 237, 243 | 5 |
-| `kernel_call_owner` | local | The new thread's XThread, for handle and name. | `src/xenia/kernel/util/shim_utils.cc` | 774, 775, 776 | 3 |
-| `kernel_call_only_sleeps` | local | True when the repeating cycle is only KeDelayExecutionThread (idle, not reported). | `src/xenia/kernel/util/shim_utils.cc` | 873, 881, 884 | 3 |
-| `kernel_call_code` | local | Guest address a code dump starts at (lr - 0x80 in a repeat report; sampled guest PC - 0x40 in the guest-thread list). | `src/xenia/kernel/util/shim_utils.cc` | 443, 444, 453, 457, 910, 920, 923 | 7 |
-| `kernel_call_line` | local | First word of a code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 445, 446, 448, 449, 457, 912, 913, 915, 916, 923 | 12 |
-| `kernel_call_words` | local | Text of one code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 447, 450, 457, 914, 917, 923 | 6 |
-| `kernel_call_word` | local | Word being added to a code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 448, 449, 453, 915, 916, 920 | 8 |
-| `LogKernelCallStack` | function in xe::kernel::shim | Returns the guest return addresses up the stack from a frame (back chain at 0(r1), saved LR at caller frame - 8); also used by the guest crash dump. | `src/xenia/kernel/util/shim_utils.cc` | 96, 277, 432, 849, 907 | 5 |
-| `guest_stack_pointer` | KernelCallThreadState field | Guest r1 at the thread's last kernel call, for its stack when it is blocked. | `src/xenia/kernel/util/shim_utils.cc` | 70, 277, 281, 783 | 4 |
-| `guest_arg0` | KernelCallThreadState field | Guest r3 at the thread's last kernel call (the handle for NtWaitForSingleObjectEx). | `src/xenia/kernel/util/shim_utils.cc` | 71, 244, 784 | 3 |
-| `guest_arg1` | KernelCallThreadState field | Guest r4 at the thread's last kernel call. | `src/xenia/kernel/util/shim_utils.cc` | 72, 276, 785 | 3 |
+| `kernel_call_owner` | local | The new thread's XThread, for handle and name. | `src/xenia/kernel/util/shim_utils.cc` | 779, 780, 781 | 3 |
+| `kernel_call_only_sleeps` | local | True when the repeating cycle is only KeDelayExecutionThread (idle, not reported). | `src/xenia/kernel/util/shim_utils.cc` | 878, 886, 889 | 3 |
+| `kernel_call_code` | local | Guest address a code dump starts at (lr - 0x80 in a repeat report; sampled guest PC - 0x40 in the guest-thread list). | `src/xenia/kernel/util/shim_utils.cc` | 443, 444, 453, 457, 915, 925, 928 | 7 |
+| `kernel_call_line` | local | First word of a code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 445, 446, 448, 449, 457, 917, 918, 920, 921, 928 | 12 |
+| `kernel_call_words` | local | Text of one code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 447, 450, 457, 919, 922, 928 | 6 |
+| `kernel_call_word` | local | Word being added to a code dump line. | `src/xenia/kernel/util/shim_utils.cc` | 448, 449, 453, 920, 921, 925 | 8 |
+| `LogKernelCallStack` | function in xe::kernel::shim | Returns the guest return addresses up the stack from a frame (back chain at 0(r1), saved LR at caller frame - 8); also used by the guest crash dump. | `src/xenia/kernel/util/shim_utils.cc` | 96, 277, 432, 854, 912 | 5 |
+| `guest_stack_pointer` | KernelCallThreadState field | Guest r1 at the thread's last kernel call, for its stack when it is blocked. | `src/xenia/kernel/util/shim_utils.cc` | 70, 277, 281, 788 | 4 |
+| `guest_arg0` | KernelCallThreadState field | Guest r3 at the thread's last kernel call (the handle for NtWaitForSingleObjectEx). | `src/xenia/kernel/util/shim_utils.cc` | 71, 244, 789 | 3 |
+| `guest_arg1` | KernelCallThreadState field | Guest r4 at the thread's last kernel call. | `src/xenia/kernel/util/shim_utils.cc` | 72, 276, 790 | 3 |
 | `kernel_call_ms` | local | How long the logged thread has been inside, or out of, its last call. | `src/xenia/kernel/util/shim_utils.cc` | 229, 237, 243 | 3 |
 | `kernel_call_handle` | local | The blocked thread's r3, looked up in the object table. | `src/xenia/kernel/util/shim_utils.cc` | 244, 254, 275 | 3 |
 | `kernel_call_object` | local | Text naming a wait object, or the guest function / host symbol a sampled host PC is in. | `src/xenia/kernel/util/shim_utils.cc` | 245, 255, 262, 272, 276, 354, 365, 370, 380, 396, 429 | 11 |
 | `kernel_call_xobject` | local | Object-table lookup result for that handle. | `src/xenia/kernel/util/shim_utils.cc` | 252, 257, 258, 259, 261 | 5 |
-| `kernel_call_total` | local | This thread's call count including this call. | `src/xenia/kernel/util/shim_utils.cc` | 789, 822, 844 | 3 |
-| `kernel_call_history_lr` | thread_local array | Guest return address of each call in kernel_call_history. | `src/xenia/kernel/util/shim_utils.cc` | 797, 810, 838 | 3 |
-| `kernel_call_history_head` | thread_local | Calls this thread has recorded; the next ring slot is head & 31. | `src/xenia/kernel/util/shim_utils.cc` | 792, 798, 802, 809, 810, 812, 832, 876, 894 | 9 |
-| `kernel_call_slot` | local in NoteKernelCall | Ring slot of the call being listed in a storm report. | `src/xenia/kernel/util/shim_utils.cc` | 831, 833, 837, 838 | 4 |
-| `kernel_call_storm_ms` | thread_local | Uptime at the last millionth call on this thread. | `src/xenia/kernel/util/shim_utils.cc` | 820, 824, 825 | 3 |
-| `kernel_call_storm_reports` | thread_local | How many million-call bursts under a second this thread has had (every tenth is logged). | `src/xenia/kernel/util/shim_utils.cc` | 821, 827, 850 | 3 |
-| `kernel_call_storm_elapsed` | local | Milliseconds this thread took for its last million calls. | `src/xenia/kernel/util/shim_utils.cc` | 823, 826, 844 | 3 |
+| `kernel_call_total` | local | This thread's call count including this call. | `src/xenia/kernel/util/shim_utils.cc` | 794, 827, 849 | 3 |
+| `kernel_call_history_lr` | thread_local array | Guest return address of each call in kernel_call_history. | `src/xenia/kernel/util/shim_utils.cc` | 802, 815, 843 | 3 |
+| `kernel_call_history_head` | thread_local | Calls this thread has recorded; the next ring slot is head & 31. | `src/xenia/kernel/util/shim_utils.cc` | 797, 803, 807, 814, 815, 817, 837, 881, 899 | 9 |
+| `kernel_call_slot` | local in NoteKernelCall | Ring slot of the call being listed in a storm report. | `src/xenia/kernel/util/shim_utils.cc` | 836, 838, 842, 843 | 4 |
+| `kernel_call_storm_ms` | thread_local | Uptime at the last millionth call on this thread. | `src/xenia/kernel/util/shim_utils.cc` | 825, 829, 830 | 3 |
+| `kernel_call_storm_reports` | thread_local | How many million-call bursts under a second this thread has had (every tenth is logged). | `src/xenia/kernel/util/shim_utils.cc` | 826, 832, 855 | 3 |
+| `kernel_call_storm_elapsed` | local | Milliseconds this thread took for its last million calls. | `src/xenia/kernel/util/shim_utils.cc` | 828, 831, 849 | 3 |
 | `kernel_call_global` | local | The global critical region mutex, only try-locked so a report never waits on a stuck thread (wait-object lookup, guest-thread list, stack walk). | `src/xenia/kernel/util/shim_utils.cc` | 101, 102, 128, 250, 251, 270, 334, 335, 341, 405, 416, 441, 460 | 13 |
 | `kernel_call_xthreads` | local | Every XThread in the object table. | `src/xenia/kernel/util/shim_utils.cc` | 339, 342 | 2 |
 | `kernel_call_xthread` | local | The XThread being listed. | `src/xenia/kernel/util/shim_utils.cc` | 342, 343, 348, 406, 408, 411, 412, 413, 414, 421, 422, 427, 428, 456 | 15 |
@@ -273,10 +273,10 @@ further edits.
 | `cpu_waits` | MetalPerfCounters field | Number of those waits. | `src/xenia/gpu/metal/metal_perf_counters.h` | 32, 92 | 2 |
 | `cpu_waits` | MetalPerfCounters field | Number of those waits. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2914 | 1 |
 | `shader_compiles` | MetalPerfCounters field | Shaders translated and compiled (MslShader). | `src/xenia/gpu/metal/metal_perf_counters.h` | 34 | 1 |
-| `shader_compiles` | MetalPerfCounters field | Shaders translated and compiled (MslShader). | `src/xenia/gpu/metal/msl_shader.cc` | 1499 | 1 |
+| `shader_compiles` | MetalPerfCounters field | Shaders translated and compiled (MslShader). | `src/xenia/gpu/metal/msl_shader.cc` | 1515 | 1 |
 | `shader_compiles` | MetalPerfCounters field | Shaders translated and compiled (MslShader). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2917 | 1 |
 | `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/metal_perf_counters.h` | 35 | 1 |
-| `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/msl_shader.cc` | 1500 | 1 |
+| `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/msl_shader.cc` | 1516 | 1 |
 | `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2919 | 1 |
 | `pipeline_compiles` | MetalPerfCounters field | Render pipeline states created. | `src/xenia/gpu/metal/metal_perf_counters.h` | 37 | 1 |
 | `pipeline_compiles` | MetalPerfCounters field | Render pipeline states created. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1127, 2922, 8836 | 3 |
@@ -288,7 +288,7 @@ further edits.
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_perf_counters.h` | 76, 90, 92 | 3 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 14 | 1 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 32, 5075 | 2 |
-| `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/msl_shader.cc` | 34, 1499, 1500 | 3 |
+| `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/msl_shader.cc` | 34, 1515, 1516 | 3 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_shared_memory.cc` | 11, 144 | 2 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_command_processor.cc` | 50, 950, 951, 1127, 1128, 2785, 2801, 2808, 2898, 2911, 2914, 2915, 2917, 2919, 2922, 2924, 2927, 2929, 2932, 2956, 2958, 2960, 2962, 2964, 2966, 2974, 2978, 2981, 2999, 3000, 3001, 3002, 3003, 5922, 6467, 6756, 6760, 7061, 7064, 7089, 7107, 7145, 7147, 7173, 7210, 7218, 7221, 7255, 7258, 7487, 7496, 7646, 7649, 7651, 7665, 8836, 8837 | 57 |
 | `MetalPerfMicrosecondsSince` | inline function | Microseconds since a steady_clock time point. | `src/xenia/gpu/metal/metal_perf_counters.h` | 78, 91 | 2 |
@@ -591,9 +591,9 @@ further edits.
 | `stencil_packed_set` | local in transfer_ps (MSL) | stencil_packed was computed (8_8_8_8_GAMMA source). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8693, 8730, 8790 | 3 |
 | `transfer_stencil` | local in transfer_ps (MSL) | Guest stencil written with the depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8789, 8792, 8795, 8956 | 4 |
 | `depth_stencil_output_state` | local in PerformTransfersAndResolveClears | GetTransferDepthAndStencilOutputState() for a draw writing stencil with depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6557, 6559, 6562 | 3 |
-| `named_candidate_count` | local in CompileToMsl | Entry point candidates before those found in the MSL source, which are only searched for when none of them resolves. | `src/xenia/gpu/metal/msl_shader.cc` | 1406, 1409 | 2 |
-| `argument_encoder_begin` | local in CompileToMsl | Start of the argument encoder creation, timed for the compile timings line. | `src/xenia/gpu/metal/msl_shader.cc` | 1468, 1493 | 2 |
-| `argument_encoder_ms` | local in CompileToMsl | Its time (argument-encoder= in the compile timings line). | `src/xenia/gpu/metal/msl_shader.cc` | 1492, 1510, 1519 | 3 |
+| `named_candidate_count` | local in CompileToMsl | Entry point candidates before those found in the MSL source, which are only searched for when none of them resolves. | `src/xenia/gpu/metal/msl_shader.cc` | 1417, 1420 | 2 |
+| `argument_encoder_begin` | local in CompileToMsl | Start of the argument encoder creation, timed for the compile timings line. | `src/xenia/gpu/metal/msl_shader.cc` | 1484, 1509 | 2 |
+| `argument_encoder_ms` | local in CompileToMsl | Its time (argument-encoder= in the compile timings line). | `src/xenia/gpu/metal/msl_shader.cc` | 1508, 1526, 1535 | 3 |
 | `metal_async_compile_wait_ms` | cvar (Metal); iOS settings key | How long draws may wait per frame for a compile before being skipped; 0 (default) never waits. Settings > Performance > Wait for Shader Compiles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 143, 152, 924 | 3 |
 | `metal_async_compile_wait_ms` | cvar (Metal); iOS settings key | How long draws may wait per frame for a compile before being skipped; 0 (default) never waits. Settings > Performance > Wait for Shader Compiles. | `src/xenia/ui/windowed_app_main_ios.mm` | 3615 | 1 |
 | `queue_arrival` | MslShaderCompileRequest and MslPipelineCompileRequest field | Queue order within a priority (first in, first out). | `src/xenia/gpu/metal/metal_command_processor.h` | 566, 586, 596, 605, 625 | 7 |
@@ -654,45 +654,45 @@ further edits.
 | `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/kernel/util/shim_utils.h` | 558 | 1 |
 | `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/kernel/util/shim_utils.cc` | 603 | 1 |
 | `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3011 | 1 |
-| `HotspotThread` | struct in LogGuestThreadHotspots | A sampled thread and where its samples were. | `src/xenia/kernel/util/shim_utils.cc` | 615, 623, 651, 677 | 4 |
-| `xthread` | HotspotThread field | The guest thread (kept referenced). | `src/xenia/kernel/util/shim_utils.cc` | 616, 705 | 2 |
-| `host_thread` | HotspotThread field | Its host thread, sampled. | `src/xenia/kernel/util/shim_utils.cc` | 617, 653, 705 | 3 |
-| `places` | HotspotThread field | Samples per place: guest function address or host symbol. | `src/xenia/kernel/util/shim_utils.cc` | 619, 674, 680, 693 | 4 |
-| `guest_samples` | HotspotThread field | Samples in guest (JIT) code. | `src/xenia/kernel/util/shim_utils.cc` | 620, 662, 679, 706 | 4 |
-| `samples` | HotspotThread field | Samples taken. | `src/xenia/kernel/util/shim_utils.cc` | 621, 657, 678, 704, 706 | 5 |
+| `HotspotThread` | struct in LogGuestThreadHotspots | A sampled thread and where its samples were. | `src/xenia/kernel/util/shim_utils.cc` | 615, 623, 651, 682 | 4 |
+| `xthread` | HotspotThread field | The guest thread (kept referenced). | `src/xenia/kernel/util/shim_utils.cc` | 616, 710 | 2 |
+| `host_thread` | HotspotThread field | Its host thread, sampled. | `src/xenia/kernel/util/shim_utils.cc` | 617, 653, 710 | 3 |
+| `places` | HotspotThread field | Samples per place: guest function address or host symbol. | `src/xenia/kernel/util/shim_utils.cc` | 619, 679, 685, 698 | 4 |
+| `guest_samples` | HotspotThread field | Samples in guest (JIT) code. | `src/xenia/kernel/util/shim_utils.cc` | 620, 662, 684, 711 | 4 |
+| `samples` | HotspotThread field | Samples taken. | `src/xenia/kernel/util/shim_utils.cc` | 621, 657, 683, 709, 711 | 5 |
 | `kHotspotRounds` | constant in LogGuestThreadHotspots | Sampling rounds (16). | `src/xenia/kernel/util/shim_utils.cc` | 645, 646 | 2 |
 | `hotspot_global` | local | The global critical region, try-locked for the object table. | `src/xenia/kernel/util/shim_utils.cc` | 608, 609, 614 | 3 |
 | `hotspot_xthreads` | local | Every XThread. | `src/xenia/kernel/util/shim_utils.cc` | 612, 624 | 2 |
-| `hotspot_threads` | local | The running guest threads being sampled. | `src/xenia/kernel/util/shim_utils.cc` | 623, 627, 631, 651, 677 | 5 |
+| `hotspot_threads` | local | The running guest threads being sampled. | `src/xenia/kernel/util/shim_utils.cc` | 623, 627, 631, 651, 682 | 5 |
 | `hotspot_xthread` | loop variable | One XThread. | `src/xenia/kernel/util/shim_utils.cc` | 624, 625, 626, 628 | 6 |
 | `hotspot_code_cache` | local | JIT code cache, to map host PCs to guest functions. | `src/xenia/kernel/util/shim_utils.cc` | 634, 660 | 2 |
 | `hotspot_round` | loop variable | Sampling round. | `src/xenia/kernel/util/shim_utils.cc` | 646, 647, 648 | 4 |
-| `hotspot_thread` | loop variable | A sampled thread. | `src/xenia/kernel/util/shim_utils.cc` | 651, 653, 657, 662, 674, 677, 679, 680, 693, 705, 706 | 13 |
-| `hotspot_pc` | local | Its host program counter. | `src/xenia/kernel/util/shim_utils.cc` | 652, 654, 660, 666, 669 | 5 |
-| `hotspot_place` | local; structured binding | Guest function address or host symbol of a sample. | `src/xenia/kernel/util/shim_utils.cc` | 658, 661, 671, 674, 680, 681, 682, 683, 684, 685, 693, 694 | 12 |
+| `hotspot_thread` | loop variable | A sampled thread. | `src/xenia/kernel/util/shim_utils.cc` | 651, 653, 657, 662, 679, 682, 684, 685, 698, 710, 711 | 13 |
+| `hotspot_pc` | local | Its host program counter. | `src/xenia/kernel/util/shim_utils.cc` | 652, 654, 660, 666, 674 | 5 |
+| `hotspot_place` | local; structured binding | Guest function address or host symbol of a sample. | `src/xenia/kernel/util/shim_utils.cc` | 658, 661, 676, 679, 685, 686, 687, 688, 689, 690, 698, 699 | 12 |
 | `hotspot_function` | local | Guest function at the PC. | `src/xenia/kernel/util/shim_utils.cc` | 659, 661, 663, 664, 665 | 5 |
-| `hotspot_symbol` | local | dladdr result for host code. | `src/xenia/kernel/util/shim_utils.cc` | 668, 669, 670, 671 | 4 |
-| `hotspot_busy` | local | The thread had samples outside host waits. | `src/xenia/kernel/util/shim_utils.cc` | 679, 686, 689 | 3 |
-| `hotspot_count` | structured binding | Samples at a place. | `src/xenia/kernel/util/shim_utils.cc` | 680, 693, 694 | 3 |
-| `hotspot_sorted` | local | Places by sample count. | `src/xenia/kernel/util/shim_utils.cc` | 692, 694, 696, 698, 700, 701 | 7 |
-| `hotspot_text` | local | The logged list. | `src/xenia/kernel/util/shim_utils.cc` | 697, 699, 706 | 3 |
-| `hotspot_totals` | function static map, LogGuestThreadHotspots | Samples since launch per guest function. | `src/xenia/kernel/util/shim_utils.cc` | 640, 663, 713 | 3 |
-| `hotspot_total_lines` | function static map, LogGuestThreadHotspots | Samples since launch per function and guest instruction (function << 32 | instruction). | `src/xenia/kernel/util/shim_utils.cc` | 641, 664, 725, 726 | 4 |
-| `hotspot_dumped` | function static set, LogGuestThreadHotspots | Functions whose code has been logged. | `src/xenia/kernel/util/shim_utils.cc` | 642, 739 | 2 |
-| `hotspot_sorted` | local (second, totals report) | Functions by samples since launch; same name as the per-thread list above, in a later scope. | `src/xenia/kernel/util/shim_utils.cc` | 711, 714, 717, 720, 721, 736, 738 | 8 |
-| `hotspot_text` | local (second, totals report) | The logged totals list. | `src/xenia/kernel/util/shim_utils.cc` | 718, 734, 759 | 3 |
-| `hotspot_total` | local | All samples since launch, for percentages. | `src/xenia/kernel/util/shim_utils.cc` | 712, 715, 736, 757, 758 | 5 |
-| `hotspot_memory` | local | Guest memory, to read the code of hot functions. | `src/xenia/kernel/util/shim_utils.cc` | 719, 749 | 2 |
-| `hotspot_address` | structured binding; local | Guest function address in the totals. | `src/xenia/kernel/util/shim_utils.cc` | 713, 714, 721, 722, 725, 727, 735, 739, 743 | 9 |
-| `hotspot_count` | structured binding (second, totals report) | Samples of that function. | `src/xenia/kernel/util/shim_utils.cc` | 713, 714, 715 | 3 |
-| `hotspot_line` | local | The function's most sampled guest instruction. | `src/xenia/kernel/util/shim_utils.cc` | 722, 731, 737, 743 | 4 |
-| `hotspot_line_count` | local | Samples at hotspot_line. | `src/xenia/kernel/util/shim_utils.cc` | 723, 729, 730, 737 | 4 |
-| `it` | loop iterator | Walks hotspot_total_lines for one function. | `src/xenia/kernel/util/shim_utils.cc` | 724, 726, 727, 728, 729, 730, 731 | 7 |
-| `i` | loop variable (totals report) | Rank in the totals. | `src/xenia/kernel/util/shim_utils.cc` | 720, 721, 735, 736, 738 | 8 |
-| `hotspot_start` | local | First guest address of the logged code. | `src/xenia/kernel/util/shim_utils.cc` | 742, 750, 752 | 3 |
-| `row` | loop variable | Line of eight words in the code dump. | `src/xenia/kernel/util/shim_utils.cc` | 744, 750, 752 | 5 |
-| `word` | loop variable | Word within that line. | `src/xenia/kernel/util/shim_utils.cc` | 746, 750 | 4 |
-| `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/gpu/metal/msl_shader.cc` | 45, 1348 | 2 |
+| `hotspot_symbol` | local | dladdr result for host code. | `src/xenia/kernel/util/shim_utils.cc` | 673, 674, 675, 676 | 4 |
+| `hotspot_busy` | local | The thread had samples outside host waits. | `src/xenia/kernel/util/shim_utils.cc` | 684, 691, 694 | 3 |
+| `hotspot_count` | structured binding | Samples at a place. | `src/xenia/kernel/util/shim_utils.cc` | 685, 698, 699 | 3 |
+| `hotspot_sorted` | local | Places by sample count. | `src/xenia/kernel/util/shim_utils.cc` | 697, 699, 701, 703, 705, 706 | 7 |
+| `hotspot_text` | local | The logged list. | `src/xenia/kernel/util/shim_utils.cc` | 702, 704, 711 | 3 |
+| `hotspot_totals` | function static map, LogGuestThreadHotspots | Samples since launch per guest function. | `src/xenia/kernel/util/shim_utils.cc` | 640, 663, 718 | 3 |
+| `hotspot_total_lines` | function static map, LogGuestThreadHotspots | Samples since launch per function and guest instruction (function << 32 | instruction). | `src/xenia/kernel/util/shim_utils.cc` | 641, 664, 730, 731 | 4 |
+| `hotspot_dumped` | function static set, LogGuestThreadHotspots | Functions whose code has been logged. | `src/xenia/kernel/util/shim_utils.cc` | 642, 744 | 2 |
+| `hotspot_sorted` | local (second, totals report) | Functions by samples since launch; same name as the per-thread list above, in a later scope. | `src/xenia/kernel/util/shim_utils.cc` | 716, 719, 722, 725, 726, 741, 743 | 8 |
+| `hotspot_text` | local (second, totals report) | The logged totals list. | `src/xenia/kernel/util/shim_utils.cc` | 723, 739, 764 | 3 |
+| `hotspot_total` | local | All samples since launch, for percentages. | `src/xenia/kernel/util/shim_utils.cc` | 717, 720, 741, 762, 763 | 5 |
+| `hotspot_memory` | local | Guest memory, to read the code of hot functions. | `src/xenia/kernel/util/shim_utils.cc` | 724, 754 | 2 |
+| `hotspot_address` | structured binding; local | Guest function address in the totals. | `src/xenia/kernel/util/shim_utils.cc` | 718, 719, 726, 727, 730, 732, 740, 744, 748 | 9 |
+| `hotspot_count` | structured binding (second, totals report) | Samples of that function. | `src/xenia/kernel/util/shim_utils.cc` | 718, 719, 720 | 3 |
+| `hotspot_line` | local | The function's most sampled guest instruction. | `src/xenia/kernel/util/shim_utils.cc` | 727, 736, 742, 748 | 4 |
+| `hotspot_line_count` | local | Samples at hotspot_line. | `src/xenia/kernel/util/shim_utils.cc` | 728, 734, 735, 742 | 4 |
+| `it` | loop iterator | Walks hotspot_total_lines for one function. | `src/xenia/kernel/util/shim_utils.cc` | 729, 731, 732, 733, 734, 735, 736 | 7 |
+| `i` | loop variable (totals report) | Rank in the totals. | `src/xenia/kernel/util/shim_utils.cc` | 725, 726, 740, 741, 743 | 8 |
+| `hotspot_start` | local | First guest address of the logged code. | `src/xenia/kernel/util/shim_utils.cc` | 747, 755, 757 | 3 |
+| `row` | loop variable | Line of eight words in the code dump. | `src/xenia/kernel/util/shim_utils.cc` | 749, 755, 757 | 5 |
+| `word` | loop variable | Word within that line. | `src/xenia/kernel/util/shim_utils.cc` | 751, 755 | 4 |
+| `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/gpu/metal/msl_shader.cc` | 45, 1359 | 2 |
 | `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 3678 | 1 |
 | `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.h` | 212, 637 | 2 |
 | `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.cc` | 609, 824 | 2 |
@@ -838,13 +838,13 @@ further edits.
 | `msl_fetch_constants_version_` | MetalCommandProcessor member | Version of the cached fetch constants, bumped when recopied. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5370, 5374, 5378 | 3 |
 | `msl_inline_constants_bound_versions_` | MetalCommandProcessor member | Per constant block slot (11), the version passed with set*Bytes in the current render encoder; 0 for none, cleared with the encoder state. | `src/xenia/gpu/metal/metal_command_processor.h` | 920 | 1 |
 | `msl_inline_constants_bound_versions_` | MetalCommandProcessor member | Per constant block slot (11), the version passed with set*Bytes in the current render encoder; 0 for none, cleared with the encoder state. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5215, 5223, 5496, 7313 | 4 |
-| `metal_log_shader_hashes` | cvar (GPU) | Comma-separated shader ucode hashes whose microcode disassembly and generated MSL are logged when translated ("Shader log" lines), and whose float constants the frame detail log adds per draw. Settings > Metal (generated section). | `src/xenia/gpu/metal/msl_shader.cc` | 63, 265 | 2 |
+| `metal_log_shader_hashes` | cvar (GPU) | Comma-separated shader ucode hashes whose microcode disassembly and generated MSL are logged when translated ("Shader log" lines), and whose float constants the frame detail log adds per draw. Settings > Metal (generated section). | `src/xenia/gpu/metal/msl_shader.cc` | 74, 276 | 2 |
 | `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/msl_shader.h` | 26 | 1 |
-| `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/msl_shader.cc` | 264, 1220 | 2 |
+| `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/msl_shader.cc` | 275, 1231 | 2 |
 | `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6012 | 1 |
-| `log_shader_lines` | lambda in MslTranslation::CompileToMsl | Logs a text line by line with the shader's stage, hash and modification. | `src/xenia/gpu/metal/msl_shader.cc` | 1223, 1237, 1238 | 3 |
-| `line_begin` | local in log_shader_lines | Start of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1224, 1225, 1226, 1233, 1234 | 6 |
-| `line_end` | local in log_shader_lines | End of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1226, 1227, 1228, 1233, 1234 | 5 |
+| `log_shader_lines` | lambda in MslTranslation::CompileToMsl | Logs a text line by line with the shader's stage, hash and modification. | `src/xenia/gpu/metal/msl_shader.cc` | 1234, 1248, 1249 | 3 |
+| `line_begin` | local in log_shader_lines | Start of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1235, 1236, 1237, 1244, 1245 | 6 |
+| `line_end` | local in log_shader_lines | End of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1237, 1238, 1239, 1244, 1245 | 5 |
 | `frame_detail_shader` | loop variable in IssueDrawMsl | The draw's vertex or pixel shader, for its float constants in the frame detail log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6009, 6011, 6012, 6015, 6018, 6033 | 6 |
 | `is_pixel` | local in IssueDrawMsl | frame_detail_shader is the pixel shader. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6015, 6023, 6032 | 3 |
 | `frame_detail_constants` | local in IssueDrawMsl | The shader's float constants for the log line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6016, 6026, 6033 | 3 |
@@ -1025,7 +1025,7 @@ further edits.
 | `trace_local_time` | local in IssueSwap | trace_time in the device time zone. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2839, 2840, 2843 | 3 |
 | `trace_folder` | local in IssueSwap | Folder name from the date and time. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2841, 2842, 2844 | 4 |
 | `LogKernelCallStackCode` | function in xe::kernel::shim | Logs the guest code around the caller and each return address of a stuck thread (first storm report). | `src/xenia/kernel/util/shim_utils.h` | 570 | 1 |
-| `LogKernelCallStackCode` | function in xe::kernel::shim | Logs the guest code around the caller and each return address of a stuck thread (first storm report). | `src/xenia/kernel/util/shim_utils.cc` | 132, 280, 284, 437, 851 | 5 |
+| `LogKernelCallStackCode` | function in xe::kernel::shim | Logs the guest code around the caller and each return address of a stuck thread (first storm report). | `src/xenia/kernel/util/shim_utils.cc` | 132, 280, 284, 437, 856 | 5 |
 | `kernel_call_returns` | local in LogKernelCallStackCode | The caller and the return addresses up the stack. | `src/xenia/kernel/util/shim_utils.cc` | 141, 155, 162 | 3 |
 | `kernel_call_return` | local in LogKernelCallStackCode | One of them. | `src/xenia/kernel/util/shim_utils.cc` | 162, 163, 164, 165, 180 | 6 |
 | `kernel_call_code_logged` | function-local static in LogKernelCallStackCode | Return addresses already dumped this run. | `src/xenia/kernel/util/shim_utils.cc` | 161, 165 | 2 |
@@ -1180,17 +1180,17 @@ further edits.
 | `paste_button` | local in the text setting editor | Pastes the clipboard into the field. | `src/xenia/ui/windowed_app_main_ios.mm` | 8609, 8610, 8612, 8613, 8614, 8623 | 6 |
 | `pasted` | local in the paste button handler | The clipboard text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8615, 8616, 8617 | 3 |
 | `text_stream` | local in ApplyGameConfigToSections | Writes an override as TOML text. | `src/xenia/ui/windowed_app_main_ios.mm` | 3992, 3993, 3994 | 3 |
-| `metal_share_argument_encoders` | cvar; iOS settings key | Share one texture/sampler argument encoder between shaders with the same argument buffer layout instead of reflecting each compiled function (default on). Settings > All Options: Metal. | `src/xenia/gpu/metal/msl_shader.cc` | 71, 316, 1554, 1556 | 4 |
-| `g_argument_encoder_cache_mutex` | file-local static (anonymous namespace) | Guards g_argument_encoder_cache (compile threads translate concurrently). | `src/xenia/gpu/metal/msl_shader.cc` | 319, 1560, 1571 | 3 |
-| `g_argument_encoder_cache` | file-local static (anonymous namespace) | Argument encoders by GetArgumentBufferLayoutKey, one reference each, kept for the process lifetime. | `src/xenia/gpu/metal/msl_shader.cc` | 320, 1561, 1562, 1572, 1581 | 5 |
-| `GetArgumentBufferLayoutKey` | function (anonymous namespace) | Hash of the spvDescriptorSetBuffer structs' member types and [[id]] slots (names left out) and the device; 0 if absent or unexpected. | `src/xenia/gpu/metal/msl_shader.cc` | 316, 327, 1557 | 3 |
-| `argument_buffer_layout_key` | local in CompileToMsl | This translation's layout key, 0 when sharing is off or the key could not be made. | `src/xenia/gpu/metal/msl_shader.cc` | 1555, 1559, 1561, 1570, 1573, 1579 | 6 |
-| `kStructPrefix` | constant in GetArgumentBufferLayoutKey | The text that starts an argument buffer struct in SPIRV-Cross output. | `src/xenia/gpu/metal/msl_shader.cc` | 329, 333 | 2 |
-| `struct_begin` | local in GetArgumentBufferLayoutKey | Position of the struct being read. | `src/xenia/gpu/metal/msl_shader.cc` | 332, 333, 335, 336, 342, 374 | 8 |
-| `struct_end` | local in GetArgumentBufferLayoutKey | Position of the struct's closing `};`. | `src/xenia/gpu/metal/msl_shader.cc` | 335, 337, 338, 345, 346, 374 | 6 |
-| `id_pos` | local in GetArgumentBufferLayoutKey | Position of a member's `[[id(` attribute. | `src/xenia/gpu/metal/msl_shader.cc` | 350, 351, 357, 371 | 4 |
-| `name_begin` | local in GetArgumentBufferLayoutKey | Start of the member name left out of the key. | `src/xenia/gpu/metal/msl_shader.cc` | 361, 362, 363, 364, 365, 367, 370 | 7 |
-| `device_address` | local in GetArgumentBufferLayoutKey | The device pointer, hashed into the key. | `src/xenia/gpu/metal/msl_shader.cc` | 379, 380, 381 | 3 |
+| `metal_share_argument_encoders` | cvar; iOS settings key | Share one texture/sampler argument encoder between shaders with the same argument buffer layout instead of reflecting each compiled function (default on). Settings > All Options: Metal. | `src/xenia/gpu/metal/msl_shader.cc` | 82, 327, 1570, 1572 | 4 |
+| `g_argument_encoder_cache_mutex` | file-local static (anonymous namespace) | Guards g_argument_encoder_cache (compile threads translate concurrently). | `src/xenia/gpu/metal/msl_shader.cc` | 330, 1576, 1587 | 3 |
+| `g_argument_encoder_cache` | file-local static (anonymous namespace) | Argument encoders by GetArgumentBufferLayoutKey, one reference each, kept for the process lifetime. | `src/xenia/gpu/metal/msl_shader.cc` | 331, 1577, 1578, 1588, 1597 | 5 |
+| `GetArgumentBufferLayoutKey` | function (anonymous namespace) | Hash of the spvDescriptorSetBuffer structs' member types and [[id]] slots (names left out) and the device; 0 if absent or unexpected. | `src/xenia/gpu/metal/msl_shader.cc` | 327, 338, 1573 | 3 |
+| `argument_buffer_layout_key` | local in CompileToMsl | This translation's layout key, 0 when sharing is off or the key could not be made. | `src/xenia/gpu/metal/msl_shader.cc` | 1571, 1575, 1577, 1586, 1589, 1595 | 6 |
+| `kStructPrefix` | constant in GetArgumentBufferLayoutKey | The text that starts an argument buffer struct in SPIRV-Cross output. | `src/xenia/gpu/metal/msl_shader.cc` | 340, 344 | 2 |
+| `struct_begin` | local in GetArgumentBufferLayoutKey | Position of the struct being read. | `src/xenia/gpu/metal/msl_shader.cc` | 343, 344, 346, 347, 353, 385 | 8 |
+| `struct_end` | local in GetArgumentBufferLayoutKey | Position of the struct's closing `};`. | `src/xenia/gpu/metal/msl_shader.cc` | 346, 348, 349, 356, 357, 385 | 6 |
+| `id_pos` | local in GetArgumentBufferLayoutKey | Position of a member's `[[id(` attribute. | `src/xenia/gpu/metal/msl_shader.cc` | 361, 362, 368, 382 | 4 |
+| `name_begin` | local in GetArgumentBufferLayoutKey | Start of the member name left out of the key. | `src/xenia/gpu/metal/msl_shader.cc` | 372, 373, 374, 375, 376, 378, 381 | 7 |
+| `device_address` | local in GetArgumentBufferLayoutKey | The device pointer, hashed into the key. | `src/xenia/gpu/metal/msl_shader.cc` | 390, 391, 392 | 3 |
 | `unresolved_calls` | static local in ResolveFunction (a64) | How many calls the a64 resolve thunk could not resolve (no function at the guest address); the first 16 are logged with the address and guest lr. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 905, 906 | 2 |
 | `host_crash_context` | local in Emulator::ExceptionCallback (ARM64) | Host registers of the fault, for the host PC, link register and JIT state registers in the crash dump. | `src/xenia/emulator.cc` | 1744, 1755, 1756, 1757, 1758 | 8 |
 | `host_code_start` | local in Emulator::ExceptionCallback (ARM64) | Start of the machine code of the guest function the host PC was mapped to, for the offset in the crash dump. | `src/xenia/emulator.cc` | 1745, 1751, 1752, 1753, 1754 | 6 |
@@ -1221,7 +1221,8 @@ further edits.
 | `would_load` | local lambda in TextureCache::GetUsedTexturePotentialLoadMask | Whether RequestTextures would load the texture for a key: none cached, or the cached one outdated (always with resolution scaling). | `src/xenia/gpu/texture_cache.cc` | 509, 533, 537, 540 | 4 |
 | `texture_it` | local in would_load | The cached texture for the key. | `src/xenia/gpu/texture_cache.cc` | 513, 514, 515, 516 | 4 |
 | `signed_key` | local in GetUsedTexturePotentialLoadMask | Key of the separate signed version; same name and role as in RequestTextures. | `src/xenia/gpu/texture_cache.cc` | 535, 536, 537 | 3 |
-| `metal_shader_fast_math` | cvar (bool, GPU) | Compile SPIRV-Cross Metal shaders with fast math (default on); off compiles IEEE math that keeps infinities and NaN, for games relying on 0 x infinity = 0 or on infinities (A/B for Spider-Man: Edge of Time). Settings > All Options: GPU. | `src/xenia/gpu/metal/msl_shader.cc` | 54, 1424, 1425 | 3 |
+| `metal_shader_fast_math` | cvar (bool, GPU) | Compile SPIRV-Cross Metal shaders with fast math (default on); off compiles IEEE math that keeps infinities and NaN, for games relying on 0 x infinity = 0 or on infinities (A/B for Spider-Man: Edge of Time). Settings > All Options: GPU. | `src/xenia/gpu/metal/msl_shader.cc` | 55, 65, 1439 | 3 |
+| `metal_vertex_shader_fast_math` | cvar (bool, GPU) | Vertex shaders also use fast math (default off): off keeps positions bit-identical between shaders computing them with different but equivalent instructions (depth pre-pass then an equal-depth pass, Spider-Man: Edge of Time's hypersense copies). Settings > All Options: GPU. | `src/xenia/gpu/metal/msl_shader.cc` | 54, 1441 | 2 |
 | `sleep_zero_backoff_us` | cvar (uint32, Kernel) | Sleep length for a guest thread polling with Sleep(0); 0 always yields. Default 50. | `src/xenia/kernel/xthread.cc` | 50, 1275 | 2 |
 | `sleep_zero_last_us` | thread_local in XThread::Delay | Time (us) of this thread's previous Sleep(0). | `src/xenia/kernel/xthread.cc` | 1273, 1281, 1285 | 3 |
 | `sleep_zero_run` | thread_local in XThread::Delay | Quick Sleep(0) calls in a row on this thread. | `src/xenia/kernel/xthread.cc` | 1274, 1281, 1283, 1287 | 4 |
@@ -2135,6 +2136,7 @@ further edits.
 | `scratch` | 4 |
 | `alpha` | 16 |
 | `half_shift` | 11 |
+| `metal_vertex_shader_fast_math` | 2 |
 
 ## Checks
 
