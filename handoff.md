@@ -3197,6 +3197,28 @@ For phase 2:
   pass's load action would save a store and a load per clear. 20 of 32
   transfers a frame are depth <-> colour reinterpretations of the same EDRAM
   (12.6 of 28.4 M samples), 11 MSAA changes (13.3 M).
+- Black Ops (08-15-37): menus 60 fps; gameplay 40-60 ms frames with draws
+  waiting for compiles ~130 times per 120 frames, GPU 35-47%. 544 compiles,
+  410 s of compiler time, although msl_source held 556 sources from earlier
+  runs (cached MSL skips SPIRV-Cross only; the Metal compile still runs, and
+  vertex shaders' options changed with metal_vertex_shader_fast_math, so
+  iOS's own compiler cache missed them). Stalls are queueing: "pending 11285
+  ms (queue 10980 ms, compile 305 ms)". The game's Backend thread (90-95%)
+  spins in 825AF918, which calls 824B4AA8 (reads 0x4188/0x4190 of the
+  device, ring buffer pointers) until a flag clears: waiting for the command
+  processor, which waits for compiles. jit glue is 14-16% of the Backend,
+  Server and Main threads.
+  MSL: median 74 KB, p90 167 KB, max 616 KB; a median shader is 1400 lines,
+  1200 of them the translated main function (1355 NoContraction helper calls
+  in the largest). Options: XeniOS's spirv2air (submodule
+  xenios-jp/spirv2air, f9bf68591: SPIR-V to AIR without the MSL front end,
+  83-86% less compile CPU, its metallib can be stored and loaded with
+  newLibraryWithData) -- needs our MSL bindings matched; or warming the
+  queue at title start from msl_source; or compile queue priority by draws
+  waiting.
+- Black Ops 2 GB trace (08-18-21, not uploaded): two frames, written in about
+  5 s; TraceWriter clears its memory read cache at each swap (9680, for
+  vertex data in zero-copy traces), so each frame stores everything it reads.
 - release_core_in_spin_waits is read when a function is compiled, so
   changing it in game only affects code compiled after; all GTA IV runs
   here launched with it on. A fair A/B needs it set before launch.
