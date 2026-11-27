@@ -1270,7 +1270,7 @@ further edits.
 | `spirv2air` | premake project name | Builds third_party/spirv2air. | `premake5.lua` | 827 | 1 |
 | `spirv2air` | premake project name | Builds third_party/spirv2air. | `src/xenia/gpu/metal/premake5.lua` | 36, 40 | 3 |
 | `spirv2air` | premake project name | Builds third_party/spirv2air. | `src/xenia/app/premake5.lua` | 242 | 1 |
-| `spirv2air` | premake project name | Builds third_party/spirv2air. | `third_party/spirv2air.lua` | 1, 5, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22 | 16 |
+| `spirv2air` | premake project name | Builds third_party/spirv2air. | `third_party/spirv2air.lua` | 1, 5, 11, 12, 13, 18, 21, 22, 23, 24, 25, 26 | 16 |
 | `msl_compile_frame_arrival_` | MetalCommandProcessor member | msl_compile_arrivals_ at the start of the frame: a pending shader whose latest entry is older is queued again. | `src/xenia/gpu/metal/metal_command_processor.h` | 650 | 1 |
 | `msl_compile_frame_arrival_` | MetalCommandProcessor member | msl_compile_arrivals_ at the start of the frame: a pending shader whose latest entry is older is queued again. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1045, 3114 | 2 |
 | `pending_it` | local in EnqueueMslShaderCompilation and MslShaderCompileThread | The shader's msl_shader_compile_pending_ entry (latest queue_arrival, UINT64_MAX while compiling). | `src/xenia/gpu/metal/metal_command_processor.cc` | 1043, 1044, 1045, 1057, 1060, 1250, 1252, 1253, 1257 | 9 |

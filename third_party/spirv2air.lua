@@ -11,6 +11,10 @@ project("spirv2air")
     "spirv2air/src",
     "spirv2air/src/spirv2air",
     "spirv2air/src/airbc",
+  })
+  -- translate.cpp includes <spirv/unified1/...> with angle brackets, which
+  -- Xcode only searches in header (not user header) search paths.
+  externalincludedirs({
     "spirv2air/include",
   })
   files({
