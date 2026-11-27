@@ -33,9 +33,11 @@ project("xenia-gpu-metal")
     "glslang-spirv",
     "metal-cpp",
     "spirv-cross",
+    "spirv2air",
   }
   includedirs {
     path.join(project_root, "third_party/glslang"),
+    path.join(project_root, "third_party/spirv2air/src/spirv2air"),
   }
 
   -- Shared source files (both MSC and SPIRV-Cross paths).

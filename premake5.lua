@@ -823,6 +823,9 @@ workspace("xenia")
   include("third_party/metal-shader-converter.lua")
   include("third_party/metal-cpp.lua")
   include("third_party/spirv-cross.lua")
+  if os.istarget("macosx") or is_ios_target() then
+    include("third_party/spirv2air.lua")
+  end
   include("third_party/miniaudio.lua")
   include("third_party/mspack.lua")
   include("third_party/snappy.lua")

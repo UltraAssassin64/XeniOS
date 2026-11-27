@@ -3224,6 +3224,54 @@ For phase 2:
   here launched with it on. A fair A/B needs it set before launch.
 
 
+### Owner's runs on build 9687 (6c4063e9f; rars "9687_logs", "9687_shaders") and the next build
+
+- EoT: hypersense copies and Spider-Man's glow show, with the right opacity
+  (16_16_16_16 source factor fix, 02122bff4). Vertex explosions now only at
+  moments of extreme movement, hard to reproduce.
+- Arkham City (keep-CB on globally in these runs): fine overall after the
+  FFmpeg update; one dialogue line missing after loading another save;
+  credits and subtitles flicker briefly (keep-CB, owner's guess; the read
+  watch is meant for this); audio stutters in the opening, where frames hitch
+  0.6-1.7 s while ~90 shaders compile (sc 89, wait 121 in one window).
+- GTA IV: draw pass attachment traffic down from 430-450 to about 260-380 MB a
+  frame (render areas average ~420 rows, was 588), transfers unchanged (~21
+  ms, ~115 MB). But thermal state 2 in every run, frames 65-90 ms with the GPU
+  only 42-57% busy: CPU bound, the audio thread (XThread0F07, guest DSP
+  8216D90C and XMA decode) at 75-81% plus compile waits.
+- Black Ops about the same (compile bound, see 9684).
+
+spirv2air (owner: start testing it, a fork may be needed for iOS 16):
+- Vendored at third_party/spirv2air from xenios-jp/spirv2air 84638cec9 (the
+  commit XeniOS pins; BSD-3), built by third_party/spirv2air.lua (Apple only:
+  its metallib writer uses CommonCrypto), linked into xenia-gpu-metal and the
+  iOS app. Changes for iOS 16 (XENIOS.md there): iOS floor 16 (upstream 18),
+  iOS 16 = AIR 2.5 / file version 2.6 / triple air64_v25-apple-ios16.0.0, iOS
+  17 = AIR 2.6, air.language_version Metal 3.0 below AIR 2.6. Unverified:
+  that iOS 16 loads these and accepts every intrinsic spirv2air emits.
+- metal_spirv2air_probe (default off): each shader the MSL path compiles is
+  also translated by spirv2air (our layout: 7 constant buffers, so shared
+  memory at 56/64 and texture index pointers at 72/80 of the top-level
+  argument buffer), loaded with newLibraryWithData and its "main" looked up;
+  "spirv2air probe" lines every 25 shaders give counts, rejection reasons and
+  average times against the MSL compile. Up to 16 rejected or refused
+  modules (.spv and .metallib) go to <shader storage>/<title>/spirv2air_probe.
+  Nothing draws with spirv2air yet.
+- Offline (Linux harness in the scratchpad, s2a/harness: guest ucode ->
+  SpirvShaderTranslator with the Metal features -> spirv2air iOS 16): every
+  shader of the EoT (171), Black Ops (177), Arkham City and GTA IV traces
+  translated, 1.4 ms (EoT) and 2.4 ms (Black Ops, max 13 ms) on average,
+  metallibs 6-15 KB, against ~750 ms a Metal Shading Language compile on the
+  device. Default modifications only; the device probe covers the real ones.
+- To draw with it: a binding path for spirv2air's layout (docs/bindings.md
+  there): a top-level argument buffer at buffer 2 with the constant buffer
+  pointers, shared memory pointers and per-stage texture index record
+  pointers, a resource heap (buffer 0, 24-byte records, texture
+  gpuResourceID at +8) and a sampler heap (buffer 1), useResource for every
+  texture; pipelines from spirv2air functions; fall back to MSL for a shader
+  it rejects. The metallib bytes can be cached on disk by (SPIR-V, options,
+  kVersion), so later launches skip compiling entirely.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

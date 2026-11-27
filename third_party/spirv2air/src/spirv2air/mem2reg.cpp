@@ -1,0 +1,603 @@
+// SSA promotion, as in Cytron et al. and LLVM's PromoteMemToReg: dominators by Cooper, Harvey and Kennedy, phis at the
+// iterated dominance frontier of each slot's stores, then one renaming walk over the dominator tree. Phis that turn out
+// to be trivial (one incoming value besides themselves) or unused are dropped afterwards. Every walk is iterative: the
+// largest corpus shader has over 6,000 blocks. Before that, arrays and structs addressed only with constant indices are
+// split into one alloca per element (scalar replacement of aggregates), so their elements can be promoted too.
+#include "spirv2air/mem2reg.h"
+
+#include <algorithm>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "airbc.h"
+
+namespace spirv2air {
+
+using namespace airbc;
+
+namespace {
+
+bool constantIndex(const Value* v, uint64_t& out) {
+  if (v->vk != Value::Const) return false;
+  const auto* c = static_cast<const Constant*>(v);
+  if (c->ck != Constant::Int && c->ck != Constant::Null) return false;
+  out = c->ck == Constant::Int ? c->bits : 0;
+  return true;
+}
+
+// A null, undef or poison constant: the same constant of each element type.
+bool uniformConstant(const Value* v) {
+  if (v->vk != Value::Const) return false;
+  auto ck = static_cast<const Constant*>(v)->ck;
+  return ck == Constant::Null || ck == Constant::Undef || ck == Constant::Poison;
+}
+
+Value* uniformElement(Module& m, const Value* v, Type* t) {
+  switch (static_cast<const Constant*>(v)->ck) {
+    case Constant::Undef: return m.constUndef(t);
+    case Constant::Poison: return m.constPoison(t);
+    default: return m.constNull(t);
+  }
+}
+
+// The last round's rewrite of splitAggregates, left to promoteAllocas' first walk over every operand: instructions
+// with an id (tag - base < n) are the split GEPs; dead ones are removed, and an operand with a replacement takes it.
+struct SplitRewrite {
+  uint32_t base = 0;
+  unsigned n = 0;
+  std::vector<Value*> repl;
+  std::vector<char> dead;
+  unsigned idOf(const Value* v) const { return v->tag - base < n && v->vk == Value::Inst ? v->tag - base : ~0u; }
+};
+
+// Splits each entry-block array or struct alloca whose only uses are GEPs `0, c, ...` with constant indices, and whole
+// stores of a null, undef or poison constant, into one alloca per element; a GEP `0, c` becomes element c's alloca and a
+// longer one a GEP into it, and a whole store a store to each element. Repeats until nothing splits, so nested
+// aggregates split level by level. The split aggregates leave the entry block here; the rest of the last round's
+// rewrite is left in `rewrite`, unless that round split a whole store (its element stores are inserted here).
+void splitAggregates(Module& m, Function* f, SplitRewrite& rewrite) {
+  BasicBlock* entry = f->blocks[0];
+  for (bool changed = true; changed;) {
+    changed = false;
+    // The aggregate allocas get ids 0..A-1 (tag - base), the GEPs on them the ids after them.
+    std::vector<Instruction*> aggregates;
+    for (Instruction* i : entry->insts)
+      if (i->op == Op::Alloca && (i->srcElemTy->kind == Type::Array || i->srcElemTy->kind == Type::Struct))
+        aggregates.push_back(i);
+    if (aggregates.empty()) break;
+    unsigned total = 0;
+    for (const BasicBlock* b : f->blocks) total += unsigned(b->insts.size());
+    const uint32_t base = m.allocTags(total);
+    const unsigned A = unsigned(aggregates.size());
+    unsigned next = A;
+    for (unsigned a = 0; a < A; ++a) aggregates[a]->tag = base + a;
+    auto aggregateOf = [&](const Value* v) -> int {
+      unsigned k = v->tag - base;
+      return k < A && v->vk == Value::Inst && aggregates[k] == v ? int(k) : -1;
+    };
+    std::vector<std::vector<Instruction*>> geps(A), stores(A);
+    std::vector<char> unsplittable(A, 0);
+    for (BasicBlock* b : f->blocks)
+      for (Instruction* i : b->insts)
+        for (size_t k = 0; k < i->ops.size(); ++k) {
+          int a = aggregateOf(i->ops[k]);
+          if (a < 0) continue;
+          const Type* t = aggregates[a]->srcElemTy;
+          uint64_t first = 1, c = 0;
+          bool ok = i->op == Op::GEP && k == 0 && i->ops.size() >= 3 && constantIndex(i->ops[1], first) && first == 0 &&
+                    constantIndex(i->ops[2], c) && c < (t->kind == Type::Array ? t->n : t->elems.size());
+          if (ok)
+            geps[a].push_back(i), i->tag = base + next++;
+          else if (i->op == Op::Store && k == 1 && !i->isVolatile && uniformConstant(i->ops[0]))
+            stores[a].push_back(i), i->tag = base + next++;
+          else
+            unsplittable[a] = 1;
+        }
+    std::vector<Value*> repl(next, nullptr);
+    std::vector<char> dead(next, 0);
+    std::vector<std::vector<Instruction*>> split(next);  // what replaces each split whole store
+    bool storesSplit = false;
+    std::vector<Instruction*> insts;
+    bool nested = false;  // an element is itself an aggregate, which the next round may split
+    for (Instruction* i : entry->insts) {
+      int a = aggregateOf(i);
+      bool splits = a >= 0 && !geps[a].empty() && !unsplittable[a];
+      if (!splits) insts.push_back(i);
+      if (!splits) continue;
+      std::unordered_map<uint64_t, Instruction*> elements;
+      for (Instruction* g : geps[a]) {
+        uint64_t c = 0;
+        constantIndex(g->ops[2], c);
+        Type* t = i->srcElemTy->kind == Type::Array ? i->srcElemTy->elem : i->srcElemTy->elems[c];
+        Instruction*& e = elements[c];
+        if (!e) {
+          e = m.newInst(Op::Alloca, m.ptrTy(t, 0));
+          e->srcElemTy = t;
+          e->align = i->align;
+          e->ops = {m.constInt(m.intTy(32), 1)};
+          insts.push_back(e);
+          nested |= t->kind == Type::Array || t->kind == Type::Struct;
+        }
+        if (g->ops.size() == 3) {
+          repl[g->tag - base] = e;
+          dead[g->tag - base] = 1;
+        } else {
+          g->srcElemTy = t;
+          g->ops.erase(g->ops.begin() + 2);
+          g->ops[0] = e;
+          g->ops[1] = m.constNull(g->ops[1]->type);
+        }
+      }
+      // A whole store of a uniform constant becomes a store of the element's constant to each element.
+      for (Instruction* st : stores[a]) {
+        std::vector<Instruction*>& into = split[st->tag - base];
+        std::vector<std::pair<uint64_t, Instruction*>> ordered(elements.begin(), elements.end());
+        std::sort(ordered.begin(), ordered.end());
+        for (auto& [c, e] : ordered) {
+          Instruction* es = m.newInst(Op::Store, st->type);
+          es->ops = {uniformElement(m, st->ops[0], e->srcElemTy), e};
+          es->align = st->align;
+          into.push_back(es);
+        }
+        dead[st->tag - base] = 1;
+        storesSplit = true;
+      }
+      dead[i->tag - base] = 1;
+      changed = true;
+    }
+    entry->insts = std::move(insts);
+    if (!changed) break;
+    // Instructions created above (the element allocas and stores) have tag 0, which is outside [base, base + next).
+    rewrite = {base, next, std::move(repl), std::move(dead)};
+    if (!nested && !storesSplit) break;
+    auto idOf = [&](const Value* v) { return rewrite.idOf(v); };
+    for (BasicBlock* b : f->blocks) {
+      std::vector<Instruction*> list;
+      list.reserve(b->insts.size());
+      for (Instruction* i : b->insts) {
+        unsigned k = idOf(i);
+        if (k == ~0u || !rewrite.dead[k]) {
+          list.push_back(i);
+          continue;
+        }
+        list.insert(list.end(), split[k].begin(), split[k].end());
+      }
+      b->insts = std::move(list);
+      for (Instruction* i : b->insts)
+        for (Value*& v : i->ops)
+          if (unsigned k = idOf(v); k != ~0u && rewrite.repl[k]) v = rewrite.repl[k];
+    }
+    rewrite = {};
+    if (!nested) break;
+  }
+}
+
+// A row of a compressed adjacency list.
+struct Row {
+  const int *first, *last;
+  const int* begin() const { return first; }
+  const int* end() const { return last; }
+  size_t size() const { return size_t(last - first); }
+};
+
+// Rewrites element loads and stores through a GEP `0, c` (constant c) on an entry-block vector alloca into whole-vector
+// ones, an extractelement after a load and an insertelement into the loaded vector before a store, when the alloca is
+// otherwise only loaded and stored whole. That leaves it promotable, and the lanes then go their own way in
+// scalarize.cpp, so a lane stored once and never read again no longer keeps its computation alive.
+void wholeVectorAccesses(Module& m, Function* f) {
+  std::vector<Instruction*> vectors;  // the entry block's vector allocas
+  for (Instruction* i : f->blocks[0]->insts)
+    if (i->op == Op::Alloca && i->srcElemTy->kind == Type::Vector) vectors.push_back(i);
+  if (vectors.empty()) return;
+  // Dense ids (tag - base) for the allocas, then for the element GEPs as they are met, so that asking of an operand
+  // "is this one of them" is a compare and not a hash lookup.
+  unsigned total = 0;
+  for (const BasicBlock* b : f->blocks) total += unsigned(b->insts.size());
+  const uint32_t base = m.allocTags(unsigned(vectors.size()) + total);
+  const uint32_t gepBase = base + uint32_t(vectors.size());
+  // The tags are scratch, but the split's table above is indexed by the ones the instructions had, so they come back.
+  std::vector<uint32_t> savedAllocaTags, savedGepTags;
+  for (size_t a = 0; a < vectors.size(); ++a) savedAllocaTags.push_back(vectors[a]->tag), vectors[a]->tag = base + uint32_t(a);
+  std::vector<char> rewritable(vectors.size(), 1);  // by alloca id: still rewritable
+  std::vector<Instruction*> geps;                   // the element GEPs, by id
+  std::vector<unsigned> gepAlloca;                  // ... and the alloca (id) each addresses
+  auto vectorOf = [&](const Value* v) -> int {
+    unsigned k = v->tag - base;
+    return k < vectors.size() && v->vk == Value::Inst && vectors[k] == v ? int(k) : -1;
+  };
+  auto gepOf = [&](const Value* v) -> int {
+    unsigned k = v->tag - gepBase;
+    return k < geps.size() && v->vk == Value::Inst && geps[k] == v ? int(k) : -1;
+  };
+  for (BasicBlock* b : f->blocks)
+    for (Instruction* i : b->insts)
+      for (size_t k = 0; k < i->ops.size(); ++k) {
+        const int a = vectorOf(i->ops[k]);
+        if (a < 0) continue;
+        const Type* t = vectors[a]->srcElemTy;
+        uint64_t first = 1, c = 0;
+        bool whole = !i->isVolatile && ((i->op == Op::Load && k == 0 && i->type == t) ||
+                                        (i->op == Op::Store && k == 1 && i->ops[0]->type == t));
+        bool element = i->op == Op::GEP && k == 0 && i->ops.size() == 3 && constantIndex(i->ops[1], first) &&
+                       first == 0 && constantIndex(i->ops[2], c) && c < t->n;
+        if (element) {
+          if (gepOf(i) < 0) {
+            savedGepTags.push_back(i->tag);
+            i->tag = gepBase + uint32_t(geps.size());
+            geps.push_back(i);
+            gepAlloca.push_back(unsigned(a));
+          } else {
+            gepAlloca[gepOf(i)] = unsigned(a);
+          }
+        } else if (!whole) {
+          rewritable[a] = 0;
+        }
+      }
+  // Every use of an element GEP has to be a non-volatile load or store of the element through it.
+  for (BasicBlock* b : f->blocks)
+    for (Instruction* i : b->insts)
+      for (size_t k = 0; k < i->ops.size(); ++k) {
+        const int g = gepOf(i->ops[k]);
+        if (g < 0) continue;
+        const Type* e = vectors[gepAlloca[g]]->srcElemTy->elem;
+        bool ok = !i->isVolatile && ((i->op == Op::Load && k == 0 && i->type == e) ||
+                                     (i->op == Op::Store && k == 1 && i->ops[0]->type == e));
+        if (!ok) rewritable[gepAlloca[g]] = 0;
+      }
+  auto restoreTags = [&] {
+    for (size_t a = 0; a < vectors.size(); ++a) vectors[a]->tag = savedAllocaTags[a];
+    for (size_t g = 0; g < geps.size(); ++g) geps[g]->tag = savedGepTags[g];
+  };
+  bool any = false;
+  for (unsigned a : gepAlloca) any |= rewritable[a] != 0;
+  if (!any) return restoreTags();
+  for (BasicBlock* b : f->blocks) {
+    std::vector<Instruction*> list;
+    list.reserve(b->insts.size());
+    for (Instruction* i : b->insts) {
+      Instruction* a = nullptr;
+      if (i->op == Op::GEP) {
+        const int g = gepOf(i);
+        if (g >= 0 && rewritable[gepAlloca[g]]) continue;  // its loads and stores no longer use it
+      }
+      size_t k = i->op == Op::Load ? 0 : i->op == Op::Store ? 1 : 2;
+      if (k < i->ops.size()) {
+        const int g = gepOf(i->ops[k]);
+        if (g >= 0 && rewritable[gepAlloca[g]]) a = vectors[gepAlloca[g]];
+      }
+      if (!a) {
+        list.push_back(i);
+        continue;
+      }
+      Value* index = static_cast<Instruction*>(i->ops[k])->ops[2];
+      Instruction* whole = m.newInst(Op::Load, a->srcElemTy);
+      whole->ops = {a};
+      whole->align = a->align;
+      list.push_back(whole);
+      if (i->op == Op::Load) {
+        // The load becomes the extract, keeping its identity for its users.
+        i->op = Op::ExtractElement;
+        i->ops = {whole, index};
+        i->align = 0;
+        list.push_back(i);
+      } else {
+        Instruction* insert = m.newInst(Op::InsertElement, a->srcElemTy);
+        insert->ops = {whole, i->ops[0], index};
+        list.push_back(insert);
+        i->ops = {insert, a};
+        i->align = a->align;
+        list.push_back(i);
+      }
+    }
+    b->insts = std::move(list);
+  }
+  restoreTags();
+}
+
+}  // namespace
+
+void promoteAllocas(Module& m, Function* f) {
+  if (f->blocks.empty()) return;
+  SplitRewrite split;
+  splitAggregates(m, f, split);
+  wholeVectorAccesses(m, f);
+  const std::vector<BasicBlock*>& blocks = f->blocks;
+  const size_t n = blocks.size();
+
+  // Slots: entry-block allocas used only as the address of whole-value, non-volatile loads and stores.
+  // Dense ids (tag - base) for what the later tables are indexed by: the entry block's allocas first, in order, then
+  // the loads and stores of slots as they are met. Phis made below get ids after all instructions.
+  std::vector<Instruction*> allocas;
+  for (Instruction* i : blocks[0]->insts)
+    if (i->op == Op::Alloca) allocas.push_back(i);
+  if (allocas.empty()) return;
+  const unsigned A = unsigned(allocas.size());
+  // An upper bound until the walk below removes the split's dead GEPs.
+  unsigned ninsts = 0;
+  for (const BasicBlock* b : blocks) ninsts += unsigned(b->insts.size());
+  uint32_t base = m.allocTags(ninsts);
+  unsigned nextId = A;
+  for (unsigned a = 0; a < A; ++a) allocas[a]->tag = base + a;
+  // The index of the entry-block alloca a value is, or -1.
+  auto allocaOf = [&](const Value* v) -> int {
+    unsigned k = v->tag - base;
+    return k < A && v->vk == Value::Inst && allocas[k] == v ? int(k) : -1;
+  };
+  std::vector<char> promotable(A, 1);
+  ninsts = 0;
+  for (BasicBlock* b : blocks) {
+    std::vector<Instruction*>& list = b->insts;
+    if (split.n) {
+      size_t kept = 0;
+      for (Instruction* i : list) {
+        if (unsigned k = split.idOf(i); k != ~0u && split.dead[k]) continue;
+        for (Value*& v : i->ops)
+          if (unsigned k = split.idOf(v); k != ~0u && split.repl[k]) v = split.repl[k];
+        list[kept++] = i;
+      }
+      list.resize(kept);
+    }
+    ninsts += unsigned(list.size());
+    for (Instruction* i : list)
+      for (size_t k = 0; k < i->ops.size(); ++k) {
+        int a = allocaOf(i->ops[k]);
+        if (a < 0) continue;
+        Type* t = allocas[a]->srcElemTy;
+        bool whole =
+            (i->op == Op::Load && k == 0 && i->type == t) || (i->op == Op::Store && k == 1 && i->ops[0]->type == t);
+        if (!whole || i->isVolatile) promotable[a] = 0;
+      }
+  }
+  std::vector<Instruction*> slots;
+  std::vector<int> slotIndex(A, -1);  // by alloca index
+  for (unsigned a = 0; a < A; ++a)
+    if (promotable[a]) slotIndex[a] = int(slots.size()), slots.push_back(allocas[a]);
+  if (slots.empty()) return;
+  const size_t nslots = slots.size();
+  // The slot a value is the address of, or -1.
+  auto slot = [&](const Value* v) -> int {
+    int a = allocaOf(v);
+    return a < 0 ? -1 : slotIndex[a];
+  };
+
+  // CFG. Edges are kept per terminator operand, so a switch with two cases to one block gives two edges, and that
+  // block's phis two entries for it, as LLVM requires. Block b's successors are succ[succAt[b] .. succAt[b + 1]), its
+  // predecessors likewise in pred.
+  const uint32_t bbase = m.allocTags(unsigned(n));
+  for (size_t b = 0; b < n; ++b) blocks[b]->tag = bbase + uint32_t(b);
+  auto edges = [&](size_t b) -> const decltype(Instruction::bbs)* {
+    if (blocks[b]->insts.empty()) return nullptr;
+    const Instruction* t = blocks[b]->insts.back();
+    return t->op == Op::Br || t->op == Op::Switch ? &t->bbs : nullptr;
+  };
+  std::vector<int> succAt(n + 1, 0), predAt(n + 1, 0);
+  for (size_t b = 0; b < n; ++b)
+    if (const auto* e = edges(b)) {
+      succAt[b + 1] = int(e->size());
+      for (BasicBlock* s : *e) ++predAt[s->tag - bbase + 1];
+    }
+  for (size_t b = 0; b < n; ++b) succAt[b + 1] += succAt[b], predAt[b + 1] += predAt[b];
+  std::vector<int> succ(static_cast<size_t>(succAt[n])), pred(static_cast<size_t>(predAt[n]));
+  std::vector<int> predFill(predAt.begin(), predAt.end() - 1);
+  for (size_t b = 0; b < n; ++b)
+    if (const auto* e = edges(b)) {
+      int k = succAt[b];
+      for (BasicBlock* s : *e) {
+        int j = int(s->tag - bbase);
+        succ[size_t(k++)] = j;
+        pred[size_t(predFill[size_t(j)]++)] = int(b);
+      }
+    }
+  auto succs = [&](size_t b) { return Row{succ.data() + succAt[b], succ.data() + succAt[b + 1]}; };
+  auto preds = [&](size_t b) { return Row{pred.data() + predAt[b], pred.data() + predAt[b + 1]}; };
+
+  // Postorder from the entry; blocks it never reaches keep po == -1.
+  std::vector<int> post, po(n, -1);
+  {
+    std::vector<char> seen(n, 0);
+    std::vector<std::pair<int, size_t>> stack{{0, 0}};
+    seen[0] = 1;
+    while (!stack.empty()) {
+      auto& [b, k] = stack.back();
+      if (Row r = succs(size_t(b)); k < r.size()) {
+        int s = r.first[k++];
+        if (!seen[s]) seen[s] = 1, stack.push_back({s, 0});
+      } else {
+        po[b] = int(post.size());
+        post.push_back(b);
+        stack.pop_back();
+      }
+    }
+  }
+  const std::vector<int> rpo(post.rbegin(), post.rend());
+
+  std::vector<int> idom(n, -1);
+  idom[0] = 0;
+  for (bool changed = true; changed;) {
+    changed = false;
+    for (int b : rpo) {
+      if (b == 0) continue;
+      int d = -1;
+      for (int p : preds(size_t(b))) {
+        if (idom[p] < 0) continue;
+        if (d < 0) {
+          d = p;
+          continue;
+        }
+        int x = p;
+        while (x != d) {
+          while (po[x] < po[d]) x = idom[x];
+          while (po[d] < po[x]) d = idom[d];
+        }
+      }
+      if (idom[b] != d) idom[b] = d, changed = true;
+    }
+  }
+
+  std::vector<std::vector<int>> frontier(n), children(n);
+  for (int b : rpo) {
+    if (b != 0) children[idom[b]].push_back(b);
+    if (preds(size_t(b)).size() < 2) continue;
+    for (int p : preds(size_t(b)))
+      for (int r = p; po[r] >= 0 && r != idom[b]; r = idom[r]) frontier[r].push_back(b);
+  }
+
+  // Phis at the iterated dominance frontier of each slot's reachable stores.
+  std::vector<std::vector<std::pair<unsigned, Instruction*>>> phis(n);
+  {
+    std::vector<std::vector<int>> defs(nslots);
+    for (int b : rpo)
+      for (const Instruction* i : blocks[b]->insts)
+        if (i->op == Op::Store) {
+          int a = slot(i->ops[1]);
+          if (a >= 0 && (defs[a].empty() || defs[a].back() != b)) defs[a].push_back(b);
+        }
+    std::vector<size_t> placed(n, ~size_t(0)), queued(n, ~size_t(0));
+    for (size_t a = 0; a < nslots; ++a) {
+      std::vector<int> work = defs[a];
+      for (int b : work) queued[b] = a;
+      while (!work.empty()) {
+        int b = work.back();
+        work.pop_back();
+        for (int d : frontier[b]) {
+          if (placed[d] == a) continue;
+          placed[d] = a;
+          phis[d].push_back({unsigned(a), m.newInst(Op::Phi, slots[a]->srcElemTy)});
+          if (queued[d] != a) queued[d] = a, work.push_back(d);
+        }
+      }
+    }
+  }
+
+  // The phis get the ids after the existing instructions (their own tag range).
+  unsigned nphis = 0;
+  for (auto& list : phis) nphis += unsigned(list.size());
+  const uint32_t pbase = m.allocTags(nphis);
+  const unsigned nIds = ninsts + nphis;
+  {
+    unsigned p = 0;
+    for (auto& list : phis)
+      for (auto& [a, phi] : list) phi->tag = pbase + p++;
+  }
+  // Renaming walk over the dominator tree.
+  std::vector<Value*> repl(nIds, nullptr);
+  std::vector<char> dead(nIds, 0);
+  auto idOf = [&](const Value* v) -> unsigned {
+    if (v->vk != Value::Inst) return ~0u;
+    if (unsigned k = v->tag - base; k < nextId) return k;
+    if (unsigned k = v->tag - pbase; k < nphis) return ninsts + k;
+    return ~0u;
+  };
+  auto number = [&](Instruction* i) -> unsigned {
+    if (i->tag - base >= nextId) i->tag = base + nextId++;
+    return i->tag - base;
+  };
+  auto resolve = [&](Value* v) {
+    for (unsigned k = idOf(v); k != ~0u && repl[k]; k = idOf(v)) v = repl[k];
+    return v;
+  };
+  std::vector<std::vector<Value*>> values(nslots);
+  auto current = [&](unsigned a) -> Value* {
+    return values[a].empty() ? m.constUndef(slots[a]->srcElemTy) : values[a].back();
+  };
+  auto slotOfUse = [&](const Instruction* i) -> int {
+    if (i->op != Op::Load && i->op != Op::Store) return -1;
+    return slot(i->ops[i->op == Op::Load ? 0 : 1]);
+  };
+  std::vector<std::vector<unsigned>> pushed(n);
+  std::vector<std::pair<int, bool>> walk{{0, false}};  // block, leaving
+  while (!walk.empty()) {
+    auto [b, leaving] = walk.back();
+    walk.pop_back();
+    if (leaving) {
+      for (unsigned a : pushed[b]) values[a].pop_back();
+      continue;
+    }
+    walk.push_back({b, true});
+    for (auto& [a, phi] : phis[b]) values[a].push_back(phi), pushed[b].push_back(a);
+    for (Instruction* i : blocks[b]->insts) {
+      int a = slotOfUse(i);
+      if (a < 0) continue;
+      if (i->op == Op::Load) {
+        repl[number(i)] = current(unsigned(a));
+      } else {
+        values[a].push_back(resolve(i->ops[0]));
+        pushed[b].push_back(unsigned(a));
+      }
+      dead[number(i)] = 1;
+    }
+    for (int s : succs(size_t(b)))
+      for (auto& [a, phi] : phis[s]) phi->ops.push_back(current(a)), phi->bbs.push_back(blocks[b]);
+    for (auto c = children[b].rbegin(); c != children[b].rend(); ++c) walk.push_back({*c, false});
+  }
+  // Unreachable blocks: their loads read undef, and they still need entries in the phis of reachable successors.
+  for (size_t b = 0; b < n; ++b) {
+    if (po[b] >= 0) continue;
+    for (Instruction* i : blocks[b]->insts) {
+      int a = slotOfUse(i);
+      if (a < 0) continue;
+      if (i->op == Op::Load) repl[number(i)] = m.constUndef(slots[a]->srcElemTy);
+      dead[number(i)] = 1;
+    }
+    for (int s : succs(size_t(b)))
+      for (auto& [a, phi] : phis[s])
+        phi->ops.push_back(m.constUndef(slots[a]->srcElemTy)), phi->bbs.push_back(blocks[b]);
+  }
+  for (Instruction* a : slots) dead[idOf(a)] = 1;
+
+  // Drop trivial phis until none is left; then one walk resolves every operand, removes the dead instructions and
+  // notes which inserted phis something else uses.
+  for (bool changed = true; changed;) {
+    changed = false;
+    for (auto& list : phis)
+      for (auto& [a, phi] : list) {
+        if (dead[idOf(phi)]) continue;
+        Value* same = nullptr;
+        bool trivial = true;
+        for (Value*& v : phi->ops) {
+          v = resolve(v);
+          if (v == phi || v == same) continue;
+          if (same) trivial = false;
+          same = v;
+        }
+        if (!trivial) continue;
+        repl[idOf(phi)] = same ? same : m.constUndef(phi->type);
+        dead[idOf(phi)] = 1;
+        changed = true;
+      }
+  }
+  std::vector<char> live(nIds, 0);
+  std::vector<Instruction*> work;
+  auto use = [&](Value* v) {
+    unsigned k = idOf(v);
+    if (k != ~0u && k >= ninsts && !dead[k] && !live[k]) live[k] = 1, work.push_back(static_cast<Instruction*>(v));
+  };
+  for (BasicBlock* b : blocks) {
+    std::vector<Instruction*>& insts = b->insts;
+    size_t kept = 0;
+    for (Instruction* i : insts) {
+      if (unsigned k = idOf(i); k != ~0u && dead[k]) continue;
+      for (Value*& v : i->ops) use(v = resolve(v));
+      insts[kept++] = i;
+    }
+    insts.resize(kept);
+  }
+  // Keep only the inserted phis something else uses.
+  while (!work.empty()) {
+    Instruction* phi = work.back();
+    work.pop_back();
+    for (Value*& v : phi->ops) use(v = resolve(v));
+  }
+
+  for (size_t b = 0; b < n; ++b) {
+    if (phis[b].empty()) continue;
+    std::vector<Instruction*>& insts = blocks[b]->insts;
+    std::vector<Instruction*> front;
+    for (auto& [a, phi] : phis[b])
+      if (live[idOf(phi)]) front.push_back(phi);
+    insts.insert(insts.begin(), front.begin(), front.end());
+  }
+}
+
+}  // namespace spirv2air

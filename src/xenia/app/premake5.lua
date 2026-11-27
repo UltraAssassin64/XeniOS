@@ -239,6 +239,7 @@ project("xenia-app")
       "xenia-gpu-metal",
       "xenia-ui-metal",
       "spirv-cross",
+      "spirv2air",
       "metal-cpp",
       "SDL2",
       "iconv",

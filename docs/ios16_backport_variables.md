@@ -1246,6 +1246,31 @@ further edits.
 | `SplitForPendingResolveOutput` | MetalCommandProcessor member function | The copy->draw split: ends the render pass and loads the textures (keep-CB), or commits the command buffer. | `src/xenia/gpu/metal/metal_command_processor.h` | 443 | 1 |
 | `SplitForPendingResolveOutput` | MetalCommandProcessor member function | The copy->draw split: ends the render pass and loads the textures (keep-CB), or commits the command buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3530, 4799, 5023 | 3 |
 | `known_texture_mask` | local in IssueDraw | Textures of already translated shaders, for splitting before the render pass begins. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3522, 3525, 3528, 3529, 3530 | 5 |
+| `metal_spirv2air_probe` | cvar (bool, Metal) | Also compile each guest shader with spirv2air (iOS 16 target) without drawing with it, and log Metal's acceptance, rejections and timings ("spirv2air probe"). | `src/xenia/gpu/metal/msl_shader.cc` | 95, 1817 | 2 |
+| `Spirv2airProbeStats` | struct (anonymous namespace) | metal_spirv2air_probe totals. | `src/xenia/gpu/metal/msl_shader.cc` | 130, 144, 212 | 3 |
+| `shaders` | member of Spirv2airProbeStats | Shaders probed. | `src/xenia/gpu/metal/msl_shader.cc` | 131, 213, 260, 267, 271, 274 | 7 |
+| `translated` | member of Spirv2airProbeStats | Shaders spirv2air translated. | `src/xenia/gpu/metal/msl_shader.cc` | 132, 223, 267, 271, 274 | 5 |
+| `libraries` | member of Spirv2airProbeStats | Libraries Metal accepted. | `src/xenia/gpu/metal/msl_shader.cc` | 133, 225, 268, 271 | 4 |
+| `functions` | member of Spirv2airProbeStats | Libraries whose main function Metal returned. | `src/xenia/gpu/metal/msl_shader.cc` | 134, 228, 265, 268, 272 | 5 |
+| `translate_ms` | member of Spirv2airProbeStats, local in ProbeSpirv2air | spirv2air translation time (sum over accepted shaders / of this shader). | `src/xenia/gpu/metal/msl_shader.cc` | 136, 174, 229, 272 | 5 |
+| `library_ms` | member of Spirv2airProbeStats, local in ProbeSpirv2air | newLibraryWithData plus newFunction time. | `src/xenia/gpu/metal/msl_shader.cc` | 137, 180, 206, 230, 273 | 6 |
+| `msl_library_ms` | member of Spirv2airProbeStats, parameter of ProbeSpirv2air | The Metal Shading Language library compile time of the same shader. | `src/xenia/gpu/metal/msl_shader.cc` | 138, 153, 231, 273 | 5 |
+| `rejections` | member of Spirv2airProbeStats, local in ProbeSpirv2air | spirv2air rejection reasons with counts (and their text for the summary). | `src/xenia/gpu/metal/msl_shader.cc` | 139, 217, 261, 262, 263, 274 | 6 |
+| `library_errors` | member of Spirv2airProbeStats | Metal library or function errors with counts. | `src/xenia/gpu/metal/msl_shader.cc` | 140, 234 | 2 |
+| `dumped` | member of Spirv2airProbeStats | Modules written to spirv2air_probe (at most 16). | `src/xenia/gpu/metal/msl_shader.cc` | 141, 243, 244 | 3 |
+| `g_spirv2air_probe_mutex` | global (anonymous namespace) | Guards g_spirv2air_probe_stats. | `src/xenia/gpu/metal/msl_shader.cc` | 143, 211 | 2 |
+| `g_spirv2air_probe_stats` | global (anonymous namespace) | The probe totals. | `src/xenia/gpu/metal/msl_shader.cc` | 144, 212 | 2 |
+| `ProbeSpirv2air` | function (anonymous namespace) | Compiles one shader's SPIR-V with spirv2air for this backend's layout, loads the library and records the result. | `src/xenia/gpu/metal/msl_shader.cc` | 151, 1818 | 2 |
+| `translate_begin` | local in ProbeSpirv2air | Start of the translation. | `src/xenia/gpu/metal/msl_shader.cc` | 172, 175 | 2 |
+| `library_error` | local in ProbeSpirv2air | Metal's error for the library or function. | `src/xenia/gpu/metal/msl_shader.cc` | 177, 198, 202, 233, 238 | 5 |
+| `library_ok` | local in ProbeSpirv2air | Metal accepted the library. | `src/xenia/gpu/metal/msl_shader.cc` | 178, 191, 224 | 3 |
+| `function_ok` | local in ProbeSpirv2air | Metal returned the main function. | `src/xenia/gpu/metal/msl_shader.cc` | 179, 195, 227 | 3 |
+| `library_begin` | local in ProbeSpirv2air | Start of the library load. | `src/xenia/gpu/metal/msl_shader.cc` | 183, 206 | 2 |
+| `accepted` | local in ProbeSpirv2air | Accepted shaders (at least 1) to average over. | `src/xenia/gpu/metal/msl_shader.cc` | 265, 268, 272, 273 | 6 |
+| `spirv2air` | premake project name | Builds third_party/spirv2air. | `premake5.lua` | 827 | 1 |
+| `spirv2air` | premake project name | Builds third_party/spirv2air. | `src/xenia/gpu/metal/premake5.lua` | 36, 40 | 3 |
+| `spirv2air` | premake project name | Builds third_party/spirv2air. | `src/xenia/app/premake5.lua` | 242 | 1 |
+| `spirv2air` | premake project name | Builds third_party/spirv2air. | `third_party/spirv2air.lua` | 1, 5, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22 | 16 |
 
 ## Total references per name
 
@@ -1601,7 +1626,7 @@ further edits.
 | `MetalGpuPassPipeline` | 4 |
 | `vertex_translation` | 10 |
 | `pixel_translation` | 18 |
-| `shaders` | 6 |
+| `shaders` | 13 |
 | `features` | 22 |
 | `texture_samples` | 6 |
 | `NoteDraw` | 4 |
@@ -2169,9 +2194,38 @@ further edits.
 | `DrawReadsPendingResolveOutput` | 4 |
 | `SplitForPendingResolveOutput` | 4 |
 | `known_texture_mask` | 5 |
+| `metal_spirv2air_probe` | 2 |
+| `Spirv2airProbeStats` | 3 |
+| `translated` | 5 |
+| `libraries` | 4 |
+| `functions` | 5 |
+| `translate_ms` | 5 |
+| `library_ms` | 6 |
+| `msl_library_ms` | 5 |
+| `rejections` | 6 |
+| `library_errors` | 2 |
+| `dumped` | 3 |
+| `g_spirv2air_probe_mutex` | 2 |
+| `g_spirv2air_probe_stats` | 2 |
+| `ProbeSpirv2air` | 2 |
+| `translate_begin` | 2 |
+| `library_error` | 5 |
+| `library_ok` | 3 |
+| `function_ok` | 3 |
+| `library_begin` | 2 |
+| `accepted` | 6 |
+| `spirv2air` | 21 |
 
 ## Checks
 
+- `third_party/spirv2air` is copied from xenios-jp/spirv2air 84638cec9 (BSD-3, the
+  commit XeniOS pins), changed only to target iOS 16 (its XENIOS.md lists the
+  changes), so its names are not listed. In `ProbeSpirv2air` the locals
+  `to_ms`, `options`, `bindings`, `offset`, `result`, `pool`, `data`, `error`,
+  `library`, `function`, `stage`, `lock`, `stats`, `dump`, `reason`, `ec`,
+  `base`, `spv`, `metallib` and `count` are named as the same locals are
+  elsewhere in `msl_shader.cc` and in XeniOS's Metal code (`dump_dir` as in
+  this file's MSL failure dump), so they are not listed.
 - `depth_attachment` and `stencil_attachment` in `BeginCommandBuffer` (the
   attachment textures keying `render_area_by_attachments_`) are render pass
   attachment descriptors, as the same names are elsewhere in
