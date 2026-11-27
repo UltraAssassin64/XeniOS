@@ -542,13 +542,13 @@ void XmaContextNew::Decode(XMA_CONTEXT_DATA* data) {
 
   PrepareDecoder(data->sample_rate, bool(data->is_stereo));
   PreparePacket(packet_info.current_frame_size_, padding_start);
-  // Every frame is output, as on the hardware. FFmpeg gives no samples for
-  // the first frame after the codec is opened (it only keeps that frame's
-  // overlap for the next one) or for a frame it cannot decode; those frames
-  // are output as silence (raw_frame_ is zeroed above). Dropping them left a
-  // buffer one frame short, and the guest's voice then never finished: in
-  // Batman: Arkham City every voice whose first frame was dropped was never
-  // reused, so a dialogue line never ended and voices ran out over time.
+  // Every frame is output, as on the hardware. A frame FFmpeg gives no
+  // samples for (one it cannot decode; before FFmpeg dfc5a3993 also the first
+  // frame after the codec was opened) is output as silence (raw_frame_ is
+  // zeroed above). Dropping them left a buffer one frame short, and the
+  // guest's voice then never finished: in Batman: Arkham City every voice
+  // whose first frame was dropped was never reused, so a dialogue line never
+  // ended and voices ran out over time.
   if (DecodePacket(av_context_, av_packet_, av_frame_)) {
     // dump_raw(av_frame_, id());
     ConvertFrame(reinterpret_cast<const uint8_t**>(&av_frame_->data),

@@ -3119,6 +3119,24 @@ For phase 2:
   (held_guest_signals_) and adapts per destination; with keep-CB our fences
   are already written at command buffer completion, so start without those.
 
+### Owner's runs on build 9684 (rars "xenia" = Library/Caches/xenia, "com.UltraAssassin64.xenios.ios" = Metal's caches, "9684_gpu-1", zip "9684_logs") and the next build
+
+- FFmpeg moved to dfc5a3993 (owner's go-ahead; what XeniOS and xenia-edge
+  HEAD use): first frame after open no longer skipped (d980192), decode
+  errors returned as AVERROR_INVALIDDATA and a flush callback (c4f4407),
+  output starts 192 samples earlier, at the point the samples are final, and
+  a stream's last frame is no longer held back (3913ff9), cut loop-end frames
+  marked by bit 0 of the packet's first byte (9307052; our PreparePacket
+  leaves it 0, as our loop handling cuts the loop start instead), frames
+  whose data ends early play (dfc5a39). Every file our premake lists exists
+  in the new tree, XeniOS's CMake list for it is a subset of ours (plus
+  libswresample, which we don't use), and the only config macro the new
+  headers add (CONFIG_CBS_LCEVC) is in code we don't build. Our frame loop
+  still outputs silence for a frame with no samples; with the new FFmpeg
+  that is only an undecodable frame (logged "Error sending packet").
+  If Arkham City's dialogue stalls again, compare against XmaContextNew's
+  first-frame handling (handoff: "Arkham City root cause").
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings
