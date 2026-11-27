@@ -79,6 +79,33 @@ namespace MslArgumentBufferId {
 constexpr uint32_t kSamplerBase = MslTextureIndex::kMaxPerStage;
 }  // namespace MslArgumentBufferId
 
+// Shaders compiled with spirv2air (metal_shader_compiler "spirv2air") read
+// their resources through a top-level argument buffer of 64-bit pointers: the
+// seven constant buffers by SPIR-V binding, shared memory for reading and for
+// writing, and the vertex and fragment stages' texture index records. Textures
+// and samplers come from heaps of 24-byte records, a texture's handle 8 bytes
+// in and a sampler's at the start. Textures and then samplers go in one heap,
+// so a resource's heap index is its SPIR-V binding and every stage's index
+// records are {binding, binding}. The buffer indices are ones the Metal
+// Shading Language path doesn't use.
+namespace Spirv2airLayout {
+constexpr uint32_t kResourceHeapBuffer = 9;
+constexpr uint32_t kSamplerHeapBuffer = 10;
+constexpr uint32_t kArgumentBuffer = 11;
+constexpr uint32_t kConstantBufferCount = 7;
+constexpr uint32_t kSharedMemoryReadOffset = kConstantBufferCount * 8;
+constexpr uint32_t kSharedMemoryWriteOffset = kSharedMemoryReadOffset + 8;
+constexpr uint32_t kVertexTextureIndicesOffset = kSharedMemoryWriteOffset + 8;
+constexpr uint32_t kFragmentTextureIndicesOffset =
+    kVertexTextureIndicesOffset + 8;
+constexpr uint32_t kArgumentBufferBytes = kFragmentTextureIndicesOffset + 8;
+constexpr uint32_t kHeapRecordBytes = 24;
+constexpr uint32_t kHeapTextureHandleOffset = 8;
+// Index records in the {binding, binding} table, enough for any stage's
+// textures and samplers.
+constexpr uint32_t kMaxBindings = 256;
+}  // namespace Spirv2airLayout
+
 }  // namespace metal
 }  // namespace gpu
 }  // namespace xe

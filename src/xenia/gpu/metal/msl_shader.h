@@ -46,9 +46,16 @@ class MslShader : public SpirvShader {
 
     MTL::Library* metal_library() const { return metal_library_; }
     MTL::Function* metal_function() const { return metal_function_; }
+    // With metal_shader_compiler "spirv2air": the function spirv2air compiled
+    // instead of the Metal Shading Language one. A pipeline takes all its
+    // shaders from one of the two, as their stage interfaces differ; a later
+    // CompileToMsl call adds the Metal Shading Language one.
+    MTL::Function* spirv2air_function() const { return spirv2air_function_; }
     const std::string& msl_source() const { return msl_source_; }
     const std::string& entry_point_name() const { return entry_point_name_; }
-    bool is_valid() const { return metal_function_ != nullptr; }
+    bool is_valid() const {
+      return metal_function_ != nullptr || spirv2air_function_ != nullptr;
+    }
     bool uses_argument_buffers() const { return uses_argument_buffers_; }
     MTL::ArgumentEncoder* argument_encoder() const { return argument_encoder_; }
     uint32_t argument_encoder_alignment() const {
@@ -67,6 +74,8 @@ class MslShader : public SpirvShader {
    private:
     MTL::Library* metal_library_ = nullptr;
     MTL::Function* metal_function_ = nullptr;
+    MTL::Library* spirv2air_library_ = nullptr;
+    MTL::Function* spirv2air_function_ = nullptr;
     bool uses_argument_buffers_ = false;
     MTL::ArgumentEncoder* argument_encoder_ = nullptr;
     uint32_t argument_encoder_alignment_ = 0;

@@ -831,6 +831,10 @@ MetalCommandProcessor::~MetalCommandProcessor() {
     null_buffer_->release();
     null_buffer_ = nullptr;
   }
+  if (spirv2air_texture_indices_) {
+    spirv2air_texture_indices_->release();
+    spirv2air_texture_indices_ = nullptr;
+  }
   if (null_texture_) {
     null_texture_->release();
     null_texture_ = nullptr;
@@ -1842,6 +1846,26 @@ bool MetalCommandProcessor::SetupContext() {
   null_buffer_->setLabel(
       NS::String::string("NullBuffer", NS::UTF8StringEncoding));
   std::memset(null_buffer_->contents(), 0, kNullBufferSize);
+
+  // The index records of every spirv2air stage: {binding, binding}
+  // (Spirv2airLayout).
+  spirv2air_texture_indices_ =
+      device_->newBuffer(Spirv2airLayout::kMaxBindings * 2 * sizeof(uint32_t),
+                         MTL::ResourceStorageModeShared);
+  if (!spirv2air_texture_indices_) {
+    XELOGE("Failed to create the spirv2air texture index records");
+    return false;
+  }
+  spirv2air_texture_indices_->setLabel(
+      NS::String::string("Spirv2airTextureIndices", NS::UTF8StringEncoding));
+  {
+    uint32_t* records =
+        static_cast<uint32_t*>(spirv2air_texture_indices_->contents());
+    for (uint32_t i = 0; i < Spirv2airLayout::kMaxBindings; ++i) {
+      records[i * 2] = i;
+      records[i * 2 + 1] = i;
+    }
+  }
 
   // Create a 1x1x1 placeholder 2D array texture for unbound texture slots
   // Xbox 360 textures are typically 2D arrays (for texture atlases, cubemaps)
@@ -4993,6 +5017,40 @@ bool MetalCommandProcessor::IssueDrawMsl(
     }
   }
 
+  // metal_shader_compiler "spirv2air": a pipeline takes all its shaders from
+  // spirv2air or all from the Metal Shading Language, as their stage
+  // interfaces differ, and tessellated draws only the latter. A shader that
+  // only has a spirv2air function gets the other one here, at once, where it
+  // goes with one that has none.
+  const bool use_spirv2air =
+      !is_tessellated && vertex_translation->spirv2air_function() &&
+      (!pixel_translation || pixel_translation->spirv2air_function());
+  if (!use_spirv2air) {
+    for (MslShader::MslTranslation* translation :
+         {vertex_translation, pixel_translation}) {
+      if (!translation || translation->metal_function()) {
+        continue;
+      }
+      static std::atomic<uint32_t> spirv2air_msl_fallbacks{0};
+      if (spirv2air_msl_fallbacks.fetch_add(1, std::memory_order_relaxed) <
+          16) {
+        XELOGI(
+            "spirv2air: compiling {} shader {:016X} mod {:016X} with the "
+            "Metal Shading Language as well, for a draw whose other shader "
+            "or tessellation can't use spirv2air",
+            translation->shader().type() == xenos::ShaderType::kVertex
+                ? "vertex"
+                : "pixel",
+            translation->shader().ucode_data_hash(),
+            translation->modification());
+      }
+      if (!translation->CompileToMsl(device_, kIsIos)) {
+        XELOGE("SPIRV-Cross: Failed to prepare shader MSL/library/function");
+        return false;
+      }
+    }
+  }
+
   // Create or retrieve pipeline state.
   MTL::RenderPipelineState* pipeline = nullptr;
   MslPipelineCompileStatus pipeline_compile_status =
@@ -5001,14 +5059,15 @@ bool MetalCommandProcessor::IssueDrawMsl(
     pipeline = GetOrCreateMslTessPipelineState(
         vertex_translation, pixel_translation, host_vertex_shader_type, regs);
   } else {
-    pipeline = GetOrCreateMslPipelineState(
-        vertex_translation, pixel_translation, regs, &pipeline_compile_status);
+    pipeline =
+        GetOrCreateMslPipelineState(vertex_translation, pixel_translation, regs,
+                                    use_spirv2air, &pipeline_compile_status);
     while (!pipeline &&
            pipeline_compile_status == MslPipelineCompileStatus::kPending &&
            WaitForMslCompileProgress()) {
-      pipeline =
-          GetOrCreateMslPipelineState(vertex_translation, pixel_translation,
-                                      regs, &pipeline_compile_status);
+      pipeline = GetOrCreateMslPipelineState(
+          vertex_translation, pixel_translation, regs, use_spirv2air,
+          &pipeline_compile_status);
     }
   }
   if (!pipeline) {
@@ -5278,7 +5337,9 @@ bool MetalCommandProcessor::IssueDrawMsl(
   // metal_inline_shader_constants: each constant block is passed with
   // set*Bytes when it changed since it was last passed in this render encoder,
   // instead of written to this draw's tables in a pooled uniform buffer.
-  const bool inline_constants = cvars::metal_inline_shader_constants;
+  // spirv2air shaders read the blocks through pointers, so from the tables.
+  const bool inline_constants =
+      cvars::metal_inline_shader_constants && !use_spirv2air;
   uint8_t* uniforms_vertex = nullptr;
   uint8_t* uniforms_pixel = nullptr;
   if (!inline_constants) {
@@ -5864,11 +5925,144 @@ bool MetalCommandProcessor::IssueDrawMsl(
     UseRenderEncoderResource(argbuf_buffer, MTL::ResourceUsageRead);
     return true;
   };
-  if (vertex_uses_argbuf &&
+  // spirv2air: each stage gets its top-level argument buffer (the stage's
+  // constant tables, shared memory and the {binding, binding} index records)
+  // and one heap of its textures and then its samplers (Spirv2airLayout),
+  // bound as both the resource and the sampler heap.
+  auto bind_spirv2air_stage = [&](MslShader* shader,
+                                  bool is_pixel_stage) -> bool {
+    const auto& texture_bindings = shader->GetTextureBindingsAfterTranslation();
+    const auto& sampler_bindings = shader->GetSamplerBindingsAfterTranslation();
+    const uint32_t texture_count = uint32_t(texture_bindings.size());
+    const uint32_t record_count =
+        texture_count + uint32_t(sampler_bindings.size());
+    if (record_count > Spirv2airLayout::kMaxBindings) {
+      XELOGE("spirv2air: {} textures and samplers, more than {}", record_count,
+             Spirv2airLayout::kMaxBindings);
+      return false;
+    }
+    // Constant buffer offsets are aligned to 256 bytes on macOS.
+    constexpr uint32_t kSliceAlignment = kIsIos ? 16 : 256;
+    constexpr uint32_t kHeapOffset =
+        (Spirv2airLayout::kArgumentBufferBytes + kSliceAlignment - 1) &
+        ~(kSliceAlignment - 1);
+    MTL::Buffer* slice_buffer = nullptr;
+    NS::UInteger slice_offset = 0;
+    if (!AcquireSpirvArgumentBufferSlice(
+            kHeapOffset +
+                std::max(record_count, 1u) * Spirv2airLayout::kHeapRecordBytes,
+            kSliceAlignment, &slice_buffer, &slice_offset)) {
+      XELOGE("spirv2air: Failed to allocate an argument buffer slice");
+      return false;
+    }
+    uint8_t* slice =
+        static_cast<uint8_t*>(slice_buffer->contents()) + slice_offset;
+
+    uint64_t argument_buffer[Spirv2airLayout::kArgumentBufferBytes /
+                             sizeof(uint64_t)] = {};
+    const uint64_t uniforms_address = uniforms_buffer_->gpuAddress();
+    const uint64_t stage_uniforms =
+        uniforms_address + (is_pixel_stage ? ps_base_offset : vs_base_offset);
+    // SPIR-V bindings 0 to 6: system, float vertex, float pixel, bool/loop,
+    // fetch, clip plane and tessellation constants, from the stage's table
+    // (a stage's float constants are its table's second block).
+    argument_buffer[0] = stage_uniforms + 0 * kCBVSize;
+    argument_buffer[1] = uniforms_address + vs_base_offset + 1 * kCBVSize;
+    argument_buffer[2] = uniforms_address + ps_base_offset + 1 * kCBVSize;
+    argument_buffer[3] = stage_uniforms + 2 * kCBVSize;
+    argument_buffer[4] = stage_uniforms + 3 * kCBVSize;
+    argument_buffer[5] = stage_uniforms + 4 * kCBVSize;
+    argument_buffer[6] = stage_uniforms + 5 * kCBVSize;
+    const uint64_t shared_memory_address =
+        shared_mem_buffer ? shared_mem_buffer->gpuAddress() : 0;
+    argument_buffer[Spirv2airLayout::kSharedMemoryReadOffset / 8] =
+        shared_memory_address;
+    argument_buffer[Spirv2airLayout::kSharedMemoryWriteOffset / 8] =
+        shared_memory_address;
+    const uint64_t indices_address = spirv2air_texture_indices_->gpuAddress();
+    argument_buffer[Spirv2airLayout::kVertexTextureIndicesOffset / 8] =
+        indices_address;
+    argument_buffer[Spirv2airLayout::kFragmentTextureIndicesOffset / 8] =
+        indices_address;
+    std::memcpy(slice, argument_buffer, sizeof(argument_buffer));
+
+    uint8_t* heap = slice + kHeapOffset;
+    std::memset(heap, 0, record_count * Spirv2airLayout::kHeapRecordBytes);
+    MetalTextureCache* metal_texture_cache = texture_cache_.get();
+    for (uint32_t i = 0; i < texture_count; ++i) {
+      const auto& binding = texture_bindings[i];
+      MTL::Texture* texture = texture_cache_->GetTextureForBinding(
+          binding.fetch_constant, binding.dimension, binding.is_signed);
+      if (!texture) {
+        switch (binding.dimension) {
+          case xenos::FetchOpDimension::k3DOrStacked:
+            texture = metal_texture_cache->GetNullTexture3D();
+            break;
+          case xenos::FetchOpDimension::kCube:
+            texture = metal_texture_cache->GetNullTextureCube();
+            break;
+          default:
+            texture = metal_texture_cache->GetNullTexture2D();
+            break;
+        }
+      }
+      if (!texture) {
+        continue;
+      }
+      const MTL::ResourceID handle = texture->gpuResourceID();
+      std::memcpy(heap + i * Spirv2airLayout::kHeapRecordBytes +
+                      Spirv2airLayout::kHeapTextureHandleOffset,
+                  &handle, sizeof(handle));
+      UseRenderEncoderResource(texture, MTL::ResourceUsageRead);
+    }
+    for (uint32_t i = texture_count; i < record_count; ++i) {
+      MTL::SamplerState* sampler_state = texture_cache_->GetOrCreateSampler(
+          texture_cache_->GetSamplerParameters(
+              sampler_bindings[i - texture_count]));
+      if (!sampler_state) {
+        sampler_state = null_sampler_;
+      }
+      const MTL::ResourceID handle = sampler_state->gpuResourceID();
+      std::memcpy(heap + i * Spirv2airLayout::kHeapRecordBytes, &handle,
+                  sizeof(handle));
+    }
+
+    if (is_pixel_stage) {
+      current_render_encoder_->setFragmentBuffer(
+          slice_buffer, slice_offset, Spirv2airLayout::kArgumentBuffer);
+      current_render_encoder_->setFragmentBuffer(
+          slice_buffer, slice_offset + kHeapOffset,
+          Spirv2airLayout::kResourceHeapBuffer);
+      current_render_encoder_->setFragmentBuffer(
+          slice_buffer, slice_offset + kHeapOffset,
+          Spirv2airLayout::kSamplerHeapBuffer);
+    } else {
+      current_render_encoder_->setVertexBuffer(
+          slice_buffer, slice_offset, Spirv2airLayout::kArgumentBuffer);
+      current_render_encoder_->setVertexBuffer(
+          slice_buffer, slice_offset + kHeapOffset,
+          Spirv2airLayout::kResourceHeapBuffer);
+      current_render_encoder_->setVertexBuffer(
+          slice_buffer, slice_offset + kHeapOffset,
+          Spirv2airLayout::kSamplerHeapBuffer);
+    }
+    UseRenderEncoderResource(slice_buffer, MTL::ResourceUsageRead);
+    return true;
+  };
+  if (use_spirv2air) {
+    if (!texture_cache_ || !bind_spirv2air_stage(msl_vertex_shader, false) ||
+        (msl_pixel_shader && !bind_spirv2air_stage(msl_pixel_shader, true))) {
+      return false;
+    }
+    UseRenderEncoderResource(spirv2air_texture_indices_,
+                             MTL::ResourceUsageRead);
+  }
+
+  if (!use_spirv2air && vertex_uses_argbuf &&
       !bind_msl_argument_buffer(msl_vertex_shader, vertex_translation, false)) {
     return false;
   }
-  if (pixel_uses_argbuf &&
+  if (!use_spirv2air && pixel_uses_argbuf &&
       !bind_msl_argument_buffer(msl_pixel_shader, pixel_translation, true)) {
     return false;
   }
@@ -6040,11 +6234,11 @@ bool MetalCommandProcessor::IssueDrawMsl(
     *cached_binding_uid = binding_uid;
   };
 
-  if (!vertex_uses_argbuf) {
+  if (!use_spirv2air && !vertex_uses_argbuf) {
     bind_msl_textures(msl_vertex_shader, vertex_translation, false);
     bind_msl_samplers(msl_vertex_shader, vertex_translation, false);
   }
-  if (!pixel_uses_argbuf) {
+  if (!use_spirv2air && !pixel_uses_argbuf) {
     bind_msl_textures(msl_pixel_shader, pixel_translation, true);
     bind_msl_samplers(msl_pixel_shader, pixel_translation, true);
   }
@@ -11463,12 +11657,20 @@ MetalCommandProcessor::GetCurrentSpirvPixelShaderModification(
 MTL::RenderPipelineState* MetalCommandProcessor::GetOrCreateMslPipelineState(
     MslShader::MslTranslation* vertex_translation,
     MslShader::MslTranslation* pixel_translation, const RegisterFile& regs,
-    MslPipelineCompileStatus* compile_status_out) {
+    bool spirv2air, MslPipelineCompileStatus* compile_status_out) {
   if (compile_status_out) {
     *compile_status_out = MslPipelineCompileStatus::kFailed;
   }
-  if (!vertex_translation || !vertex_translation->metal_function()) {
-    XELOGE("SPIRV-Cross: No valid vertex shader function");
+  MTL::Function* vertex_function =
+      vertex_translation ? (spirv2air ? vertex_translation->spirv2air_function()
+                                      : vertex_translation->metal_function())
+                         : nullptr;
+  MTL::Function* fragment_function =
+      pixel_translation ? (spirv2air ? pixel_translation->spirv2air_function()
+                                     : pixel_translation->metal_function())
+                        : nullptr;
+  if (!vertex_function || (pixel_translation && !fragment_function)) {
+    XELOGE("SPIRV-Cross: No valid vertex or pixel shader function");
     return nullptr;
   }
 
@@ -11553,9 +11755,11 @@ MTL::RenderPipelineState* MetalCommandProcessor::GetOrCreateMslPipelineState(
     uint32_t normalized_color_mask;
     uint32_t alpha_to_mask_enable;
     uint32_t blendcontrol[4];
+    uint32_t spirv2air;
   } key_data = {};
   key_data.vs = vertex_translation;
   key_data.ps = pixel_translation;
+  key_data.spirv2air = spirv2air ? 1 : 0;
   key_data.sample_count = sample_count;
   key_data.depth_format = uint32_t(depth_format);
   key_data.stencil_format = uint32_t(stencil_format);
@@ -11614,9 +11818,8 @@ MTL::RenderPipelineState* MetalCommandProcessor::GetOrCreateMslPipelineState(
     request.pixel_shader_hash = pixel_translation->shader().ucode_data_hash();
     request.pixel_modification = pixel_translation->modification();
   }
-  request.vertex_function = vertex_translation->metal_function();
-  request.fragment_function =
-      pixel_translation ? pixel_translation->metal_function() : nullptr;
+  request.vertex_function = vertex_function;
+  request.fragment_function = fragment_function;
   request.sample_count = sample_count;
   request.depth_format = depth_format;
   request.stencil_format = stencil_format;

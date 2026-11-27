@@ -430,10 +430,12 @@ class MetalCommandProcessor : public CommandProcessor {
   MTL::RenderPipelineState* CreateMslPipelineState(
       const MslPipelineCompileRequest& request, std::string* error_out);
   void MslShaderCompileThread(size_t thread_index);
+  // spirv2air: the pipeline takes the shaders' spirv2air functions instead of
+  // the Metal Shading Language ones.
   MTL::RenderPipelineState* GetOrCreateMslPipelineState(
       MslShader::MslTranslation* vertex_translation,
       MslShader::MslTranslation* pixel_translation, const RegisterFile& regs,
-      MslPipelineCompileStatus* compile_status_out = nullptr);
+      bool spirv2air, MslPipelineCompileStatus* compile_status_out = nullptr);
   // Whether a draw using these textures reads what a resolve still in the open
   // command buffer wrote (copy_resolve_writes_pending_), and the split that
   // makes it see it: the render pass ended and the textures loaded
@@ -796,6 +798,8 @@ class MetalCommandProcessor : public CommandProcessor {
 
   // Null resources for unbound slots (shared between MSC and SPIRV-Cross)
   MTL::Buffer* null_buffer_ = nullptr;
+  // {binding, binding} index records for spirv2air shaders (Spirv2airLayout).
+  MTL::Buffer* spirv2air_texture_indices_ = nullptr;
   MTL::Texture* null_texture_ = nullptr;
   MTL::SamplerState* null_sampler_ = nullptr;
 

@@ -3289,6 +3289,72 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   metallib disk cache; if it refuses them, the error text and the saved
   .metallib show what to change in the AIR 2.5 target.
 
+### Owner's runs on build 9691 (f7e270ba5; spirv2air probe on in four games) and the next build
+
+- Probe (metal_spirv2air_probe): every shader translated and loaded on iOS
+  16.5.1, none rejected, no spirv2air_probe folder. Per accepted shader
+  spirv2air + library vs the Metal Shading Language compile of the same
+  shader: EoT 425 shaders 1.26 + 0.03 ms vs 93.99 ms, Black Ops 800 shaders
+  6.55 + 0.10 ms vs 828.99 ms, GTA IV 350 shaders 2.19 + 0.04 ms vs 121.90 ms
+  (2.05 + 0.03 ms vs 3.73 ms on the second run, Metal's cache warm), Arkham
+  City 1050 shaders 3.47 +
+  0.08 ms vs 264.54 ms.
+- Owner: Black Ops' main menu draws much faster (compile queue newest first),
+  GTA IV runs well a little longer. Two Arkham City dialogue lines were
+  skipped ("treated as if it ends already as it starts"; one in 9687 too),
+  and GTA IV's radio "doubles up on itself".
+- XMA, compared with 9684 (FFmpeg d1963569): the only audio change between
+  them is FFmpeg dfc5a3993 (468008a25); 281648837's file read changes only
+  move watch callbacks. The decoder now decodes the first frame after open
+  (was dropped, and output as silence by our 59cb4515c), outputs a frame's
+  samples 192 samples earlier (delay 64 instead of 256; the last frame of a
+  stream comes out whole), returns an error for frames that overrun their
+  length (were decoded anyway) and plays frames whose data ends early (as
+  before), and takes a cut flag. Samples per frame are unchanged, and the
+  9687/9691 logs have no decode error lines, so no FFmpeg-only mechanism was
+  found for either report. Our XmaContextNew predated the whole XeniOS series
+  that went with that FFmpeg (37bf631a3..0ce969b9e), and review found errors
+  of our own: DWORD 1 read loop_subframe_end from bits 14-16 (XMASetLoopData
+  puts it in 12-13) and took bits 24-26 (decode_subframe, the seek subframe)
+  for output padding; XMASetLoopData read its XMA_LOOP_DATA as a whole
+  context, so every loop it set was garbage; XMAInitializeContext cleared the
+  context after writing it, which reset the title's read offset to the
+  buffer start; the position moved past a frame before it was output (input
+  buffers released early); split frames waiting for a late buffer set a
+  sticky error_status 4; loop_end 0 with a loop count looped the first frame;
+  ConvertFrame truncated on ARM64. edcad3c19 ports XeniOS HEAD's
+  xma_context_new.h/.cc, the DWORD 1 layout, ConvertFrame's NEON path, the
+  allocation-time zeroing and the two kernel fixes; kept: the frame-with-no-
+  samples-as-silence rule and our diagnostics; not ported: work buffer
+  pointer, XMABlockWhileInUse and XMADisableContext (need XeniOS's guest
+  scheduler). If either report remains, compare xma_decoder = "old" on the
+  same spot, and an XMA debug log (log_level debug, APU) of it shows the
+  context positions.
+- spirv2air drawing path (metal_shader_compiler = "spirv2air", default
+  "msl"): CompileToMsl compiles vertex and fragment shaders with spirv2air
+  (GetSpirv2airOptions: Spirv2airLayout buffer indices 9-11, seven constant
+  buffers, native vertex_id and unmodified positions as SPIRV-Cross gives
+  them), falling back to SPIRV-Cross for a module spirv2air rejects or Metal
+  refuses; libraries go to metal_shader_disk_cache keyed by the SPIR-V, the
+  spirv2air version and kSpirv2airOptionsRevision. A pipeline takes all its
+  functions from one compiler (the stage interfaces differ: user(texcoordN)
+  against SPIRV-Cross's names), so a shader paired with one that has no
+  spirv2air function, or used in a tessellated draw, also gets the Metal
+  Shading Language one, compiled at once (first 16 logged). Draws: constants
+  come from the uniform tables (metal_inline_shader_constants is skipped for
+  them, as the shaders read the blocks through pointers); each stage gets a
+  slice with its top-level argument buffer (the stage table's seven blocks,
+  shared memory twice, the index records) and one heap of its textures then
+  samplers (texture handle at +8, sampler at +0, 24-byte records), bound as
+  both heaps, with a static {binding, binding} index table, since texture k
+  is SPIR-V binding k and sampler j binding texture count + j. Textures get
+  useResource. Totals log as "spirv2air compiler" lines.
+- Not done / to check on the device: invariance and fast math (spirv2air's
+  AIR doesn't take MTLCompileOptions: EoT's equal-depth passes and anything
+  that relied on metal_vertex_shader_fast_math off need a look), the per-draw
+  heap is rewritten every draw (cache it like the argument buffer path if it
+  shows in the CPU profile), tessellation stays on SPIRV-Cross.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

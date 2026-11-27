@@ -37,6 +37,7 @@
 #include "xenia/base/logging.h"
 #include "xenia/gpu/gpu_flags.h"
 #include "xenia/gpu/metal/metal_perf_counters.h"
+#include "xenia/gpu/metal/metal_shader_cache.h"
 #include "xenia/gpu/metal/msl_bindings.h"
 
 DEFINE_bool(
@@ -101,6 +102,15 @@ DEFINE_bool(
     "lines). The first modules it rejects or Metal refuses are written to "
     "spirv2air_probe in the title's shader storage.",
     "Metal");
+DEFINE_string(
+    metal_shader_compiler, "msl",
+    "Guest shader compiler.\n"
+    " msl: SPIR-V -> Metal Shading Language with SPIRV-Cross, compiled by "
+    "Metal.\n"
+    " spirv2air: SPIR-V -> AIR directly (third_party/spirv2air), falling back "
+    "to msl for shaders it can't translate or Metal refuses, and for "
+    "tessellated draws. Its libraries are kept with metal_shader_disk_cache.",
+    "Metal");
 
 namespace xe {
 namespace gpu {
@@ -126,12 +136,15 @@ std::filesystem::path GetMslSourceCachePathLocked(uint64_t cache_key) {
   return g_msl_source_cache_directory / name;
 }
 
-// metal_spirv2air_probe totals, under g_spirv2air_probe_mutex.
+// spirv2air totals (metal_spirv2air_probe or metal_shader_compiler
+// "spirv2air"), under g_spirv2air_probe_mutex.
 struct Spirv2airProbeStats {
   uint32_t shaders = 0;
   uint32_t translated = 0;
   uint32_t libraries = 0;
   uint32_t functions = 0;
+  // Of the shaders whose library came from metal_shader_disk_cache.
+  uint32_t cached = 0;
   // Of the shaders Metal accepted the function of.
   double translate_ms = 0.0;
   double library_ms = 0.0;
@@ -143,40 +156,100 @@ struct Spirv2airProbeStats {
 std::mutex g_spirv2air_probe_mutex;
 Spirv2airProbeStats g_spirv2air_probe_stats;
 
-// metal_spirv2air_probe: compiles a shader's SPIR-V with spirv2air for the
-// resource layout of this backend's SPIR-V (seven constant buffers, so the
-// slots after them move up by 8 bytes from spirv2air's defaults) and loads
-// the library, recording what Metal makes of it next to the time the Metal
-// Shading Language compile of the same shader took.
-void ProbeSpirv2air(MTL::Device* device, bool is_ios, const uint32_t* words,
-                    size_t word_count, bool is_vertex, uint64_t shader_hash,
-                    uint64_t modification, double msl_library_ms) {
-  auto to_ms = [](std::chrono::steady_clock::duration duration) {
-    return std::chrono::duration<double, std::milli>(duration).count();
-  };
+// Bump when GetSpirv2airOptions changes, for the cached libraries.
+constexpr uint64_t kSpirv2airOptionsRevision = 1;
+
+// spirv2air options for this backend's SPIR-V and draw path
+// (Spirv2airLayout): seven constant buffers, so the slots after them move up
+// by 8 bytes from spirv2air's defaults, and the vertex index and position as
+// SPIRV-Cross gives them to the Metal Shading Language shaders.
+spirv2air::Options GetSpirv2airOptions(bool is_ios) {
   spirv2air::Options options;
   options.platform =
       is_ios ? spirv2air::Platform::IOS : spirv2air::Platform::MacOS;
   options.minOsMajor = is_ios ? 16 : 14;
+  options.vertexIndexRelativeToBase = false;
+  options.positionInfToNan = false;
   spirv2air::GraphicsBindings& bindings = options.graphics;
-  // SpirvShaderTranslator's constant buffers, system to tessellation (SpirvCbv
-  // below).
-  bindings.constantBufferCount = 7;
-  uint32_t offset = bindings.constantBaseOffset +
-                    bindings.constantStride * bindings.constantBufferCount;
-  bindings.sharedMemoryReadOffset = offset;
-  bindings.sharedMemoryWriteOffset = offset + 8;
-  bindings.vertexTextureIndicesOffset = offset + 16;
-  bindings.fragmentTextureIndicesOffset = offset + 24;
+  bindings.resourceHeapBuffer = Spirv2airLayout::kResourceHeapBuffer;
+  bindings.samplerHeapBuffer = Spirv2airLayout::kSamplerHeapBuffer;
+  bindings.argumentBuffer = Spirv2airLayout::kArgumentBuffer;
+  // Tessellation stays on the Metal Shading Language path, and the EDRAM
+  // binding (set 0 binding 1, the counter's by default) is only declared with
+  // fragment shader interlock, which this path doesn't use.
+  bindings.controlPointBuffer = -1;
+  bindings.occlusionCounterBuffer = -1;
+  bindings.constantBufferCount = Spirv2airLayout::kConstantBufferCount;
+  bindings.sharedMemoryReadOffset = Spirv2airLayout::kSharedMemoryReadOffset;
+  bindings.sharedMemoryWriteOffset = Spirv2airLayout::kSharedMemoryWriteOffset;
+  bindings.vertexTextureIndicesOffset =
+      Spirv2airLayout::kVertexTextureIndicesOffset;
+  bindings.fragmentTextureIndicesOffset =
+      Spirv2airLayout::kFragmentTextureIndicesOffset;
+  bindings.descriptorStride = Spirv2airLayout::kHeapRecordBytes;
+  bindings.textureHandleOffset = Spirv2airLayout::kHeapTextureHandleOffset;
+  bindings.samplerHandleOffset = 0;
+  return options;
+}
+
+// The execution model of the module's first entry point.
+spv::ExecutionModel GetSpirvExecutionModel(const uint32_t* words,
+                                           size_t word_count) {
+  for (size_t i = 5; i < word_count;) {
+    const uint32_t word_count_op = words[i] >> 16;
+    if (!word_count_op) {
+      break;
+    }
+    if ((words[i] & 0xFFFF) == uint32_t(spv::OpEntryPoint) &&
+        i + 1 < word_count) {
+      return spv::ExecutionModel(words[i + 1]);
+    }
+    i += word_count_op;
+  }
+  return spv::ExecutionModelMax;
+}
+
+// Compiles a shader's SPIR-V with spirv2air (GetSpirv2airOptions) and loads
+// the library and its function "main", recording in the spirv2air totals
+// whether spirv2air translates it and Metal accepts it, and the time taken
+// (against the Metal Shading Language compile of the same shader for the
+// probe, msl_library_ms). With cache_key, the library is looked up in and
+// stored to metal_shader_disk_cache. The first modules it rejects or Metal
+// refuses are written to spirv2air_probe in the title's shader storage.
+// Returns false, with nothing to release, where it fails.
+bool CompileSpirv2air(MTL::Device* device, bool is_ios, const uint32_t* words,
+                      size_t word_count, bool is_vertex, uint64_t shader_hash,
+                      uint64_t modification, double msl_library_ms,
+                      uint64_t cache_key, MTL::Library** library_out,
+                      MTL::Function** function_out) {
+  *library_out = nullptr;
+  *function_out = nullptr;
+  auto to_ms = [](std::chrono::steady_clock::duration duration) {
+    return std::chrono::duration<double, std::milli>(duration).count();
+  };
 
   const auto translate_begin = std::chrono::steady_clock::now();
-  spirv2air::Result result = spirv2air::translate(words, word_count, options);
+  spirv2air::Result result;
+  bool cached = false;
+  if (cache_key) {
+    MetalShaderCache::CachedMetallib cached_metallib;
+    if (g_metal_shader_cache->Load(cache_key, &cached_metallib) &&
+        cached_metallib.function_name == "main" &&
+        !cached_metallib.metallib_data.empty()) {
+      result.metallib = std::move(cached_metallib.metallib_data);
+      cached = true;
+    }
+  }
+  if (!cached) {
+    result =
+        spirv2air::translate(words, word_count, GetSpirv2airOptions(is_ios));
+  }
   const double translate_ms =
       to_ms(std::chrono::steady_clock::now() - translate_begin);
 
   std::string library_error;
-  bool library_ok = false;
-  bool function_ok = false;
+  MTL::Library* library = nullptr;
+  MTL::Function* function = nullptr;
   double library_ms = 0.0;
   if (result.ok()) {
     NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
@@ -185,19 +258,16 @@ void ProbeSpirv2air(MTL::Device* device, bool is_ios, const uint32_t* words,
         dispatch_data_create(result.metallib.data(), result.metallib.size(),
                              nullptr, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
     NS::Error* error = nullptr;
-    MTL::Library* library = device->newLibrary(data, &error);
+    library = device->newLibrary(data, &error);
     dispatch_release(data);
     if (library) {
-      library_ok = true;
-      MTL::Function* function = library->newFunction(
+      function = library->newFunction(
           NS::String::string("main", NS::UTF8StringEncoding));
-      if (function) {
-        function_ok = true;
-        function->release();
-      } else {
+      if (!function) {
         library_error = "no function main";
+        library->release();
+        library = nullptr;
       }
-      library->release();
     } else {
       library_error = error && error->localizedDescription()
                           ? error->localizedDescription()->utf8String()
@@ -205,6 +275,10 @@ void ProbeSpirv2air(MTL::Device* device, bool is_ios, const uint32_t* words,
     }
     library_ms = to_ms(std::chrono::steady_clock::now() - library_begin);
     pool->release();
+    if (function && cache_key && !cached) {
+      g_metal_shader_cache->Store(cache_key, "main", result.metallib.data(),
+                                  result.metallib.size());
+    }
   }
 
   const char* stage = is_vertex ? "VS" : "PS";
@@ -215,17 +289,20 @@ void ProbeSpirv2air(MTL::Device* device, bool is_ios, const uint32_t* words,
   if (!result.ok()) {
     std::string reason = result.error.substr(0, 120);
     if (stats.rejections[reason]++ == 0) {
-      XELOGW("spirv2air probe: rejected {} {:016X} mod {:016X}: {}", stage,
+      XELOGW("spirv2air: rejected {} {:016X} mod {:016X}: {}", stage,
              shader_hash, modification, result.error);
     }
     dump = true;
   } else {
     ++stats.translated;
-    if (library_ok) {
+    if (library) {
       ++stats.libraries;
     }
-    if (function_ok) {
+    if (function) {
       ++stats.functions;
+      if (cached) {
+        ++stats.cached;
+      }
       stats.translate_ms += translate_ms;
       stats.library_ms += library_ms;
       stats.msl_library_ms += msl_library_ms;
@@ -233,8 +310,8 @@ void ProbeSpirv2air(MTL::Device* device, bool is_ios, const uint32_t* words,
       std::string reason = library_error.substr(0, 200);
       if (stats.library_errors[reason]++ == 0) {
         XELOGW(
-            "spirv2air probe: Metal refused the library of {} {:016X} mod "
-            "{:016X}: {}",
+            "spirv2air: Metal refused the library of {} {:016X} mod {:016X}: "
+            "{}",
             stage, shader_hash, modification, library_error);
       }
       dump = true;
@@ -263,15 +340,39 @@ void ProbeSpirv2air(MTL::Device* device, bool is_ios, const uint32_t* words,
       rejections += fmt::format("; {}x {}", count, reason);
     }
     double accepted = std::max(stats.functions, 1u);
+    std::string msl_compile;
+    if (stats.msl_library_ms > 0.0) {
+      msl_compile = fmt::format(" vs Metal Shading Language compile {:.2f} ms",
+                                stats.msl_library_ms / accepted);
+    }
     XELOGI(
-        "spirv2air probe ({}, iOS 16 target): {} shaders, {} translated, {} "
-        "libraries and {} functions accepted by Metal; per accepted shader "
-        "spirv2air {:.2f} ms + library {:.2f} ms vs Metal Shading Language "
-        "compile {:.2f} ms; {} rejected{}",
+        "spirv2air {} ({}, iOS 16 target): {} shaders, {} translated, {} "
+        "libraries and {} functions accepted by Metal ({} from the disk "
+        "cache); per accepted shader spirv2air {:.2f} ms + library {:.2f} "
+        "ms{}; {} rejected{}",
+        cvars::metal_shader_compiler == "spirv2air" ? "compiler" : "probe",
         spirv2air::kVersion, stats.shaders, stats.translated, stats.libraries,
-        stats.functions, stats.translate_ms / accepted,
-        stats.library_ms / accepted, stats.msl_library_ms / accepted,
+        stats.functions, stats.cached, stats.translate_ms / accepted,
+        stats.library_ms / accepted, msl_compile,
         stats.shaders - stats.translated, rejections);
+  }
+  *library_out = library;
+  *function_out = function;
+  return function != nullptr;
+}
+
+// metal_spirv2air_probe: compiles a shader's SPIR-V with spirv2air as well
+// and loads the library, without drawing with it.
+void ProbeSpirv2air(MTL::Device* device, bool is_ios, const uint32_t* words,
+                    size_t word_count, bool is_vertex, uint64_t shader_hash,
+                    uint64_t modification, double msl_library_ms) {
+  MTL::Library* library = nullptr;
+  MTL::Function* function = nullptr;
+  if (CompileSpirv2air(device, is_ios, words, word_count, is_vertex,
+                       shader_hash, modification, msl_library_ms, 0, &library,
+                       &function)) {
+    function->release();
+    library->release();
   }
 }
 
@@ -603,6 +704,14 @@ MslShader::MslTranslation::~MslTranslation() {
   if (metal_library_) {
     metal_library_->release();
     metal_library_ = nullptr;
+  }
+  if (spirv2air_function_) {
+    spirv2air_function_->release();
+    spirv2air_function_ = nullptr;
+  }
+  if (spirv2air_library_) {
+    spirv2air_library_->release();
+    spirv2air_library_ = nullptr;
   }
 }
 
@@ -987,6 +1096,41 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
   const uint32_t* spirv_words =
       reinterpret_cast<const uint32_t*>(spirv_data.data());
   size_t spirv_word_count = spirv_data.size() / sizeof(uint32_t);
+
+  // metal_shader_compiler "spirv2air": a vertex or fragment shader is
+  // compiled with spirv2air first, and with SPIRV-Cross where that fails. A
+  // second call, for a pipeline whose other shader has no spirv2air function,
+  // compiles the Metal Shading Language version.
+  if (cvars::metal_shader_compiler == "spirv2air" && !spirv2air_function_ &&
+      !metal_function_) {
+    const spv::ExecutionModel spirv2air_model =
+        GetSpirvExecutionModel(spirv_words, spirv_word_count);
+    if (spirv2air_model == spv::ExecutionModelVertex ||
+        spirv2air_model == spv::ExecutionModelFragment) {
+      uint64_t spirv2air_cache_key = 0;
+      if (cvars::metal_shader_disk_cache && g_metal_shader_cache &&
+          g_metal_shader_cache->IsInitialized()) {
+        spirv2air_cache_key = XXH3_64bits_withSeed(
+            spirv_words, spirv_word_count * sizeof(uint32_t),
+            XXH3_64bits_withSeed(
+                spirv2air::kVersion, std::strlen(spirv2air::kVersion),
+                kSpirv2airOptionsRevision * 2 + (is_ios ? 1 : 0)));
+      }
+      if (CompileSpirv2air(device, is_ios, spirv_words, spirv_word_count,
+                           shader().type() == xenos::ShaderType::kVertex,
+                           shader().ucode_data_hash(), modification(), 0.0,
+                           spirv2air_cache_key, &spirv2air_library_,
+                           &spirv2air_function_)) {
+        const double total_compile_ms =
+            to_ms(std::chrono::steady_clock::now() - compile_begin);
+        metal_perf_counters.shader_compiles.fetch_add(
+            1, std::memory_order_relaxed);
+        metal_perf_counters.shader_compile_us.fetch_add(
+            uint64_t(total_compile_ms * 1000.0), std::memory_order_relaxed);
+        return true;
+      }
+    }
+  }
 
   // SPIRV-Cross throws exceptions on translation errors.  We catch them
   // below and return false so the draw can be skipped gracefully instead
@@ -1814,7 +1958,8 @@ bool MslShader::MslTranslation::CompileToMsl(MTL::Device* device, bool is_ios) {
 
   XELOGD("MslShader: Successfully created Metal function '{}'",
          entry_point_name_);
-  if (cvars::metal_spirv2air_probe) {
+  if (cvars::metal_spirv2air_probe &&
+      cvars::metal_shader_compiler != "spirv2air") {
     ProbeSpirv2air(device, is_ios, spirv_words, spirv_word_count,
                    shader().type() == xenos::ShaderType::kVertex,
                    shader().ucode_data_hash(), modification(),
