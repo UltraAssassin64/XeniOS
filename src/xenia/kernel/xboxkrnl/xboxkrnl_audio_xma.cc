@@ -226,6 +226,10 @@ dword_result_t XMAInitializeContext_entry(
     return X_E_FALSE;
   }
 
+  // Reset the decoder's state for the context first: the Clear also resets
+  // the read offset, which comes from the init struct.
+  StoreXmaContextIndexedRegister(kernel_state(), 0x1A80, context_ptr);
+
   std::memset(context_ptr, 0, sizeof(XMA_CONTEXT_DATA));
 
   XMA_CONTEXT_DATA context(context_ptr);
@@ -242,7 +246,8 @@ dword_result_t XMAInitializeContext_entry(
 
   // context.work_buffer = context_init->work_buffer;  // ?
   context.subframe_decode_count = context_init->subframe_decode_count;
-  context.is_stereo = context_init->channel_count >= 1;
+  // Channel count is 0-based: only bit 0 is used.
+  context.is_stereo = context_init->channel_count & 1;
   context.sample_rate = context_init->sample_rate;
 
   context.loop_start = context_init->loop_data.loop_start;
@@ -253,15 +258,13 @@ dword_result_t XMAInitializeContext_entry(
 
   context.Store(context_ptr);
 
-  StoreXmaContextIndexedRegister(kernel_state(), 0x1A80, context_ptr);
-
   return 0;
 }
 DECLARE_XBOXKRNL_EXPORT2(XMAInitializeContext, kAudio, kImplemented,
                          kHighFrequency);
 
 dword_result_t XMASetLoopData_entry(lpvoid_t context_ptr,
-                                    pointer_t<XMA_CONTEXT_DATA> loop_data) {
+                                    pointer_t<XMA_LOOP_DATA> loop_data) {
   XMA_CONTEXT_DATA context(context_ptr);
 
   context.loop_start = loop_data->loop_start;
