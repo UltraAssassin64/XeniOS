@@ -17,6 +17,7 @@
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -433,6 +434,13 @@ class MetalCommandProcessor : public CommandProcessor {
       MslShader::MslTranslation* vertex_translation,
       MslShader::MslTranslation* pixel_translation, const RegisterFile& regs,
       MslPipelineCompileStatus* compile_status_out = nullptr);
+  // Whether a draw using these textures reads what a resolve still in the open
+  // command buffer wrote (copy_resolve_writes_pending_), and the split that
+  // makes it see it: the render pass ended and the textures loaded
+  // (metal_resolve_keep_command_buffer), or the command buffer committed.
+  bool DrawReadsPendingResolveOutput(uint32_t used_texture_mask,
+                                     const RegisterFile& regs);
+  void SplitForPendingResolveOutput(uint32_t used_texture_mask);
 
   // Metal device and command queue (from provider)
   MTL::Device* device_ = nullptr;
@@ -457,15 +465,16 @@ class MetalCommandProcessor : public CommandProcessor {
   // needs (its scissor's right edge, and the lower of its scissor's bottom
   // and the height the render target cache estimates it uses; 0 for the whole
   // target), the area of the current render encoder (0 for the whole
-  // target), and per render pass descriptor the largest area in this frame
-  // and in the previous one ({width, height, previous width, previous
-  // height}), so steady-state frames rarely restart passes to grow them.
+  // target), and per set of attachments the largest area in this frame and
+  // in the previous one ({width, height, previous width, previous height}),
+  // so steady-state frames rarely restart passes to grow them.
   uint32_t render_area_needed_width_ = 0;
   uint32_t render_area_needed_height_ = 0;
   uint32_t current_render_area_width_ = 0;
   uint32_t current_render_area_height_ = 0;
-  std::unordered_map<MTL::RenderPassDescriptor*, std::array<uint32_t, 4>>
-      render_area_by_descriptor_;
+  // Keyed by the textures of color attachments 0-3, depth and stencil.
+  std::map<std::array<MTL::Texture*, 6>, std::array<uint32_t, 4>>
+      render_area_by_attachments_;
   // occlusion_query_enable (SPIRV-Cross path): guest occlusion queries
   // (EVENT_WRITE_ZPD) counted with Metal visibility results. A query counts
   // in one pool slot per render pass it spans; at its end the guest gets a

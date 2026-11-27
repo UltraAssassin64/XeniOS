@@ -1337,11 +1337,10 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
                   spv::OpSelect, type_float_,
                   builder_->createBinOp(
                       spv::OpINotEqual, type_bool_,
-                      builder_->createBinOp(
-                          spv::OpBitwiseAnd, type_uint_,
-                          main_system_constant_flags_,
-                          builder_->makeUintConstant(
-                              kSysFlag_Color0Fixed16Scaled)),
+                      builder_->createBinOp(spv::OpBitwiseAnd, type_uint_,
+                                            main_system_constant_flags_,
+                                            builder_->makeUintConstant(
+                                                kSysFlag_Color0Fixed16Scaled)),
                       const_uint_0_),
                   builder_->makeFloatConstant(32.0f), const_float_1_));
 

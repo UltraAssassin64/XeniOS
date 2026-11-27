@@ -2787,8 +2787,8 @@ void MetalCommandProcessor::PrewarmPipelineBinaryArchive(
           ToMetalBlendOperation(blendcontrol.alpha_comb_fcn);
       if (i == 0) {
         ApplyFixed16SourceFactorPremult(
-            static_cast<MTL::PixelFormat>(entry.color_formats[0]),
-            blendcontrol, src_rgb, src_alpha);
+            static_cast<MTL::PixelFormat>(entry.color_formats[0]), blendcontrol,
+            src_rgb, src_alpha);
       }
 
       bool blending_enabled = src_rgb != MTL::BlendFactorOne ||
@@ -3093,7 +3093,7 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
   saw_swap_ = true;
   msl_compile_wait_used_us_ = 0;
   // A frame later, the render areas only remember this frame's.
-  for (auto& [area_descriptor, known_area] : render_area_by_descriptor_) {
+  for (auto& [area_attachments, known_area] : render_area_by_attachments_) {
     known_area[2] = known_area[0];
     known_area[3] = known_area[1];
     known_area[0] = 0;
@@ -3510,6 +3510,25 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
         uint32_t(1));
     render_area_needed_height_ =
         std::max(area_bottom * area_scale_y, uint32_t(1));
+  }
+
+  // A draw reading what a resolve in the open command buffer wrote is split
+  // from it (IssueDrawMsl). Done before the render pass begins where the
+  // shaders' textures are already known (from their first translation): split
+  // after, the pass just begun ended with no draws, its whole area loaded and
+  // stored for nothing (GTA IV: one per predicated tiling band, its four 2x
+  // MSAA targets).
+  if (UseSpirvCrossPath() && copy_resolve_writes_pending_) {
+    uint32_t known_texture_mask = static_cast<MslShader*>(vertex_shader)
+                                      ->GetUsedTextureMaskAfterTranslation();
+    if (pixel_shader) {
+      known_texture_mask |= static_cast<MslShader*>(pixel_shader)
+                                ->GetUsedTextureMaskAfterTranslation();
+    }
+    if (known_texture_mask &&
+        DrawReadsPendingResolveOutput(known_texture_mask, regs)) {
+      SplitForPendingResolveOutput(known_texture_mask);
+    }
   }
 
   // Begin command buffer if needed (will use cache-provided render targets).
@@ -4722,6 +4741,74 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
 // ==========================================================================
 // SPIRV-Cross (MSL) draw path
 // ==========================================================================
+bool MetalCommandProcessor::DrawReadsPendingResolveOutput(
+    uint32_t used_texture_mask, const RegisterFile& regs) {
+  // With metal_resolve_keep_command_buffer the command buffer stays open after
+  // resolves, so a texture to be loaded from what a resolve in it wrote must
+  // be loaded in it, after the resolve: the render pass is ended for the load
+  // (texture uploads go into the current command buffer when no render
+  // encoder is open) and begun again, its attachments loaded. Only the slots
+  // whose texture would actually be loaded (new, or outdated by a write such
+  // as a resolve) are checked; a texture already loaded since the resolve,
+  // only bound again, needs no new pass. Checking every used slot whose
+  // memory had ever been resolved this frame restarted the pass at nearly
+  // every such draw (GTA IV: 150-390 passes a frame instead of ~60).
+  const bool resolve_keep_command_buffer =
+      cvars::metal_resolve_keep_command_buffer &&
+      cvars::metal_texture_upload_via_blit;
+  const uint32_t resolve_check_mask =
+      !copy_resolve_writes_pending_  ? 0
+      : !resolve_keep_command_buffer ? used_texture_mask
+      : texture_cache_
+          ? texture_cache_->GetUsedTexturePotentialLoadMask(used_texture_mask)
+          : 0;
+  uint32_t remaining_fetch_bits = resolve_check_mask;
+  uint32_t fetch_index = 0;
+  while (xe::bit_scan_forward(remaining_fetch_bits, &fetch_index)) {
+    remaining_fetch_bits &= ~(uint32_t(1) << fetch_index);
+    xenos::xe_gpu_texture_fetch_t fetch = regs.GetTextureFetch(fetch_index);
+    uint32_t width_minus_1 = 0;
+    uint32_t height_minus_1 = 0;
+    uint32_t depth_or_array_size_minus_1 = 0;
+    uint32_t base_page = 0;
+    uint32_t mip_page = 0;
+    uint32_t mip_max_level = 0;
+    texture_util::GetSubresourcesFromFetchConstant(
+        fetch, &width_minus_1, &height_minus_1, &depth_or_array_size_minus_1,
+        &base_page, &mip_page, nullptr, &mip_max_level);
+    if (!base_page && !mip_page) {
+      continue;
+    }
+    auto layout = texture_util::GetGuestTextureLayout(
+        fetch.dimension, fetch.pitch, width_minus_1 + 1, height_minus_1 + 1,
+        depth_or_array_size_minus_1 + 1, fetch.tiled, fetch.format,
+        fetch.packed_mips, true, mip_max_level);
+    const uint32_t base_size = layout.base.level_data_extent_bytes;
+    const uint32_t mip_size = layout.mips_total_extent_bytes;
+    if (base_page && base_size &&
+        IsResolvedMemory(base_page << 12, base_size)) {
+      return true;
+    }
+    if (mip_page && mip_size && IsResolvedMemory(mip_page << 12, mip_size)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void MetalCommandProcessor::SplitForPendingResolveOutput(
+    uint32_t used_texture_mask) {
+  if (cvars::metal_resolve_keep_command_buffer &&
+      cvars::metal_texture_upload_via_blit) {
+    EndRenderEncoder();
+    if (texture_cache_) {
+      texture_cache_->RequestTextures(used_texture_mask);
+    }
+  } else {
+    EndCommandBuffer();
+  }
+}
+
 bool MetalCommandProcessor::IssueDrawMsl(
     Shader* vertex_shader, Shader* pixel_shader,
     const PrimitiveProcessor::ProcessingResult& primitive_processing_result,
@@ -4932,76 +5019,14 @@ bool MetalCommandProcessor::IssueDrawMsl(
     used_texture_mask |= msl_pixel_shader->GetUsedTextureMaskAfterTranslation();
   }
 
-  // With metal_resolve_keep_command_buffer the command buffer stays open after
-  // resolves, so a texture to be loaded from what a resolve in it wrote must
-  // be loaded in it, after the resolve: the render pass is ended for the load
-  // (texture uploads go into the current command buffer when no render
-  // encoder is open) and begun again, its attachments loaded. Only the slots
-  // whose texture would actually be loaded (new, or outdated by a write such
-  // as a resolve) are checked; a texture already loaded since the resolve,
-  // only bound again, needs no new pass. Checking every used slot whose
-  // memory had ever been resolved this frame restarted the pass at nearly
-  // every such draw (GTA IV: 150-390 passes a frame instead of ~60).
-  const bool resolve_keep_command_buffer =
-      cvars::metal_resolve_keep_command_buffer &&
-      cvars::metal_texture_upload_via_blit;
-  const uint32_t resolve_check_mask =
-      !copy_resolve_writes_pending_  ? 0
-      : !resolve_keep_command_buffer ? used_texture_mask
-      : texture_cache_
-          ? texture_cache_->GetUsedTexturePotentialLoadMask(used_texture_mask)
-          : 0;
-  if (resolve_check_mask) {
-    auto overlaps_resolved_texture_ranges = [&](uint32_t texture_fetch_mask) {
-      uint32_t remaining_fetch_bits = texture_fetch_mask;
-      uint32_t fetch_index = 0;
-      while (xe::bit_scan_forward(remaining_fetch_bits, &fetch_index)) {
-        remaining_fetch_bits &= ~(uint32_t(1) << fetch_index);
-        xenos::xe_gpu_texture_fetch_t fetch = regs.GetTextureFetch(fetch_index);
-        uint32_t width_minus_1 = 0;
-        uint32_t height_minus_1 = 0;
-        uint32_t depth_or_array_size_minus_1 = 0;
-        uint32_t base_page = 0;
-        uint32_t mip_page = 0;
-        uint32_t mip_max_level = 0;
-        texture_util::GetSubresourcesFromFetchConstant(
-            fetch, &width_minus_1, &height_minus_1,
-            &depth_or_array_size_minus_1, &base_page, &mip_page, nullptr,
-            &mip_max_level);
-        if (!base_page && !mip_page) {
-          continue;
-        }
-        auto layout = texture_util::GetGuestTextureLayout(
-            fetch.dimension, fetch.pitch, width_minus_1 + 1, height_minus_1 + 1,
-            depth_or_array_size_minus_1 + 1, fetch.tiled, fetch.format,
-            fetch.packed_mips, true, mip_max_level);
-        const uint32_t base_size = layout.base.level_data_extent_bytes;
-        const uint32_t mip_size = layout.mips_total_extent_bytes;
-        if (base_page && base_size &&
-            IsResolvedMemory(base_page << 12, base_size)) {
-          return true;
-        }
-        if (mip_page && mip_size &&
-            IsResolvedMemory(mip_page << 12, mip_size)) {
-          return true;
-        }
-      }
-      return false;
-    };
-    if (overlaps_resolved_texture_ranges(resolve_check_mask)) {
-      if (resolve_keep_command_buffer) {
-        EndRenderEncoder();
-        texture_cache_->RequestTextures(used_texture_mask);
-      } else {
-        EndCommandBuffer();
-      }
-      BeginCommandBuffer();
-      if (!current_command_buffer_ || !current_render_encoder_) {
-        XELOGE(
-            "SPIRV-Cross: failed to re-begin command buffer for copy->draw "
-            "sync split");
-        return true;
-      }
+  if (DrawReadsPendingResolveOutput(used_texture_mask, regs)) {
+    SplitForPendingResolveOutput(used_texture_mask);
+    BeginCommandBuffer();
+    if (!current_command_buffer_ || !current_render_encoder_) {
+      XELOGE(
+          "SPIRV-Cross: failed to re-begin command buffer for copy->draw "
+          "sync split");
+      return true;
     }
   }
 
@@ -7607,7 +7632,23 @@ void MetalCommandProcessor::BeginCommandBuffer() {
       limit_to_attachment(pass_descriptor->depthAttachment());
       limit_to_attachment(pass_descriptor->stencilAttachment());
       if (!clears_on_load && attachments_width != UINT32_MAX) {
-        auto& known_area = render_area_by_descriptor_[pass_descriptor];
+        // By the attachments, not the descriptor: the render target cache
+        // makes a new descriptor when the targets change, which may get the
+        // address of one just freed, and GTA IV's predicated tiling bands
+        // then took over the area of the depth clear pass between them (736
+        // rows loaded and stored for 256 drawn).
+        std::array<MTL::Texture*, 6> area_attachments = {};
+        for (uint32_t i = 0; i < 4; ++i) {
+          area_attachments[i] =
+              pass_descriptor->colorAttachments()->object(i)->texture();
+        }
+        if (auto* depth_attachment = pass_descriptor->depthAttachment()) {
+          area_attachments[4] = depth_attachment->texture();
+        }
+        if (auto* stencil_attachment = pass_descriptor->stencilAttachment()) {
+          area_attachments[5] = stencil_attachment->texture();
+        }
+        auto& known_area = render_area_by_attachments_[area_attachments];
         known_area[0] =
             std::max(known_area[0], xe::align(render_area_needed_width_, 32u));
         known_area[1] =

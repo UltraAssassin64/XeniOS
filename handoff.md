@@ -3164,6 +3164,39 @@ For phase 2:
   framebuffer fetch with the console's encode, on its gamma fetch blending
   (b22a84286) and its spirv2air compiler; a candidate larger change (would
   need SPIRV-Cross framebuffer fetch here).
+- GTA IV frame detail logs (08-08-29, 08-11-43, 08-19-54; tools
+  fd_timeline.py and fd_transfers.py in the scratchpad): GPU 50-70 ms a heavy
+  frame, of it render target transfers 20-26 ms (only 0.4 vertex + 5-6 ms
+  fragment, the rest attachment traffic: 125-130 MB loaded and stored a
+  frame) and draws 16-25 ms (430-450 MB loaded and stored). The scene is
+  drawn in three predicated tiling bands of 1280x256 (the last 208) at 2x
+  MSAA into c0, c1, c2 8888 and D24FS8 (host 1280x1024 x2), each band ending
+  with resolves, one clearing colour and depth.
+- Bug: the render area a pass descriptor needed was remembered per
+  MTL::RenderPassDescriptor pointer. The render target cache makes a new
+  descriptor whenever the targets change, and it often got the address of
+  the one just freed, so the band passes took over the area of the depth
+  clear pass between bands: 736 rows loaded and stored (416 for band 3) for
+  256 drawn. Now keyed by the attachment textures
+  (render_area_by_attachments_).
+- Bug: the copy->draw split (a draw reading a texture a resolve in the open
+  command buffer wrote, keep-CB off commits, keep-CB on loads the texture)
+  ran after IssueDraw had begun the render pass, so each such draw left an
+  empty pass behind, its whole area loaded and stored (one per band: four
+  2x MSAA targets). Now checked before the pass begins when the shaders'
+  textures are known (DrawReadsPendingResolveOutput /
+  SplitForPendingResolveOutput); IssueDrawMsl still checks for shaders
+  translated in the draw.
+- Next for GTA IV (not done): between bands the game clears depth with one
+  rectangle at 4x MSAA (pitch 640, depth ALWAYS with write, no pixel
+  shader, mode 5): it is drawn into the samples-as-pixels 1x target, so each
+  costs two 512-tile depth transfers (2x -> 1x and back) carrying nothing
+  the clear doesn't overwrite. Resolve clears run as their own passes
+  clearing the whole 1280x1024 target on load (PerformTransfersAndResolve
+  Clears), then the next pass loads it again; deferring the clear to the next
+  pass's load action would save a store and a load per clear. 20 of 32
+  transfers a frame are depth <-> colour reinterpretations of the same EDRAM
+  (12.6 of 28.4 M samples), 11 MSAA changes (13.3 M).
 - release_core_in_spin_waits is read when a function is compiled, so
   changing it in game only affects code compiled after; all GTA IV runs
   here launched with it on. A fair A/B needs it set before launch.
