@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -304,7 +305,7 @@ class PhysicalHeap : public BaseHeap {
   void EnableAccessCallbacks(uint32_t physical_address, uint32_t length,
                              bool enable_invalidation_notifications,
                              bool enable_data_providers);
-  template <bool enable_invalidation_notifications>
+  template <bool enable_invalidation_notifications, bool enable_data_providers>
   XE_NOINLINE void EnableAccessCallbacksInner(
       const uint32_t system_page_first, const uint32_t system_page_last,
       xe::memory::PageAccess protect_access) XE_RESTRICT;
@@ -313,11 +314,25 @@ class PhysicalHeap : public BaseHeap {
   // With invalidate_unwatched the callbacks are raised even when no watch is
   // armed, for a caller that knows the range is about to change rather than
   // one reacting to a fault.
+  // contents_discarded is for a write that makes the old contents irrelevant,
+  // like a fresh allocation, rather than one that may change only part of them.
   bool TriggerCallbacks(global_unique_lock_type global_lock_locked_once,
                         uint32_t virtual_address, uint32_t length,
                         bool is_write, bool unwatch_exact_range,
                         bool unprotect = true,
-                        bool invalidate_unwatched = false);
+                        bool invalidate_unwatched = false,
+                        bool contents_discarded = false);
+
+  // For a fault on a read-watched page, with the global lock held once: calls
+  // the read callbacks with it released, so waiting on the GPU there stalls
+  // only the faulting thread. The watch stays armed, so TriggerCallbacks, under
+  // the lock again, still decides the access.
+  void ProvideReadWatchedPage(global_unique_lock_type& global_lock_locked_once,
+                              uint32_t virtual_address, bool is_write);
+  // Before a host write through the physical view: provides, as for a write
+  // fault, the pages the range only partly covers, so the write lands over what
+  // they are still waiting for.
+  void ProvideReadWatchedEdgePages(uint32_t virtual_address, uint32_t length);
 
   uint32_t GetPhysicalAddress(uint32_t address) const;
 
@@ -380,6 +395,9 @@ class PhysicalHeap : public BaseHeap {
     // Whether writing to each page should result trigger invalidation
     // callbacks.
     uint64_t notify_on_invalidation;
+    // Whether the first access of each page triggers read callbacks. These
+    // pages are protected no-access. The watch is one-shot, cleared on access.
+    uint64_t notify_on_read;
   };
   // Protected by global_critical_region. Flags for each 64 system pages,
   // interleaved as blocks, so bit scan can be used to quickly extract ranges.
@@ -540,10 +558,11 @@ class Memory {
   // by all the invalidation callbacks (clamped to a sane range and also not to
   // touch pages with provider callbacks) is unprotected.
   //
-  // - Data providers:
+  // - Data providers (read watches):
   //
-  // TODO(Triang3l): Implement data providers - more complicated because they
-  // will need to be able to release the global lock.
+  // Protecting from any access. One-shot read callbacks
+  // (PhysicalMemoryReadCallback) on the first CPU access of a page, called
+  // without the global lock first, so they may wait for the GPU.
 
   // Returns start and length of the smallest physical memory region surrounding
   // the watched region that can be safely unwatched, if it doesn't matter,
@@ -558,6 +577,30 @@ class Memory {
   // Unregisters a physical memory invalidation callback previously added with
   // RegisterPhysicalMemoryInvalidationCallback.
   void UnregisterPhysicalMemoryInvalidationCallback(void* callback_handle);
+
+  // How a read-watched page is being accessed.
+  enum class PhysicalAccess {
+    kRead,
+    // May change only part of the contents, so the rest has to be current.
+    kWrite,
+    // Makes the old contents irrelevant - a fresh allocation, a release, or
+    // data already written over the range by the host.
+    kDiscard,
+  };
+  // Called on the first CPU access of a page armed as a read watch (via
+  // EnablePhysicalMemoryAccessCallbacks with data providers). The page is
+  // downgraded and unwatched right after, so it fires once per arm. A write
+  // that drops read watches calls it too, before the write proceeds. A fault
+  // calls it twice, first without the global critical region, where waiting
+  // stalls only the faulting thread, then under it, where it may wait only for
+  // what needs no other thread to progress, like already submitted GPU work.
+  typedef void (*PhysicalMemoryReadCallback)(void* context_ptr,
+                                             uint32_t physical_address_start,
+                                             uint32_t length,
+                                             PhysicalAccess access);
+  void* RegisterPhysicalMemoryReadCallback(PhysicalMemoryReadCallback callback,
+                                           void* callback_context);
+  void UnregisterPhysicalMemoryReadCallback(void* callback_handle);
 
   // Enables physical memory access callbacks for the specified memory range,
   // snapped to system page boundaries.
@@ -674,6 +717,11 @@ class Memory {
   xe::global_critical_region global_critical_region_;
   std::vector<std::pair<PhysicalMemoryInvalidationCallback, void*>*>
       physical_memory_invalidation_callbacks_;
+  std::vector<std::pair<PhysicalMemoryReadCallback, void*>*>
+      physical_memory_read_callbacks_;
+  // Held shared across read callbacks called without the global lock, so
+  // unregistering waits for them to return.
+  std::shared_mutex physical_memory_read_callback_calls_mutex_;
 };
 
 }  // namespace xe

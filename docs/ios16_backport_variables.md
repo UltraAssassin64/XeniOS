@@ -2140,6 +2140,26 @@ further edits.
 
 ## Checks
 
+- Memory read watches (`src/xenia/memory.h`, `src/xenia/memory.cc`,
+  `src/xenia/kernel/xfile.cc`) are ported verbatim from XeniOS 0fa163a23,
+  77f2cca80, 935e03876, 78315ec19 and 98b6319c5, so their names are not
+  listed: `PhysicalAccess` (`kRead`, `kWrite`, `kDiscard`),
+  `PhysicalMemoryReadCallback`, `RegisterPhysicalMemoryReadCallback`,
+  `UnregisterPhysicalMemoryReadCallback`, `physical_memory_read_callbacks_`,
+  `physical_memory_read_callback_calls_mutex_`, `notify_on_read`,
+  `ProvideReadWatchedPage`, `ProvideReadWatchedEdgePages`, the
+  `TriggerCallbacks` parameter `contents_discarded`, the second
+  `EnableAccessCallbacksInner` template parameter `enable_data_providers`, and
+  the locals (`block_last`, `block_mask`, `block`, `armed`, `calls_lock`,
+  `callbacks`, `callback_count`, `access`, `host_first`, `host_last`,
+  `page_mask`, `first_partial`, `last_partial`, `one_page`, `provide_page`,
+  `any_read_watched`, `read_callback`, `bit`, `flags`, `guest_access`,
+  `target`, `dropped_first`, `dropped_last`, `dropped_count`, `discard_first`,
+  `discard_last`, `host_end`, `notify`, `start`, `end`, `file_size`,
+  `read_length`, `buffer`, `buffer_heap`). Two differences kept on purpose:
+  the write path still returns true when it finds no watch (XeniOS returns
+  whether the guest may write the page), and our comment on
+  `SystemPageGuestAccess` stays in place of XeniOS's out-of-range log.
 - `src/xenia/cpu/testing/util.h`: `RequireFoldMatchesBackend`,
   `RequireVectorFoldMatchesBackend`, `RequireConstantOperandsMatchRegisters`
   and `RequireScalarFoldMatchesBackend` are copied from xenia-edge

@@ -3090,6 +3090,35 @@ app restarts.
 5. Long term: EDRAM through raster order groups (as D3D12's ROV path),
    which removes transfers entirely.
 
+Phase 1 of item 1 (next commit after 63d43e136): the Memory read watch from
+XeniOS (0fa163a23, 77f2cca80, 935e03876, 78315ec19, 98b6319c5).
+EnablePhysicalMemoryAccessCallbacks with data providers arms a page no-access
+(notify_on_read); its first CPU access calls the read callbacks
+(RegisterPhysicalMemoryReadCallback) without the global lock
+(ProvideReadWatchedPage), then under it (TriggerCallbacks), and the watch is
+dropped. A write that drops a read watch calls them with kWrite, or kDiscard
+for an allocation, release or file read that replaces the pages. File writes
+read physical memory through the unprotected physical view (a syscall reading
+a no-access page fails instead of faulting); file reads provide the pages
+they only partly cover first. Nothing arms a read watch yet, so behaviour is
+unchanged. Kept from ours: a write fault that finds no watch still retries.
+For phase 2:
+- The MMIO handler's QueryProtect race check runs in the signal handler
+  (mach_vm_region is not async-signal-safe); XeniOS skips it on Apple and
+  lets TriggerCallbacks handle the race. Read watches make such faults
+  common, so drop it with the hookup.
+- The Metal side (XeniOS metal_command_processor.cc ResolveReadWatchActive,
+  FaultCopyResolveToGuestRam, the read callback thunk, NoteResolveForReadback
+  in IssueCopy) waits for a completion counter under a condition variable,
+  bounded (kResolveFaultWaitBound), from the faulting thread. Ours has
+  zero-copy shared memory, so the wait is the whole copy. Needs a completed
+  command buffer counter and the guest-sync submit points
+  (SubmitResolvesForGuestSync: scratch register write-back, fences, memory
+  writes, interrupts) in our command_processor.cc.
+- XeniOS's Metal path also holds guest signals behind submissions
+  (held_guest_signals_) and adapts per destination; with keep-CB our fences
+  are already written at command buffer completion, so start without those.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

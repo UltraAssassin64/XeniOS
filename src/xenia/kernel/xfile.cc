@@ -147,6 +147,16 @@ X_STATUS XFile::ReadInternal(uint32_t buffer_guest_address,
                 memory::PageAccess::kReadWrite) {
           result = X_STATUS_ACCESS_VIOLATION;
         } else {
+          if (buffer_physical_heap) {
+            // Resolve output is copied in whole pages, so the pages this read
+            // only partly covers get it now, for the read to land over it.
+            uint64_t file_size = entry()->size();
+            buffer_physical_heap->ProvideReadWatchedEdgePages(
+                buffer_guest_address,
+                uint32_t(std::min<uint64_t>(
+                    buffer_length,
+                    byte_offset < file_size ? file_size - byte_offset : 0)));
+          }
           result = file_->ReadSync(
               std::span<uint8_t>(
                   buffer_physical_heap
@@ -158,9 +168,22 @@ X_STATUS XFile::ReadInternal(uint32_t buffer_guest_address,
               size_t(byte_offset), &bytes_read);
           if (XSUCCEEDED(result)) {
             if (buffer_physical_heap) {
-              buffer_physical_heap->TriggerCallbacks(
-                  xe::global_critical_region::AcquireDirect(),
-                  buffer_guest_address, buffer_length, true, true);
+              // The read has already replaced the contents it covers, the rest
+              // of the buffer keeps them.
+              uint32_t read_length =
+                  uint32_t(std::min(size_t(buffer_length), bytes_read));
+              if (read_length) {
+                buffer_physical_heap->TriggerCallbacks(
+                    xe::global_critical_region::AcquireDirect(),
+                    buffer_guest_address, read_length, true, true, true, false,
+                    true);
+              }
+              if (read_length < buffer_length) {
+                buffer_physical_heap->TriggerCallbacks(
+                    xe::global_critical_region::AcquireDirect(),
+                    buffer_guest_address + read_length,
+                    buffer_length - read_length, true, true);
+              }
             }
 
             if (byte_offset) {
@@ -252,6 +275,26 @@ X_STATUS XFile::ReadScatter(uint32_t segments_guest_address, uint32_t length,
 X_STATUS XFile::Write(uint32_t buffer_guest_address, uint32_t buffer_length,
                       uint64_t byte_offset, uint32_t* out_bytes_written,
                       uint32_t apc_context) {
+  // Physical memory is read through the unprotected physical view, as a host
+  // write from a watched page would fail rather than fault into its callbacks.
+  // Those are triggered first as for a guest read, which brings in resolve
+  // output guest RAM doesn't have yet. Outside the file lock, as this takes the
+  // global one.
+  uint8_t* buffer = memory()->TranslateVirtual(buffer_guest_address);
+  if (buffer_length && UINT32_MAX - buffer_guest_address >= buffer_length) {
+    xe::BaseHeap* buffer_heap = memory()->LookupHeap(buffer_guest_address);
+    if (buffer_heap && buffer_heap->heap_type() == HeapType::kGuestPhysical &&
+        memory()->LookupHeap(buffer_guest_address + buffer_length - 1) ==
+            buffer_heap) {
+      auto buffer_physical_heap = static_cast<xe::PhysicalHeap*>(buffer_heap);
+      buffer_physical_heap->TriggerCallbacks(
+          xe::global_critical_region::AcquireDirect(), buffer_guest_address,
+          buffer_length, false, true);
+      buffer = memory()->TranslatePhysical(
+          buffer_physical_heap->GetPhysicalAddress(buffer_guest_address));
+    }
+  }
+
   std::lock_guard<std::mutex> lock(file_lock_);
   if (byte_offset == uint64_t(-1)) {
     // Write from current position.
@@ -259,10 +302,8 @@ X_STATUS XFile::Write(uint32_t buffer_guest_address, uint32_t buffer_length,
   }
 
   size_t bytes_written = 0;
-  X_STATUS result = file_->WriteSync(
-      std::span<uint8_t>(memory()->TranslateVirtual(buffer_guest_address),
-                         buffer_length),
-      size_t(byte_offset), &bytes_written);
+  X_STATUS result = file_->WriteSync(std::span<uint8_t>(buffer, buffer_length),
+                                     size_t(byte_offset), &bytes_written);
   if (XSUCCEEDED(result)) {
     position_ += bytes_written;
   }
