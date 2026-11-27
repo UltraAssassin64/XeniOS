@@ -47,6 +47,13 @@
 DEFINE_int64(a64_max_stackpoints, 65536,
              "Max number of host->guest stack mappings we can record.", "a64");
 
+DEFINE_bool(a64_vmx_nan_fixup_in_tail, true,
+            "Compute a VMX float multiply-add or multiply-subtract in place, "
+            "test the result for a NaN and apply PowerPC's NaN operand order "
+            "in the function tail, instead of saving the operands for it on "
+            "every one. Same results, fewer instructions; only where FPCR.FZ "
+            "flushes denormal inputs.",
+            "a64");
 DEFINE_bool(a64_enable_host_guest_stack_synchronization, true,
             "Records entries for guest/host stack mappings at function starts "
             "and checks for reentry at return sites. Has slight performance "

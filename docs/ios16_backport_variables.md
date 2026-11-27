@@ -150,6 +150,20 @@ further edits.
 | `mmio_caller_frame` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Back-chain pointer: the caller's frame. | `src/xenia/cpu/mmio_handler.cc` | 692, 694, 698, 700, 705 | 6 |
 | `mmio_return` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Guest return address saved at -8 from the caller's frame. | `src/xenia/cpu/mmio_handler.cc` | 697, 700, 701, 702, 703 | 5 |
 | `unhandled_guest_fault_count` | function static atomic, MMIOHandler::ExceptionCallback | Guest-memory faults that were neither MMIO nor a watch, to log only the first ten. | `src/xenia/cpu/mmio_handler.cc` | 502, 503 | 2 |
+| `EmitVmxFmaV128InPlace` | function template, a64_sequences.cc | vmaddfp/vnmsubfp where FPCR.FZ flushes inputs: fmla in place, NaN test, PowerPC NaN order in the tail. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3985, 4021, 4119 | 3 |
+| `Args` | template parameter of EmitVmxFmaV128InPlace | The sequence's EmitArgType. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3984, 3985 | 2 |
+| `is_sub` | parameter of EmitVmxFmaV128InPlace | Multiply-subtract (negate the addend). | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3985, 3989 | 2 |
+| `d` | local in EmitVmxFmaV128InPlace | Destination register index. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3987, 4012 | 2 |
+| `s1` | local in EmitVmxFmaV128InPlace | First multiplicand register. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3992, 3994 | 2 |
+| `s2` | local in EmitVmxFmaV128InPlace | Second multiplicand register. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3993, 3994 | 2 |
+| `done` | local label in EmitVmxFmaV128InPlace | Where the tail fixup returns. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3995, 3997, 4004, 4011 | 4 |
+| `nan_lane` | local label in EmitVmxFmaV128InPlace | Tail code for a result with a NaN lane. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3996, 4010 | 2 |
+| `src1` | lambda init-capture in EmitVmxFmaV128InPlace (with `i.src1`) | The first source operand, for the tail. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3992, 3996, 4000 | 4 |
+| `src2` | lambda init-capture in EmitVmxFmaV128InPlace (with `i.src2`) | The second source operand, for the tail. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3993, 3996, 4001 | 4 |
+| `src3` | lambda init-capture in EmitVmxFmaV128InPlace (with `i.src3`) | The addend, for the tail. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3988, 3996, 4002 | 4 |
+| `scratch` | local in the tail lambda | GUEST_SCRATCH stack offset where the sources are saved for the fixup. | `src/xenia/cpu/backend/a64/a64_sequences.cc` | 3999, 4000, 4001, 4002 | 4 |
+| `alpha` | parameter of XeResolveUnpack32bpp8RedSamples, XeResolveUnpack64bpp8RedUnswappedSamples and XeResolveLoad8RedPixelSamplesFromRaw; local of XeResolveLoad8RedColors | An 8 bit resolve reads alpha (k_8 with the swap bit, D3D's A8 copy). | `src/xenia/gpu/shaders/resolve.xesli` | 360, 365, 371, 383, 413, 484, 487, 505, 598, 627, 631, 803, 813, 825, 838, 847 | 16 |
+| `half_shift` | local in XeResolveUnpack64bpp8RedUnswappedSamples | 16 for the alpha half of the second dword, else 0. | `src/xenia/gpu/shaders/resolve.xesli` | 487, 490, 491, 494, 495, 496, 497, 498, 499, 500, 501 | 11 |
 | `LogFrequentXmaContextCreation` | static function, XMA hang diagnostics | Logs the caller, guest stack and code when XMACreateContext is called 1000 times (and every 200,000 after). | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 67, 128 | 2 |
 | `xma_create_count` | function-static atomic, XMA hang diagnostics | Number of XMACreateContext calls so far. | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 68, 69 | 2 |
 | `xma_count` | local, XMA hang diagnostics | This call's number. | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 69, 70, 80, 81 | 5 |
@@ -166,14 +180,14 @@ further edits.
 | `xma_depth` | local, XMA hang diagnostics | Depth in the stack walk. | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 100, 112, 114, 117 | 6 |
 | `xma_caller_frame` | local, XMA hang diagnostics | Back-chain pointer to the caller's frame. | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 104, 106, 107, 111, 113, 123 | 7 |
 | `xma_return` | local, XMA hang diagnostics | Return address saved at -8 from the caller's frame. | `src/xenia/kernel/xboxkrnl/xboxkrnl_audio_xma.cc` | 110, 113, 114, 115, 118, 120 | 6 |
-| `xma_repeat_key` | function-static atomic in XmaDecoder::WriteRegister, hang diagnostics | Register number and value of the last XMA register write. | `src/xenia/apu/xma_decoder.cc` | 369, 372 | 2 |
-| `xma_repeat_count` | function-static atomic in XmaDecoder::WriteRegister, hang diagnostics | How many times in a row that pair was written. | `src/xenia/apu/xma_decoder.cc` | 370, 373, 374, 378, 381 | 6 |
-| `xma_key` | local in XmaDecoder::WriteRegister, hang diagnostics | This write's register/value pair. | `src/xenia/apu/xma_decoder.cc` | 371, 372 | 3 |
-| `xma_thread_state` | local in XmaDecoder::WriteRegister, hang diagnostics | Guest thread state of the writer, for its link register. | `src/xenia/apu/xma_decoder.cc` | 375, 379 | 3 |
-| `xma_frames` | local array in XmaDecoder::WriteRegister, hang diagnostics | Native return addresses from backtrace(). | `src/xenia/apu/xma_decoder.cc` | 382, 383, 386, 390, 396 | 5 |
-| `xma_frame_count` | local in XmaDecoder::WriteRegister, hang diagnostics | Number of native frames captured. | `src/xenia/apu/xma_decoder.cc` | 383, 384 | 2 |
-| `xma_frame` | local in XmaDecoder::WriteRegister, hang diagnostics | Index of the frame being logged. | `src/xenia/apu/xma_decoder.cc` | 384, 386, 388, 390, 395, 396 | 8 |
-| `xma_symbol` | local in XmaDecoder::WriteRegister, hang diagnostics | dladdr() result for one frame. | `src/xenia/apu/xma_decoder.cc` | 385, 386, 387, 389, 391, 392, 393 | 10 |
+| `xma_repeat_key` | function-static atomic in XmaDecoder::WriteRegister, hang diagnostics | Register number and value of the last XMA register write. | `src/xenia/apu/xma_decoder.cc` | 372, 375 | 2 |
+| `xma_repeat_count` | function-static atomic in XmaDecoder::WriteRegister, hang diagnostics | How many times in a row that pair was written. | `src/xenia/apu/xma_decoder.cc` | 373, 376, 377, 381, 384 | 6 |
+| `xma_key` | local in XmaDecoder::WriteRegister, hang diagnostics | This write's register/value pair. | `src/xenia/apu/xma_decoder.cc` | 374, 375 | 3 |
+| `xma_thread_state` | local in XmaDecoder::WriteRegister, hang diagnostics | Guest thread state of the writer, for its link register. | `src/xenia/apu/xma_decoder.cc` | 378, 382 | 3 |
+| `xma_frames` | local array in XmaDecoder::WriteRegister, hang diagnostics | Native return addresses from backtrace(). | `src/xenia/apu/xma_decoder.cc` | 385, 386, 389, 393, 399 | 5 |
+| `xma_frame_count` | local in XmaDecoder::WriteRegister, hang diagnostics | Number of native frames captured. | `src/xenia/apu/xma_decoder.cc` | 386, 387 | 2 |
+| `xma_frame` | local in XmaDecoder::WriteRegister, hang diagnostics | Index of the frame being logged. | `src/xenia/apu/xma_decoder.cc` | 387, 389, 391, 393, 398, 399 | 8 |
+| `xma_symbol` | local in XmaDecoder::WriteRegister, hang diagnostics | dladdr() result for one frame. | `src/xenia/apu/xma_decoder.cc` | 388, 389, 390, 392, 394, 395, 396 | 10 |
 | `kEmitInlineMmioChecksDefault` | file-scope constexpr | Default of the `emit_inline_mmio_checks` cvar: true on iOS, false elsewhere. | `src/xenia/memory.cc` | 42, 44, 46 | 3 |
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.cc` | 18 | 1 |
 | `kernel_call_repeat_threshold` | cvar (uint32, Logging) | Calls in a row before a repeating kernel call or cycle is logged; 0 disables. Default 20000. | `src/xenia/kernel/kernel_flags.h` | 16 | 1 |
@@ -1177,10 +1191,10 @@ further edits.
 | `id_pos` | local in GetArgumentBufferLayoutKey | Position of a member's `[[id(` attribute. | `src/xenia/gpu/metal/msl_shader.cc` | 350, 351, 357, 371 | 4 |
 | `name_begin` | local in GetArgumentBufferLayoutKey | Start of the member name left out of the key. | `src/xenia/gpu/metal/msl_shader.cc` | 361, 362, 363, 364, 365, 367, 370 | 7 |
 | `device_address` | local in GetArgumentBufferLayoutKey | The device pointer, hashed into the key. | `src/xenia/gpu/metal/msl_shader.cc` | 379, 380, 381 | 3 |
-| `unresolved_calls` | static local in ResolveFunction (a64) | How many calls the a64 resolve thunk could not resolve (no function at the guest address); the first 16 are logged with the address and guest lr. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 898, 899 | 2 |
+| `unresolved_calls` | static local in ResolveFunction (a64) | How many calls the a64 resolve thunk could not resolve (no function at the guest address); the first 16 are logged with the address and guest lr. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 905, 906 | 2 |
 | `host_crash_context` | local in Emulator::ExceptionCallback (ARM64) | Host registers of the fault, for the host PC, link register and JIT state registers in the crash dump. | `src/xenia/emulator.cc` | 1744, 1755, 1756, 1757, 1758 | 8 |
 | `host_code_start` | local in Emulator::ExceptionCallback (ARM64) | Start of the machine code of the guest function the host PC was mapped to, for the offset in the crash dump. | `src/xenia/emulator.cc` | 1745, 1751, 1752, 1753, 1754 | 6 |
-| `longjmp_resumes` | static local in ResolveFunction (a64) | How many calls resumed inside a live frame (longjmp); the first 16 are logged with the target, its function, the frame and r1. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 872, 873 | 2 |
+| `longjmp_resumes` | static local in ResolveFunction (a64) | How many calls resumed inside a live frame (longjmp); the first 16 are logged with the target, its function, the frame and r1. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 879, 880 | 2 |
 | `integer_bytes` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Component width code the CPU put in bits 24:27 / 28:31 of the swizzle word: 0 none, 1 for 8 bits, 2 for 16 bits. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2413, 2429 | 2 |
 | `integer_unsigned_max` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | 2^(8 * integer_bytes) - 1 as uint. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2423, 2435, 2442 | 3 |
 | `integer_unsigned_scale` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | integer_unsigned_max as float, at least 1. | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2432, 2464 | 2 |
@@ -1190,17 +1204,17 @@ further edits.
 | `integer_sign_signed` | local in SpirvShaderTranslator::ProcessTextureFetchInstruction (integer textures) | Its sign is signed or unsigned biased (takes the signed scale). | `src/xenia/gpu/spirv_shader_translator_fetch.cc` | 2453, 2463 | 2 |
 | `texture_integer_bytes` | local in MetalCommandProcessor::UpdateSpirvSystemConstantValues | For an integer (num_format) fetch: 1 for formats with 8 bits in every component, 2 for 16, else 0 (also 0 with a constant 1 in the swizzle); stored in bits 24:27 / 28:31 of texture_swizzles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 11701, 11710, 11715, 11724, 11727 | 5 |
 | `swizzle_component` | local in MetalCommandProcessor::UpdateSpirvSystemConstantValues (loop) | The guest swizzle component checked for a constant 1. | `src/xenia/gpu/metal/metal_command_processor.cc` | 11720, 11721, 11722 | 4 |
-| `xma_census_next_ms` | function-local static atomic in XmaDecoder::WriteRegister | Steady-clock time (ms) of the next XMA census. | `src/xenia/apu/xma_decoder.cc` | 440, 445, 447 | 3 |
-| `xma_census_now_ms` | local in XmaDecoder::WriteRegister | Steady-clock time (ms) at the kick. | `src/xenia/apu/xma_decoder.cc` | 441, 446, 448, 502 | 4 |
-| `xma_census_due_ms` | local in XmaDecoder::WriteRegister | xma_census_next_ms as read, for the compare-exchange that lets one thread run the census. | `src/xenia/apu/xma_decoder.cc` | 445, 446, 447 | 3 |
-| `xma_census_keys` | function-local static array in XmaDecoder::WriteRegister | Per context, its read and output offsets with the valid bits at the previous census. | `src/xenia/apu/xma_decoder.cc` | 451, 458, 475, 497 | 4 |
-| `xma_census_allocated` | local in XmaDecoder::WriteRegister | Allocated XMA contexts counted by the census. | `src/xenia/apu/xma_decoder.cc` | 452, 461, 502 | 3 |
-| `xma_census_holding` | local in XmaDecoder::WriteRegister | Allocated XMA contexts holding input, counted by the census. | `src/xenia/apu/xma_decoder.cc` | 452, 474, 502 | 3 |
-| `xma_census_stalled` | local in XmaDecoder::WriteRegister | Contexts holding input whose state did not change since the previous census. | `src/xenia/apu/xma_decoder.cc` | 453, 476, 503 | 3 |
-| `xma_census_context` | local in XmaDecoder::WriteRegister | The context being counted. | `src/xenia/apu/xma_decoder.cc` | 456, 457, 463 | 3 |
-| `xma_census_data` | local in XmaDecoder::WriteRegister | A context's XMA_CONTEXT_DATA read from guest memory. | `src/xenia/apu/xma_decoder.cc` | 462, 465, 466, 467, 468, 469, 470, 471, 472, 480, 481, 482, 483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 493, 494 | 24 |
-| `xma_census_key` | local in XmaDecoder::WriteRegister | A context's state packed for comparison with xma_census_keys. | `src/xenia/apu/xma_decoder.cc` | 464, 475, 497 | 3 |
-| `xma_census_list` | local in XmaDecoder::WriteRegister | The fields of up to three stalled contexts, appended to the census line. | `src/xenia/apu/xma_decoder.cc` | 454, 477, 503 | 3 |
+| `xma_census_next_ms` | function-local static atomic in XmaDecoder::WriteRegister | Steady-clock time (ms) of the next XMA census. | `src/xenia/apu/xma_decoder.cc` | 443, 448, 450 | 3 |
+| `xma_census_now_ms` | local in XmaDecoder::WriteRegister | Steady-clock time (ms) at the kick. | `src/xenia/apu/xma_decoder.cc` | 444, 449, 451, 505 | 4 |
+| `xma_census_due_ms` | local in XmaDecoder::WriteRegister | xma_census_next_ms as read, for the compare-exchange that lets one thread run the census. | `src/xenia/apu/xma_decoder.cc` | 448, 449, 450 | 3 |
+| `xma_census_keys` | function-local static array in XmaDecoder::WriteRegister | Per context, its read and output offsets with the valid bits at the previous census. | `src/xenia/apu/xma_decoder.cc` | 454, 461, 478, 500 | 4 |
+| `xma_census_allocated` | local in XmaDecoder::WriteRegister | Allocated XMA contexts counted by the census. | `src/xenia/apu/xma_decoder.cc` | 455, 464, 505 | 3 |
+| `xma_census_holding` | local in XmaDecoder::WriteRegister | Allocated XMA contexts holding input, counted by the census. | `src/xenia/apu/xma_decoder.cc` | 455, 477, 505 | 3 |
+| `xma_census_stalled` | local in XmaDecoder::WriteRegister | Contexts holding input whose state did not change since the previous census. | `src/xenia/apu/xma_decoder.cc` | 456, 479, 506 | 3 |
+| `xma_census_context` | local in XmaDecoder::WriteRegister | The context being counted. | `src/xenia/apu/xma_decoder.cc` | 459, 460, 466 | 3 |
+| `xma_census_data` | local in XmaDecoder::WriteRegister | A context's XMA_CONTEXT_DATA read from guest memory. | `src/xenia/apu/xma_decoder.cc` | 465, 468, 469, 470, 471, 472, 473, 474, 475, 483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 493, 494, 495, 496, 497 | 24 |
+| `xma_census_key` | local in XmaDecoder::WriteRegister | A context's state packed for comparison with xma_census_keys. | `src/xenia/apu/xma_decoder.cc` | 467, 478, 500 | 3 |
+| `xma_census_list` | local in XmaDecoder::WriteRegister | The fields of up to three stalled contexts, appended to the census line. | `src/xenia/apu/xma_decoder.cc` | 457, 480, 506 | 3 |
 | `metal_resolve_keep_command_buffer` | cvar (bool, Metal) | SPIRV-Cross path: keep the command buffer open after a resolve in a submission with draws and load textures read from resolved memory into it. Default false since build 9676 (GTA IV's main pass restarted 24-88 times a frame, ACR menus flickered); per-game opt-in. | `src/xenia/gpu/metal/metal_command_processor.cc` | 154, 4856, 4867, 6630, 6638 | 5 |
 | `resolve_keep_command_buffer` | local in IssueDrawMsl | metal_resolve_keep_command_buffer with blit texture uploads on: load in the current command buffer instead of committing it. | `src/xenia/gpu/metal/metal_command_processor.cc` | 4866, 4871, 4913 | 3 |
 | `resolve_check_mask` | local in IssueDrawMsl | Texture slots checked against resolved memory: all used slots, or with metal_resolve_keep_command_buffer only those whose texture would be loaded. | `src/xenia/gpu/metal/metal_command_processor.cc` | 4869, 4875, 4912 | 3 |
@@ -2107,6 +2121,20 @@ further edits.
 | `would_load` | 4 |
 | `texture_it` | 4 |
 | `signed_key` | 3 |
+| `EmitVmxFmaV128InPlace` | 3 |
+| `Args` | 2 |
+| `is_sub` | 2 |
+| `d` | 2 |
+| `s1` | 2 |
+| `s2` | 2 |
+| `done` | 4 |
+| `nan_lane` | 2 |
+| `src1` | 4 |
+| `src2` | 4 |
+| `src3` | 4 |
+| `scratch` | 4 |
+| `alpha` | 16 |
+| `half_shift` | 11 |
 
 ## Checks
 
@@ -2397,3 +2425,12 @@ further edits.
   WriteMemoryReadCached set at each swap (no other callers of
   WriteMemoryReadCached), so Metal's zero-copy vertex buffers are recorded
   once a frame. No new names besides the rows above.
+- `a64_vmx_nan_fixup_in_tail` (a64_backend.cc, a64_sequences.cc) has the same
+  name and default as XeniOS d4bd5eae9/9064ede4e, where it also covers
+  vaddfp/vsubfp/vmulfp/vdivfp; here it covers only the multiply-add and
+  multiply-subtract (EmitVmxFmaV128InPlace, listed above). Not listed as new.
+- `ffmpeg_disable_neon_on_arm64` default false on ARM64 too since build 9681
+  (UPDATE_from_bool 2026-11-27 12h; `kLastCommittedUpdateDate` raised to it).
+- The 8 bit resolve's alpha selection (resolve.xesli) follows xenia-edge
+  2b3f0cb45 ("Select alpha for A8 resolves"); written for this branch's
+  XeResolveLoad8RedColors, its names are listed above.

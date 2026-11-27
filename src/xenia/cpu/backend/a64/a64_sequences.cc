@@ -15,6 +15,7 @@
 
 #include "xenia/base/byte_order.h"
 #include "xenia/base/clock.h"
+#include "xenia/base/cvar.h"
 #include "xenia/base/logging.h"
 #include "xenia/base/math.h"
 #include "xenia/base/memory.h"
@@ -26,6 +27,8 @@
 #include "xenia/cpu/backend/a64/a64_tracers.h"
 #include "xenia/cpu/hir/instr.h"
 #include "xenia/cpu/ppc/ppc_context.h"
+
+DECLARE_bool(a64_vmx_nan_fixup_in_tail);
 
 namespace xe {
 namespace cpu {
@@ -3971,10 +3974,53 @@ struct MUL_ADD_F64
     EmitFmaWithPpcNan_F64(e, i.dest, s1, s2, s3, /*is_sub=*/false);
   }
 };
+// VMX vmaddfp/vnmsubfp where FPCR.FZ flushes denormal inputs (and outputs),
+// so the operands need no flushed copies: v2 = s3 (negated for a subtract),
+// fmla in place, and only a result with a NaN lane, which a NaN operand
+// always gives, has its sources saved and PowerPC's NaN operand order applied,
+// in the function tail. The general path below saved all three sources to the
+// stack and reloaded one for every multiply-add, the bulk of a VMX DSP loop
+// such as GTA IV's audio filters.
+template <typename Args>
+static void EmitVmxFmaV128InPlace(A64Emitter& e, const Args& i, bool is_sub) {
+  using namespace Xbyak_aarch64;
+  const int d = i.dest.reg().getIdx();
+  e.mov(VReg(2).b16, VReg(SrcVReg(e, i.src3, 3)).b16);
+  if (is_sub) {
+    e.fneg(VReg(2).s4, VReg(2).s4);
+  }
+  const int s1 = SrcVReg(e, i.src1, 0);
+  const int s2 = SrcVReg(e, i.src2, 1);
+  e.fmla(VReg(2).s4, VReg(s1).s4, VReg(s2).s4);
+  auto& done = e.NewCachedLabel();
+  auto& nan_lane = e.AddToTail([src1 = i.src1, src2 = i.src2, src3 = i.src3,
+                                &done](A64Emitter& e, Xbyak_aarch64::Label&) {
+    // Constant sources are loaded again; register ones are unchanged.
+    const int32_t scratch = static_cast<int32_t>(StackLayout::GUEST_SCRATCH);
+    e.str(QReg(SrcVReg(e, src1, 0)), ptr(e.sp, scratch));
+    e.str(QReg(SrcVReg(e, src2, 1)), ptr(e.sp, scratch + 16));
+    e.str(QReg(SrcVReg(e, src3, 3)), ptr(e.sp, scratch + 32));
+    FixupVmxNan_V128_Fma(e);
+    e.b(done);
+  });
+  // Every lane equal to itself (no NaN) leaves the minimum all ones.
+  e.fcmeq(VReg(3).s4, VReg(2).s4, VReg(2).s4);
+  e.uminv(SReg(3), VReg(3).s4);
+  e.fmov(e.w0, SReg(3));
+  e.cbz(e.w0, nan_lane);
+  e.L(done);
+  e.mov(VReg(d).b16, VReg(2).b16);
+}
+
 struct MUL_ADD_V128
     : Sequence<MUL_ADD_V128,
                I<OPCODE_MUL_ADD, V128Op, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (cvars::a64_vmx_nan_fixup_in_tail &&
+        e.IsFeatureEnabled(xe::arm64::kA64FZFlushesInputs)) {
+      EmitWithVmxFpcr(e, [&] { EmitVmxFmaV128InPlace(e, i, false); });
+      return;
+    }
     // dest = s1*s2 + s3 with VMX denormal flushing + PPC NaN propagation.
     // Scratch register plan:
     //   1. Flush s3 into v3, save to stack[32].
@@ -4068,6 +4114,11 @@ struct MUL_SUB_V128
     : Sequence<MUL_SUB_V128,
                I<OPCODE_MUL_SUB, V128Op, V128Op, V128Op, V128Op>> {
   static void Emit(A64Emitter& e, const EmitArgType& i) {
+    if (cvars::a64_vmx_nan_fixup_in_tail &&
+        e.IsFeatureEnabled(xe::arm64::kA64FZFlushesInputs)) {
+      EmitWithVmxFpcr(e, [&] { EmitVmxFmaV128InPlace(e, i, true); });
+      return;
+    }
     // dest = s1*s2 - s3 with VMX denormal flushing + PPC NaN propagation.
     // Same as MUL_ADD but negate s3 before the fmla.
     EmitWithVmxFpcr(e, [&] {

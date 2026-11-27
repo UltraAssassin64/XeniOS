@@ -2979,6 +2979,56 @@ app restarts.
   fetch range with WriteMemoryReadCached when a trace is open, and the
   writer clears that cache at every swap, so each frame records them once.
 
+### Owner's runs on build 9680 (zips "9680_logs" and "gpu.rar": GTA IV 13-18-37 keep-CB on per game and 18-47-45, Arkham City 13-25-00, EoT 18-50-53 and 19-52-59 with ACR from line 4030, traces EoT 19-55-50 (138 MB) and ACR 19-58-58/20-00-01) and the next build
+
+- EoT: no exploding vertices any more in any run (owner). The 9680 trace
+  holds vertex data (8896 memory records, 279 MB decoded).
+- EoT glow: the glow mask is drawn into an 8_8_8_8_GAMMA target writing
+  alpha only (color mask 8, additive), then resolved (D629 in frame 1) to
+  k_8 with the red/blue swap bit, and the composite (PS 126C706122A7280B,
+  t2 = 061DD000 k_8) reads it. Our 8bpp resolve took red, or blue when
+  swapped: blue is black here, so every glow mask was empty (Spidey's
+  glow, the time chamber's blue glow from the 9675 trace, same D499/D526
+  pattern). xenia-edge 2b3f0cb45: D3D's A8 copy is k_8 + LOW_BLUE, from
+  XGCopySurface; the swap then selects alpha. resolve.xesli now does that
+  (8888 top byte, 2_10_10_10 2 bit alpha, 64bpp high half of the second
+  dword, 1.0 for formats without alpha).
+- EoT hypersense copies: frame 1 draws Spidey once (meshes of 8240, 11204
+  and 2519 indices, fc95 1223A5C0/12261D20/122310A0) in the shadow, G-buffer
+  and a third pass, and one translucent copy: D592 depth only (VS
+  E24E6E540EC19D98) then D593 (VS E96C88A78902DD66, PS 66904CF55CAF67B9,
+  alpha = c58.w = 0.6, colour from a cube map times c59 = 20) of a 3975
+  index skinned mesh at 1258A3D0, depth GEQUAL with write; the positions
+  are computed identically in both VS and the position is invariant
+  (preserveInvariance on). The 358 index additive draws (VS
+  E0B5CC4F85057955, a dynamic vertex ring at 0876xxxx) are trails or
+  sparks. No draw is dropped (draw stats other=0). The copy should show;
+  the glow fix may be what was missing. Recheck with the owner.
+- ACR save menu with keep-CB: still flickers (owner). The 20-00-01 trace
+  resolves the finished frame (D106, c0 -> 1CB85000 1280x720) and aliases a
+  32_32_FLOAT 320x180 reduction over the shadow map memory (D114 -> 1CF1D000
+  read as both). A CPU read of resolve output (e.g. a save thumbnail) sees
+  the data only when the command buffer completes, which keep-CB delays to
+  the end of the frame; XeniOS HEAD guards this with a read watch
+  (237a78443). Not ported; keep-CB stays per game (GTA IV).
+- GTA IV keep-CB on (per game) after the restart fix: 70-78 draw passes a
+  frame (was 150-390), frames 30-46 ms early (GPU ~100%), 55-80 ms later
+  (GPU 50-60%). The db16cyc spin is gone from the hotspots. GPU per frame
+  in the GPU-bound stretch: render target transfers 17-25 ms for 50 passes
+  (4-6 ms of it shader time; no unchanged copies to skip), draws 13-21 ms,
+  texture loads 5-6 ms + upload blits 3-5 ms (about 40 each), resolve 3 ms,
+  EDRAM dump 3-4 ms (about 42 each). Transfers are the next GPU target.
+- GTA IV audio: the busiest thread (XThread1644F, 80-85% of a core) is the
+  game's audio thread: samples ~50% guest code (VMX filter 8216D90C, mixer
+  828C2D78/828C5AA8/828C6790), ~38% waits, ~3-5% FFmpeg XMA decode (run on
+  that thread: use_dedicated_xma_thread is off on ARM64, and on it the kick
+  waits for the worker anyway). FFmpeg ran its C paths: our branch turned
+  NEON off on ARM64 ("decode parity"); XeniOS HEAD has no such switch. Now
+  NEON is on by default (UPDATE_from_bool so saved configs follow). The
+  VMX multiply-add stored three sources to the stack and reloaded one for
+  every vmaddfp; with FZ flushing inputs it is now fmla in place with the
+  NaN fixup in the tail (a64_vmx_nan_fixup_in_tail).
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

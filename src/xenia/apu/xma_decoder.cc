@@ -66,14 +66,17 @@ extern "C" {
 DEFINE_bool(ffmpeg_verbose, false, "Verbose FFmpeg output (debug and above)",
             "APU");
 
-#if XE_ARCH_ARM64
-constexpr bool kDisableFfmpegNeonDefault = true;
-#else
+// FFmpeg's NEON MDCT and float vector routines are built for ARM64 and are
+// faster than its C ones; disabling them gives output bit-identical to x86 at
+// that cost, paid by the guest audio thread that kicked the context (the
+// decode runs there). XeniOS HEAD keeps NEON on.
 constexpr bool kDisableFfmpegNeonDefault = false;
-#endif
 DEFINE_bool(ffmpeg_disable_neon_on_arm64, kDisableFfmpegNeonDefault,
-            "Disable FFmpeg NEON runtime paths on ARM64 for decode parity.",
+            "Disable FFmpeg NEON runtime paths on ARM64 for decode parity "
+            "with x86 (slower XMA decoding).",
             "APU");
+// Configs saved before build 9681 hold the old ARM64 default (true).
+UPDATE_from_bool(ffmpeg_disable_neon_on_arm64, 2026, 11, 27, 12, true);
 
 #if XE_ARCH_ARM64
 constexpr bool kUseDedicatedXmaThreadDefault = false;
