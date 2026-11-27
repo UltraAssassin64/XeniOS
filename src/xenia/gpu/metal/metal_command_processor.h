@@ -571,7 +571,10 @@ class MetalCommandProcessor : public CommandProcessor {
     uint64_t modification = 0;
     bool is_ios = false;
     uint8_t priority = 0;
-    // Queue order within a priority (first in, first out).
+    // Queue order within a priority: the latest request first. A shader a draw
+    // still waits for in a later frame is queued again (and its older entries
+    // dropped), so what the current frame needs runs before what a draw wanted
+    // once.
     uint64_t queue_arrival = 0;
   };
   struct MslPipelineCompileRequest {
@@ -594,15 +597,18 @@ class MetalCommandProcessor : public CommandProcessor {
     uint8_t priority = 0;
     uint64_t queue_arrival = 0;
   };
-  // Highest priority first, then the oldest: a heap ordered by priority
-  // alone left some compiles queued for over 10 s while newer ones ran.
+  // Highest priority first, then the latest request (see queue_arrival): a
+  // heap ordered by priority alone left some compiles queued for over 10 s
+  // while newer ones ran, and oldest first left shaders the current frame
+  // draws with queued behind ones only an earlier frame used (Black Ops:
+  // 11 s in the queue for a 0.3 s compile).
   struct MslShaderCompileRequestCompare {
     bool operator()(const MslShaderCompileRequest& a,
                     const MslShaderCompileRequest& b) const {
       if (a.priority != b.priority) {
         return a.priority < b.priority;
       }
-      return a.queue_arrival > b.queue_arrival;
+      return a.queue_arrival < b.queue_arrival;
     }
   };
   struct MslPipelineCompileRequestCompare {
@@ -622,7 +628,10 @@ class MetalCommandProcessor : public CommandProcessor {
                       std::vector<MslPipelineCompileRequest>,
                       MslPipelineCompileRequestCompare>
       msl_pipeline_compile_queue_;
-  std::unordered_set<MslShader::MslTranslation*> msl_shader_compile_pending_;
+  // Pending shader compiles, with the queue_arrival of their latest entry (the
+  // only one compiled).
+  std::unordered_map<MslShader::MslTranslation*, uint64_t>
+      msl_shader_compile_pending_;
   std::unordered_set<MslShader::MslTranslation*> msl_shader_compile_failed_;
   std::unordered_set<uint64_t> msl_pipeline_compile_pending_;
   std::unordered_set<uint64_t> msl_pipeline_compile_failed_;
@@ -636,6 +645,9 @@ class MetalCommandProcessor : public CommandProcessor {
   // finish, for draws waiting on a compile (metal_async_compile_wait_ms).
   uint64_t msl_compile_arrivals_ = 0;
   uint64_t msl_compile_completions_ = 0;
+  // msl_compile_arrivals_ when the current frame began: a pending shader whose
+  // latest entry is older is queued again when a draw asks for it.
+  uint64_t msl_compile_frame_arrival_ = 0;
   std::condition_variable msl_compile_done_cv_;
   // Time draws spent waiting for compiles in the current frame.
   uint64_t msl_compile_wait_used_us_ = 0;

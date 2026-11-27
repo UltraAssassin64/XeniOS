@@ -1040,8 +1040,9 @@ bool MetalCommandProcessor::EnqueueMslShaderCompilation(
         msl_shader_compile_failed_.end()) {
       return false;
     }
-    if (msl_shader_compile_pending_.find(translation) !=
-        msl_shader_compile_pending_.end()) {
+    auto pending_it = msl_shader_compile_pending_.find(translation);
+    if (pending_it != msl_shader_compile_pending_.end() &&
+        pending_it->second >= msl_compile_frame_arrival_) {
       return true;
     }
 
@@ -1052,11 +1053,17 @@ bool MetalCommandProcessor::EnqueueMslShaderCompilation(
     request.is_ios = is_ios;
     request.priority = priority;
     request.queue_arrival = msl_compile_arrivals_++;
-    msl_shader_compile_pending_.insert(translation);
     msl_shader_compile_queue_.push(request);
-    metal_compile_stall_tracker.Queued(
-        {translation->shader().type() == xenos::ShaderType::kVertex ? 1u : 2u,
-         request.shader_hash, request.modification, 0, 0});
+    if (pending_it != msl_shader_compile_pending_.end()) {
+      // Queued in an earlier frame and still needed: queued again as the
+      // latest request, its older entry dropped when it comes up.
+      pending_it->second = request.queue_arrival;
+    } else {
+      msl_shader_compile_pending_.emplace(translation, request.queue_arrival);
+      metal_compile_stall_tracker.Queued(
+          {translation->shader().type() == xenos::ShaderType::kVertex ? 1u : 2u,
+           request.shader_hash, request.modification, 0, 0});
+    }
   }
   msl_shader_compile_cv_.notify_one();
   return true;
@@ -1238,6 +1245,16 @@ void MetalCommandProcessor::MslShaderCompileThread(size_t thread_index) {
       } else {
         shader_request = msl_shader_compile_queue_.top();
         msl_shader_compile_queue_.pop();
+        // An entry a later request of the same shader replaced (or of one
+        // compiled already) is dropped: only the latest one compiles.
+        auto pending_it =
+            msl_shader_compile_pending_.find(shader_request.translation);
+        if (pending_it == msl_shader_compile_pending_.end() ||
+            pending_it->second != shader_request.queue_arrival) {
+          continue;
+        }
+        // Compiling: later requests queue nothing until it's done.
+        pending_it->second = UINT64_MAX;
       }
       ++msl_shader_compile_busy_;
     }
@@ -3092,6 +3109,10 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
   }
   saw_swap_ = true;
   msl_compile_wait_used_us_ = 0;
+  {
+    std::lock_guard<std::mutex> lock(msl_shader_compile_mutex_);
+    msl_compile_frame_arrival_ = msl_compile_arrivals_;
+  }
   // A frame later, the render areas only remember this frame's.
   for (auto& [area_attachments, known_area] : render_area_by_attachments_) {
     known_area[2] = known_area[0];
@@ -4886,8 +4907,13 @@ bool MetalCommandProcessor::IssueDrawMsl(
       return MslShaderCompileStatus::kFailed;
     }
     MslShaderCompileStatus status = GetMslShaderCompileStatus(translation);
+    if (status == MslShaderCompileStatus::kPending) {
+      // Still needed: queued again as the latest request if it was queued in
+      // an earlier frame.
+      EnqueueMslShaderCompilation(translation, kIsIos, priority);
+      return status;
+    }
     if (status == MslShaderCompileStatus::kReady ||
-        status == MslShaderCompileStatus::kPending ||
         status == MslShaderCompileStatus::kFailed) {
       return status;
     }

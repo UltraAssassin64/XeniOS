@@ -3271,6 +3271,14 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   texture; pipelines from spirv2air functions; fall back to MSL for a shader
   it rejects. The metallib bytes can be cached on disk by (SPIR-V, options,
   kVersion), so later launches skip compiling entirely.
+- Compile queue (next commit): a shader a draw still waits for in a later
+  frame is queued again as the newest request, and shader compiles run newest
+  first within a priority (was oldest first), so shaders the current frame
+  draws with go before ones only an earlier frame wanted (Black Ops: 11 s
+  queued for a 0.3 s compile). Only a shader's latest entry compiles
+  (msl_shader_compile_pending_ holds its queue_arrival, UINT64_MAX while a
+  thread compiles it); older entries are dropped when they come up. Pipelines
+  stay first in, first out.
 
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
