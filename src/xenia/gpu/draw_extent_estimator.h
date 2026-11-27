@@ -38,6 +38,24 @@ class DrawExtentEstimator {
   uint32_t EstimateMaxY(bool try_to_estimate_vertex_max_y,
                         const Shader& vertex_shader);
 
+  // The position exports (before the viewport transform) of the vertices of
+  // the draw EstimateMaxY last ran the vertex shader of, if it has at most
+  // kMaxLastVertices, none of them killed, all exporting x, y and z. Not valid
+  // when the last EstimateMaxY didn't run it.
+  static constexpr uint32_t kMaxLastVertices = 4;
+  struct LastVertexPositions {
+    bool valid = false;
+    uint32_t count = 0;
+    float x[kMaxLastVertices] = {};
+    float y[kMaxLastVertices] = {};
+    float z[kMaxLastVertices] = {};
+    // NaN where not exported.
+    float w[kMaxLastVertices] = {};
+  };
+  const LastVertexPositions& last_vertex_positions() const {
+    return last_vertex_positions_;
+  }
+
  private:
   class PositionYExportSink : public ShaderInterpreter::ExportSink {
    public:
@@ -45,19 +63,25 @@ class DrawExtentEstimator {
                 uint32_t value_mask) override;
 
     void Reset() {
+      position_x_.reset();
       position_y_.reset();
+      position_z_.reset();
       position_w_.reset();
       point_size_.reset();
       vertex_kill_.reset();
     }
 
+    const std::optional<float>& position_x() const { return position_x_; }
     const std::optional<float>& position_y() const { return position_y_; }
+    const std::optional<float>& position_z() const { return position_z_; }
     const std::optional<float>& position_w() const { return position_w_; }
     const std::optional<float>& point_size() const { return point_size_; }
     const std::optional<uint32_t>& vertex_kill() const { return vertex_kill_; }
 
    private:
+    std::optional<float> position_x_;
     std::optional<float> position_y_;
+    std::optional<float> position_z_;
     std::optional<float> position_w_;
     std::optional<float> point_size_;
     std::optional<uint32_t> vertex_kill_;
@@ -68,6 +92,8 @@ class DrawExtentEstimator {
   TraceWriter* trace_writer_;
 
   ShaderInterpreter shader_interpreter_;
+
+  LastVertexPositions last_vertex_positions_;
 };
 
 }  // namespace gpu

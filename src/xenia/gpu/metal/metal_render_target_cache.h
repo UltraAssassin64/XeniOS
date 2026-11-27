@@ -213,6 +213,10 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
   bool IsHostDepthEncodingDifferent(
       xenos::DepthRenderTargetFormat format) const override;
 
+  // depth_clear_retarget_4x: draws the constant into the owner in a pass of
+  // its own.
+  bool PerformDepthClearRetarget(const DepthClearRetarget& retarget) override;
+
  private:
   void RecordRenderTargetViewCreated();
 
@@ -425,6 +429,9 @@ class MetalRenderTargetCache final : public gpu::RenderTargetCache {
   MTL::DepthStencilState* transfer_depth_state_none_ = nullptr;
   MTL::DepthStencilState* transfer_depth_clear_state_ = nullptr;
   MTL::DepthStencilState* transfer_stencil_clear_state_ = nullptr;
+  // PerformDepthClearRetarget's states by whether depth is written (bit 9),
+  // whether stencil is (bit 8) and the stencil write mask.
+  std::unordered_map<uint32_t, MTL::DepthStencilState*> retarget_clear_states_;
   MTL::DepthStencilState* transfer_stencil_bit_states_[8] = {};
   // Depth written, and stencil replaced by the pixel shader's stencil output.
   MTL::DepthStencilState* transfer_depth_stencil_output_state_ = nullptr;

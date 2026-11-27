@@ -2988,14 +2988,15 @@ void MetalCommandProcessor::IssueSwap(uint32_t frontbuffer_ptr,
     // separately (errors are logged where they happen).
     XELOGI(
         "Metal draw stats over {} frames: issued={} copies={} "
-        "no_rasterization={} no_vertices={} compile_pending={} encoded={} "
-        "other={} encoded_vertices={}",
+        "no_rasterization={} no_vertices={} compile_pending={} "
+        "depth_clear_retargets={} encoded={} other={} encoded_vertices={}",
         draw_stats_.frames, draw_stats_.issued, draw_stats_.copies,
         draw_stats_.no_rasterization, draw_stats_.no_vertices,
-        draw_stats_.compile_pending, draw_stats_.encoded,
+        draw_stats_.compile_pending, draw_stats_.depth_clear_retargets,
+        draw_stats_.encoded,
         draw_stats_.issued - draw_stats_.copies - draw_stats_.no_rasterization -
             draw_stats_.no_vertices - draw_stats_.compile_pending -
-            draw_stats_.encoded,
+            draw_stats_.depth_clear_retargets - draw_stats_.encoded,
         draw_stats_.encoded_vertices);
     // Performance diagnostics for the same window.
     uint64_t metal_perf_footprint_mb = 0;
@@ -3513,6 +3514,14 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
     normalized_color_mask = pixel_shader ? draw_util::GetNormalizedColorMask(
                                                regs, ps_writes_color_targets)
                                          : 0;
+    // depth_clear_retarget_4x: a rectangle with only depth or stencil to
+    // write and no occlusion query counting it may be written into the owner
+    // of the tiles instead of being drawn.
+    render_target_cache_->SetDepthClearRetargetCandidate(
+        is_rasterization_done && !pixel_shader && !memexport_used &&
+        !use_tessellation_emulation && !zpd_query_active_ &&
+        regs.Get<reg::VGT_DRAW_INITIATOR>().prim_type ==
+            xenos::PrimitiveType::kRectangleList);
     if (!render_target_cache_->Update(is_rasterization_done,
                                       normalized_depth_control,
                                       normalized_color_mask, *vertex_shader)) {
@@ -3520,6 +3529,10 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
           "MetalCommandProcessor::IssueDraw - RenderTargetCache::Update "
           "failed");
       return false;
+    }
+    if (render_target_cache_->last_update_depth_clear_retargeted()) {
+      ++draw_stats_.depth_clear_retargets;
+      return true;
     }
   }
 

@@ -671,7 +671,10 @@ class MetalCommandProcessor : public CommandProcessor {
     uint32_t no_rasterization = 0;  // Guest state rasterizes nothing.
     uint32_t no_vertices = 0;       // Primitive processing left no vertices.
     uint32_t compile_pending = 0;   // Shader or pipeline still compiling.
-    uint32_t encoded = 0;           // Reached a Metal draw call.
+    // Depth clears through a 4x view written into the owner of the tiles
+    // instead (depth_clear_retarget_4x).
+    uint32_t depth_clear_retargets = 0;
+    uint32_t encoded = 0;  // Reached a Metal draw call.
     uint64_t encoded_vertices = 0;
     // Host time between guest swaps (performance diagnostics).
     uint64_t frame_us_total = 0;

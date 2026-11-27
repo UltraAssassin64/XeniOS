@@ -3355,6 +3355,25 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   heap is rewritten every draw (cache it like the argument buffer path if it
   shows in the CPU profile), tessellation stays on SPIRV-Cross.
 
+- GTA IV between-band depth clears (depth_clear_retarget_4x, default on):
+  frame detail 08-19-54 draw 1223 is the clear, a rectangle list of three
+  window-space vertices (-0.5..639.5, -0.5..255.5, z 0) through a 4x view
+  (SURFACE_INFO 0A020280, pitch 640) with depth ALWAYS + write and stencil
+  off (DEPTHCONTROL 00000076), no pixel shader; the 4x view's tiles 0-512
+  belong to the 2x band target, so the draw cost a 512-tile transfer in and
+  one back out, and a pass of its own. Stencil is kept, so cutting the
+  transfer was not exact; instead (XeniOS 38f08b521's approach, written for
+  our cache) RenderTargetCache::Update recognises a constant depth/stencil
+  rectangle through a 4x view of tiles a 1x or 2x depth target owns
+  (positions from the draw extent estimator, now kept per draw), and
+  MetalRenderTargetCache::PerformDepthClearRetarget draws the constant into
+  the owner's rectangle in one load/store pass (depth-only state keeps
+  stencil); the draw is dropped and ownership doesn't move. Other copies of
+  those tiles (intact_render_target) are marked stale. Counted as
+  depth_clear_retargets in the draw stats line. Not ported from XeniOS's
+  series: drawing it into the open pass, strip merging, held transfers,
+  DontCare loads under clear quads.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

@@ -895,6 +895,12 @@ void MetalRenderTargetCache::Shutdown(bool from_destructor) {
     transfer_stencil_clear_state_->release();
     transfer_stencil_clear_state_ = nullptr;
   }
+  for (auto& retarget_clear_state : retarget_clear_states_) {
+    if (retarget_clear_state.second) {
+      retarget_clear_state.second->release();
+    }
+  }
+  retarget_clear_states_.clear();
   for (auto& state : transfer_stencil_bit_states_) {
     if (state) {
       state->release();
@@ -3082,6 +3088,11 @@ bool MetalRenderTargetCache::Update(
                                  normalized_color_mask, vertex_shader)) {
     XELOGE("MetalRenderTargetCache::Update - Base class Update failed");
     return false;
+  }
+  if (last_update_depth_clear_retargeted()) {
+    // The draw's depth is in the tiles' owner (PerformDepthClearRetarget) and
+    // the draw is dropped: nothing of this update is bound or transferred.
+    return true;
   }
 
   if (::cvars::metal_memory_log_rate > 0) {
@@ -9434,6 +9445,133 @@ MTL::DepthStencilState* MetalRenderTargetCache::GetTransferDepthClearState() {
   stencil->release();
   desc->release();
   return transfer_depth_clear_state_;
+}
+
+bool MetalRenderTargetCache::PerformDepthClearRetarget(
+    const DepthClearRetarget& retarget) {
+  auto* owner = static_cast<MetalRenderTarget*>(retarget.owner);
+  if (!owner || owner->needs_initial_clear()) {
+    return false;
+  }
+  const RenderTargetKey key = owner->key();
+  MTL::Texture* depth_texture = owner->texture();
+  if (!depth_texture) {
+    return false;
+  }
+  const MTL::PixelFormat depth_format =
+      GetDepthPixelFormat(key.GetDepthFormat());
+  const bool has_stencil =
+      depth_format == MTL::PixelFormatDepth32Float_Stencil8 ||
+      depth_format == MTL::PixelFormatDepth24Unorm_Stencil8;
+  // One host sample for each guest sample: the draw covers whole pixels, so
+  // it writes every sample of a 2x owner.
+  const uint32_t sample_count = MsaaSamplesToCount(key.msaa_samples);
+  if (depth_texture->pixelFormat() != depth_format ||
+      uint32_t(depth_texture->sampleCount()) != sample_count ||
+      (retarget.write_stencil && !has_stencil)) {
+    return false;
+  }
+  const Transfer::Rectangle& rectangle = retarget.rectangle;
+  if (!rectangle.width_pixels || !rectangle.height_pixels ||
+      rectangle.x_pixels + rectangle.width_pixels > depth_texture->width() ||
+      rectangle.y_pixels + rectangle.height_pixels > depth_texture->height()) {
+    return false;
+  }
+  const uint32_t state_key =
+      (uint32_t(retarget.write_depth) << 9) |
+      (retarget.write_stencil ? 0x100 | retarget.stencil_write_mask : 0);
+  MTL::DepthStencilState*& clear_state = retarget_clear_states_[state_key];
+  if (!clear_state) {
+    MTL::DepthStencilDescriptor* desc =
+        MTL::DepthStencilDescriptor::alloc()->init();
+    desc->setDepthCompareFunction(MTL::CompareFunctionAlways);
+    desc->setDepthWriteEnabled(retarget.write_depth);
+    if (retarget.write_stencil) {
+      MTL::StencilDescriptor* stencil = MTL::StencilDescriptor::alloc()->init();
+      stencil->setStencilCompareFunction(MTL::CompareFunctionAlways);
+      stencil->setStencilFailureOperation(MTL::StencilOperationKeep);
+      stencil->setDepthFailureOperation(MTL::StencilOperationKeep);
+      stencil->setDepthStencilPassOperation(MTL::StencilOperationReplace);
+      stencil->setReadMask(0xFF);
+      stencil->setWriteMask(retarget.stencil_write_mask);
+      desc->setFrontFaceStencil(stencil);
+      desc->setBackFaceStencil(stencil);
+      stencil->release();
+    }
+    clear_state = device_->newDepthStencilState(desc);
+    desc->release();
+  }
+  MTL::RenderPipelineState* pipeline =
+      GetOrCreateTransferClearPipeline(depth_format, false, true, sample_count);
+  MTL::CommandBuffer* cmd = command_processor_.EnsureCommandBuffer();
+  if (!clear_state || !pipeline || !cmd) {
+    return false;
+  }
+
+  // The host depth encoding, as for resolve clears.
+  TransferClearDepthConstants constants = {};
+  switch (key.GetDepthFormat()) {
+    case xenos::DepthRenderTargetFormat::kD24S8:
+      constants.depth = xenos::UNorm24To32(retarget.guest_depth);
+      break;
+    case xenos::DepthRenderTargetFormat::kD24FS8:
+      constants.depth = xenos::Float20e4To32(retarget.guest_depth) * 0.5f;
+      break;
+  }
+
+  command_processor_.EndRenderEncoder();
+  MTL::RenderPassDescriptor* rp =
+      MTL::RenderPassDescriptor::renderPassDescriptor();
+  if (::cvars::metal_render_pass_area_from_scissor) {
+    const uint32_t area_width =
+        std::min(xe::align(rectangle.x_pixels + rectangle.width_pixels, 32u),
+                 uint32_t(depth_texture->width()));
+    const uint32_t area_height =
+        std::min(xe::align(rectangle.y_pixels + rectangle.height_pixels, 32u),
+                 uint32_t(depth_texture->height()));
+    rp->setRenderTargetWidth(area_width);
+    rp->setRenderTargetHeight(area_height);
+  }
+  auto* depth_attachment = rp->depthAttachment();
+  depth_attachment->setTexture(depth_texture);
+  depth_attachment->setLoadAction(MTL::LoadActionLoad);
+  depth_attachment->setStoreAction(MTL::StoreActionStore);
+  if (has_stencil) {
+    auto* stencil_attachment = rp->stencilAttachment();
+    stencil_attachment->setTexture(depth_texture);
+    stencil_attachment->setLoadAction(MTL::LoadActionLoad);
+    stencil_attachment->setStoreAction(MTL::StoreActionStore);
+  }
+  ApplyXenosSamplePositions(rp);
+  MTL::RenderCommandEncoder* encoder =
+      metal_gpu_pass_timer.RenderEncoder(cmd, rp, "depth clear retarget");
+  if (!encoder) {
+    return false;
+  }
+  MTL::Viewport viewport;
+  viewport.originX = double(rectangle.x_pixels);
+  viewport.originY = double(rectangle.y_pixels);
+  viewport.width = double(rectangle.width_pixels);
+  viewport.height = double(rectangle.height_pixels);
+  viewport.znear = 0.0;
+  viewport.zfar = 1.0;
+  encoder->setViewport(viewport);
+  MTL::ScissorRect scissor;
+  scissor.x = rectangle.x_pixels;
+  scissor.y = rectangle.y_pixels;
+  scissor.width = rectangle.width_pixels;
+  scissor.height = rectangle.height_pixels;
+  encoder->setScissorRect(scissor);
+  encoder->setRenderPipelineState(pipeline);
+  encoder->setDepthStencilState(clear_state);
+  if (retarget.write_stencil) {
+    encoder->setStencilReferenceValue(retarget.stencil_value);
+  }
+  encoder->setFragmentBytes(&constants, sizeof(constants), 0);
+  encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0),
+                          NS::UInteger(3));
+  encoder->endEncoding();
+  return true;
 }
 
 MTL::DepthStencilState* MetalRenderTargetCache::GetTransferStencilClearState() {
