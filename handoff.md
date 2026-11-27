@@ -3279,6 +3279,15 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   (msl_shader_compile_pending_ holds its queue_arrival, UINT64_MAX while a
   thread compiles it); older entries are dropped when they come up. Pipelines
   stay first in, first out.
+- Build 9691 (f7e270ba5) has spirv2air, the probe and the compile queue
+  change. The first iOS build failed only because Xcode searched the
+  <spirv/unified1/...> headers in user header paths: spirv2air.lua now gives
+  spirv2air/include as externalincludedirs.
+- Next: read the owner's probe logs (metal_spirv2air_probe on; "spirv2air
+  probe" lines, any spirv2air_probe folder). If iOS 16 loads the libraries,
+  build the drawing path (binding layout above) behind a setting, with a
+  metallib disk cache; if it refuses them, the error text and the saved
+  .metallib show what to change in the AIR 2.5 target.
 
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
