@@ -7,6 +7,7 @@
  ******************************************************************************
  */
 
+#import <AVFoundation/AVFoundation.h>
 #import <GameController/GameController.h>
 #import <MetalKit/MetalKit.h>
 #import <PhotosUI/PhotosUI.h>
@@ -71,6 +72,25 @@ DEFINE_bool(ios_device_status, false,
             "Show the iOS version and the device's thermal state in the "
             "top-left corner while a game runs.",
             "UI");
+DEFINE_bool(ios_tap_to_open_menu, true,
+            "Tapping the game (away from the on-screen controls) opens the "
+            "in-game menu. The on-screen menu button and a controller's Home "
+            "button open it either way.",
+            "UI");
+DEFINE_bool(ios_signin_prompt, true,
+            "Show the Xbox sign-in prompt when a game asks for a profile. Off: "
+            "the prompt closes at once with no one signed in.",
+            "UI");
+DEFINE_bool(ios_keyboard_prompt, true,
+            "Show the on-screen keyboard prompt when a game asks for text. Off: "
+            "the prompt is cancelled at once.",
+            "UI");
+DEFINE_path(achievement_sound_path, "",
+            "Sound played with the achievement pop-up (chosen in Settings > "
+            "Interface). Empty: no sound.",
+            "UI");
+DECLARE_bool(show_achievement_notification);
+DECLARE_bool(mute);
 
 // Forward declarations of the Objective-C classes.
 @class XeniaAppDelegate;
@@ -557,6 +577,8 @@ enum class IOSConfigStorage {
 enum class IOSConfigAction {
   kNone,
   kViewRecentLog,
+  kChooseAchievementSound,
+  kClearAchievementSound,
 };
 
 struct IOSConfigChoice {
@@ -1564,6 +1586,23 @@ static NSString* xe_installed_content_kind_label(IOSInstalledContentKind kind) {
       return @"DLC";
   }
   return @"Content";
+}
+
+// Plays achievement_sound_path once, unless audio is muted. AVAudioPlayer
+// mixes with the game's audio output without changing it.
+static void xe_play_achievement_sound() {
+  static AVAudioPlayer* player = nil;
+  if (cvars::achievement_sound_path.empty() || cvars::mute) {
+    return;
+  }
+  NSURL* url = [NSURL fileURLWithPath:ToNSString(cvars::achievement_sound_path.string())];
+  if (!player || ![player.url isEqual:url]) {
+    [player release];
+    player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:nil];
+    [player prepareToPlay];
+  }
+  player.currentTime = 0;
+  [player play];
 }
 
 static void xe_present_ok_alert(UIViewController* presenter, NSString* title, NSString* message) {
@@ -3711,6 +3750,33 @@ std::vector<IOSConfigSection> BuildIOSConfigSections() {
   if (!accuracy.items.empty()) {
     sections.push_back(std::move(accuracy));
   }
+
+  IOSConfigSection interface;
+  interface.title = "Interface";
+  AddBoolSetting(interface.items, "ios_tap_to_open_menu", "Tap To Open Menu",
+                 "Tapping the game away from the on-screen controls opens the in-game "
+                 "menu. The on-screen menu button and a controller's Home button open "
+                 "it either way. Applies at once.",
+                 true);
+  AddBoolSetting(interface.items, "ios_signin_prompt", "Xbox Sign-In Prompt",
+                 "Shows the profile picker when a game asks someone to sign in. Off: "
+                 "the request closes at once and no one is signed in. Applies at once.",
+                 true);
+  AddBoolSetting(interface.items, "ios_keyboard_prompt", "Keyboard Prompt",
+                 "Shows the text entry prompt when a game asks for text, such as a save "
+                 "name. Off: the prompt is cancelled at once. Applies at once.",
+                 true);
+  AddBoolSetting(interface.items, "show_achievement_notification", "Achievement Pop-Up",
+                 "Shows a banner at the top of the screen when an achievement unlocks. "
+                 "Applies at once.",
+                 true);
+  AddActionSetting(interface.items, IOSConfigAction::kChooseAchievementSound,
+                   "Choose Achievement Sound…",
+                   "Plays with the pop-up. Pick an audio file; a copy is kept by the app. "
+                   "It plays alongside the game's audio and doesn't change it.");
+  AddActionSetting(interface.items, IOSConfigAction::kClearAchievementSound,
+                   "Remove Achievement Sound", "The pop-up shows without a sound.");
+  sections.push_back(std::move(interface));
 
   IOSConfigSection audio;
   audio.title = "Audio";
@@ -8019,7 +8085,7 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
 
 @end
 
-@interface XeniaConfigViewController () <UISearchBarDelegate>
+@interface XeniaConfigViewController () <UISearchBarDelegate, UIDocumentPickerDelegate>
 // The settings of one game (its config/<title id>.config.toml overrides).
 - (instancetype)initWithGameTitleId:(uint32_t)title_id title:(NSString*)title;
 @end
@@ -8558,6 +8624,40 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
   [self markPendingChanges];
 }
 
+// The achievement sound: the picked file (a copy, as the picker gives) is kept
+// in Documents as achievement_sound.<extension>, and played once to try it.
+- (void)documentPicker:(UIDocumentPickerViewController* __unused)controller
+    didPickDocumentsAtURLs:(NSArray<NSURL*>*)urls {
+  if (urls.count == 0) {
+    return;
+  }
+  NSURL* url = urls[0];
+  const BOOL access_granted = [url startAccessingSecurityScopedResource];
+  NSString* extension = url.pathExtension.length ? url.pathExtension.lowercaseString : @"m4a";
+  const std::filesystem::path destination =
+      xe_get_ios_documents_path() /
+      (std::string("achievement_sound.") + std::string([extension UTF8String]));
+  std::error_code ec;
+  if (!cvars::achievement_sound_path.empty() && cvars::achievement_sound_path != destination) {
+    std::filesystem::remove(cvars::achievement_sound_path, ec);
+  }
+  std::filesystem::copy_file(std::filesystem::path([url.path UTF8String]), destination,
+                             std::filesystem::copy_options::overwrite_existing, ec);
+  if (access_granted) {
+    [url stopAccessingSecurityScopedResource];
+  }
+  if (ec) {
+    xe_present_ok_alert(self, @"Achievement Sound", @"The file could not be copied.");
+    return;
+  }
+  cvars::achievement_sound_path = destination;
+  config::SaveConfig();
+  xe_play_achievement_sound();
+  xe_present_ok_alert(
+      self, @"Achievement Sound",
+      [NSString stringWithFormat:@"%@ plays with the achievement pop-up.", url.lastPathComponent]);
+}
+
 - (void)tableView:(UITableView*)tableView didSelectRowAtIndexPath:(NSIndexPath*)indexPath {
   IOSConfigItem* item = [self itemAtIndexPath:indexPath];
   if (!item || item->control_type == IOSConfigControlType::kToggle) {
@@ -8571,6 +8671,25 @@ static constexpr NSInteger kXeniaDiscussionPreviewCount = 3;
       case IOSConfigAction::kViewRecentLog: {
         XeniaLogViewController* log_vc = [[XeniaLogViewController alloc] init];
         [self.navigationController pushViewController:log_vc animated:YES];
+      } break;
+      case IOSConfigAction::kChooseAchievementSound: {
+        UIDocumentPickerViewController* picker =
+            [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ UTTypeAudio ]
+                                                                        asCopy:YES];
+        picker.delegate = self;
+        picker.allowsMultipleSelection = NO;
+        picker.shouldShowFileExtensions = YES;
+        [self presentViewController:picker animated:YES completion:nil];
+        [picker release];
+      } break;
+      case IOSConfigAction::kClearAchievementSound: {
+        if (!cvars::achievement_sound_path.empty()) {
+          std::error_code ec;
+          std::filesystem::remove(cvars::achievement_sound_path, ec);
+          cvars::achievement_sound_path.clear();
+          config::SaveConfig();
+        }
+        xe_present_ok_alert(self, @"Achievement Sound", @"The pop-up shows without a sound.");
       } break;
       case IOSConfigAction::kNone:
       default:
@@ -8781,6 +8900,8 @@ typedef NS_ENUM(NSInteger, XeniaTouchPadControlKind) {
   XeniaTouchPadControlKindRightTrigger,
   XeniaTouchPadControlKindLeftStick,
   XeniaTouchPadControlKindRightStick,
+  // Opens the in-game menu; never reaches the game.
+  XeniaTouchPadControlKindMenu,
 };
 
 struct XeniaTouchPadControl {
@@ -8791,20 +8912,55 @@ struct XeniaTouchPadControl {
   CGFloat radius;
 };
 
-static const NSInteger kXeniaTouchPadControlCount = 19;
+static const NSInteger kXeniaTouchPadControlCount = 20;
+
+// A control's place in a saved layout: its center as a fraction of the pad's
+// size (negative: the default place), its size against the default, and
+// whether it's hidden.
+struct XeniaTouchPadPlacement {
+  CGPoint position = {-1.0, -1.0};
+  CGFloat scale = 1.0;
+  bool hidden = false;
+};
 
 @interface XeniaTouchPadView : UIView
+// Edit mode: touches select and drag controls instead of reaching the game.
+@property(nonatomic, assign) BOOL editing;
+// Called when the menu control is pressed.
+@property(nonatomic, copy) void (^menuHandler)(void);
+// Called when the selected control changes in edit mode.
+@property(nonatomic, copy) void (^selectionHandler)(void);
 // Index of the control at the point, or -1.
 - (NSInteger)controlIndexAtPoint:(CGPoint)point;
 // Releases every control and reports the idle state.
 - (void)resetTouches;
+// Loads the layout for the title (its own if it has one, else the one for all
+// games); 0 loads the one for all games.
+- (void)loadLayoutForTitleID:(uint32_t)title_id;
+// The title whose layout is loaded, and whether it has a layout of its own.
+@property(nonatomic, readonly) uint32_t layoutTitleID;
+@property(nonatomic, readonly) BOOL layoutIsPerGame;
+// Saves the layout for the loaded title alone, or for all games (removing the
+// title's own).
+- (void)saveLayoutPerGame:(BOOL)per_game;
+- (void)resetLayout;
+@property(nonatomic, readonly) NSInteger selectedControl;
+@property(nonatomic, readonly) NSString* selectedControlLabel;
+@property(nonatomic, assign) CGFloat selectedScale;
+- (void)toggleSelectedHidden;
+@property(nonatomic, readonly) BOOL selectedHidden;
+@property(nonatomic, assign) CGFloat layoutOpacity;
 @end
 
 @implementation XeniaTouchPadView {
   XeniaTouchPadControl controls_[kXeniaTouchPadControlCount];
+  XeniaTouchPadPlacement placements_[kXeniaTouchPadControlCount];
   // Touches currently on the pad and the control each one started on.
   NSMutableArray<UITouch*>* pad_touches_;
   NSMutableArray<NSNumber*>* pad_touch_controls_;
+  // Edit mode: the dragged touch and its offset from the control's center.
+  UITouch* edit_touch_;
+  CGPoint edit_offset_;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -8816,6 +8972,8 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
     self.contentMode = UIViewContentModeRedraw;
     pad_touches_ = [[NSMutableArray alloc] init];
     pad_touch_controls_ = [[NSMutableArray alloc] init];
+    _selectedControl = -1;
+    _layoutOpacity = 1.0;
   }
   return self;
 }
@@ -8823,7 +8981,16 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 - (void)dealloc {
   [pad_touches_ release];
   [pad_touch_controls_ release];
+  [_menuHandler release];
+  [_selectionHandler release];
   [super dealloc];
+}
+
+// NSUserDefaults key of a layout: "XeniaTouchLayout" for all games,
+// "XeniaTouchLayout.<title ID>" for one.
+static NSString* XeniaTouchLayoutKey(uint32_t title_id) {
+  return title_id ? [NSString stringWithFormat:@"XeniaTouchLayout.%08X", title_id]
+                  : @"XeniaTouchLayout";
 }
 
 - (void)layoutSubviews {
@@ -8839,44 +9006,103 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
       {XeniaTouchPadControlKindRightStick, 0, @"R", {right - 250, height - 82}, 54},
       {XeniaTouchPadControlKindLeftTrigger, 0, @"LT", {left + 44, 44}, 30},
       {XeniaTouchPadControlKindRightTrigger, 0, @"RT", {right - 44, 44}, 30},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_LEFT_SHOULDER, @"LB",
-       {left + 116, 44}, 30},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_RIGHT_SHOULDER, @"RB",
-       {right - 116, 44}, 30},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_BACK, @"Back",
-       {middle - 70, 36}, 26},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_LEFT_SHOULDER,
+       @"LB",
+       {left + 116, 44},
+       30},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_RIGHT_SHOULDER,
+       @"RB",
+       {right - 116, 44},
+       30},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_BACK,
+       @"Back",
+       {middle - 70, 36},
+       26},
       {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_GUIDE, @"Guide", {middle, 36}, 26},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_START, @"Start",
-       {middle + 70, 36}, 26},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_DPAD_UP, @"▲",
-       {left + 236, height - 126}, 24},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_DPAD_DOWN, @"▼",
-       {left + 236, height - 38}, 24},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_DPAD_LEFT, @"◀",
-       {left + 192, height - 82}, 24},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_DPAD_RIGHT, @"▶",
-       {left + 280, height - 82}, 24},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_A, @"A",
-       {right - 104, height - 94}, 28},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_B, @"B",
-       {right - 50, height - 148}, 28},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_X, @"X",
-       {right - 158, height - 148}, 28},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_Y, @"Y",
-       {right - 104, height - 202}, 28},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_LEFT_THUMB, @"L3",
-       {left + 30, height - 34}, 22},
-      {XeniaTouchPadControlKindButton, xe::hid::X_INPUT_GAMEPAD_RIGHT_THUMB, @"R3",
-       {right - 30, height - 34}, 22},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_START,
+       @"Start",
+       {middle + 70, 36},
+       26},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_DPAD_UP,
+       @"▲",
+       {left + 236, height - 126},
+       24},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_DPAD_DOWN,
+       @"▼",
+       {left + 236, height - 38},
+       24},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_DPAD_LEFT,
+       @"◀",
+       {left + 192, height - 82},
+       24},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_DPAD_RIGHT,
+       @"▶",
+       {left + 280, height - 82},
+       24},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_A,
+       @"A",
+       {right - 104, height - 94},
+       28},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_B,
+       @"B",
+       {right - 50, height - 148},
+       28},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_X,
+       @"X",
+       {right - 158, height - 148},
+       28},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_Y,
+       @"Y",
+       {right - 104, height - 202},
+       28},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_LEFT_THUMB,
+       @"L3",
+       {left + 30, height - 34},
+       22},
+      {XeniaTouchPadControlKindButton,
+       xe::hid::X_INPUT_GAMEPAD_RIGHT_THUMB,
+       @"R3",
+       {right - 30, height - 34},
+       22},
+      {XeniaTouchPadControlKindMenu, 0, @"☰", {middle, height - 30}, 20},
   };
   for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
     controls_[i] = controls[i];
+    const XeniaTouchPadPlacement& placement = placements_[i];
+    if (placement.position.x >= 0.0 && placement.position.y >= 0.0) {
+      controls_[i].center =
+          CGPointMake(placement.position.x * width, placement.position.y * height);
+    }
+    controls_[i].radius *= placement.scale;
   }
   [self setNeedsDisplay];
 }
 
+- (BOOL)controlIsActive:(NSInteger)index {
+  // The menu control can't be hidden, so the menu stays reachable.
+  return self.editing || !placements_[index].hidden ||
+         controls_[index].kind == XeniaTouchPadControlKindMenu;
+}
+
 - (NSInteger)controlIndexAtPoint:(CGPoint)point {
-  for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
+  // Later controls are drawn on top, so they're hit first.
+  for (NSInteger i = kXeniaTouchPadControlCount - 1; i >= 0; --i) {
+    if (![self controlIsActive:i]) {
+      continue;
+    }
     const CGFloat dx = point.x - controls_[i].center.x;
     const CGFloat dy = point.y - controls_[i].center.y;
     // A little slack around each control makes it easier to hit.
@@ -8888,9 +9114,24 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   return -1;
 }
 
-// Touches outside the controls fall through to the views below.
+// Touches outside the controls fall through to the views below, except in
+// edit mode, where the pad takes every touch.
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent*)event {
-  return [self controlIndexAtPoint:point] >= 0;
+  return self.editing || [self controlIndexAtPoint:point] >= 0;
+}
+
+- (void)setEditing:(BOOL)editing {
+  if (_editing == editing) {
+    return;
+  }
+  [self resetTouches];
+  _editing = editing;
+  edit_touch_ = nil;
+  _selectedControl = -1;
+  if (self.selectionHandler) {
+    self.selectionHandler();
+  }
+  [self setNeedsDisplay];
 }
 
 - (void)reportState {
@@ -8944,21 +9185,68 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 }
 
 - (void)touchesBegan:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
+  if (self.editing) {
+    if (edit_touch_) {
+      return;
+    }
+    UITouch* touch = touches.anyObject;
+    const CGPoint point = [touch locationInView:self];
+    const NSInteger index = [self controlIndexAtPoint:point];
+    _selectedControl = index;
+    if (index >= 0) {
+      edit_touch_ = touch;
+      edit_offset_ =
+          CGPointMake(controls_[index].center.x - point.x, controls_[index].center.y - point.y);
+    }
+    if (self.selectionHandler) {
+      self.selectionHandler();
+    }
+    [self setNeedsDisplay];
+    return;
+  }
   for (UITouch* touch in touches) {
     const NSInteger index = [self controlIndexAtPoint:[touch locationInView:self]];
-    if (index >= 0) {
-      [pad_touches_ addObject:touch];
-      [pad_touch_controls_ addObject:@(index)];
+    if (index < 0) {
+      continue;
     }
+    if (controls_[index].kind == XeniaTouchPadControlKindMenu) {
+      if (self.menuHandler) {
+        self.menuHandler();
+      }
+      continue;
+    }
+    [pad_touches_ addObject:touch];
+    [pad_touch_controls_ addObject:@(index)];
   }
   [self reportState];
 }
 
 - (void)touchesMoved:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
+  if (self.editing) {
+    if (edit_touch_ && [touches containsObject:edit_touch_] && _selectedControl >= 0) {
+      const CGPoint point = [edit_touch_ locationInView:self];
+      const CGSize size = self.bounds.size;
+      CGPoint center = CGPointMake(point.x + edit_offset_.x, point.y + edit_offset_.y);
+      center.x = std::clamp(center.x, CGFloat(0.0), size.width);
+      center.y = std::clamp(center.y, CGFloat(0.0), size.height);
+      controls_[_selectedControl].center = center;
+      placements_[_selectedControl].position =
+          CGPointMake(center.x / std::max(size.width, CGFloat(1.0)),
+                      center.y / std::max(size.height, CGFloat(1.0)));
+      [self setNeedsDisplay];
+    }
+    return;
+  }
   [self reportState];
 }
 
 - (void)touchesEnded:(NSSet<UITouch*>*)touches withEvent:(UIEvent*)event {
+  if (self.editing) {
+    if (edit_touch_ && [touches containsObject:edit_touch_]) {
+      edit_touch_ = nil;
+    }
+    return;
+  }
   for (UITouch* touch in touches) {
     const NSUInteger position = [pad_touches_ indexOfObjectIdenticalTo:touch];
     if (position != NSNotFound) {
@@ -8973,13 +9261,155 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   [self touchesEnded:touches withEvent:event];
 }
 
+// ---- Layouts
+
+- (void)applyLayoutDictionary:(NSDictionary*)layout {
+  for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
+    placements_[i] = XeniaTouchPadPlacement();
+  }
+  _layoutOpacity = 1.0;
+  if ([layout isKindOfClass:[NSDictionary class]]) {
+    NSNumber* opacity = layout[@"opacity"];
+    if ([opacity isKindOfClass:[NSNumber class]]) {
+      _layoutOpacity = std::clamp(CGFloat(opacity.doubleValue), CGFloat(0.1), CGFloat(1.0));
+    }
+    NSDictionary* controls = layout[@"controls"];
+    if ([controls isKindOfClass:[NSDictionary class]]) {
+      for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
+        NSDictionary* entry = controls[controls_[i].label];
+        if (![entry isKindOfClass:[NSDictionary class]]) {
+          continue;
+        }
+        XeniaTouchPadPlacement& placement = placements_[i];
+        NSNumber* x = entry[@"x"];
+        NSNumber* y = entry[@"y"];
+        if ([x isKindOfClass:[NSNumber class]] && [y isKindOfClass:[NSNumber class]]) {
+          placement.position =
+              CGPointMake(std::clamp(x.doubleValue, 0.0, 1.0), std::clamp(y.doubleValue, 0.0, 1.0));
+        }
+        NSNumber* scale = entry[@"scale"];
+        if ([scale isKindOfClass:[NSNumber class]]) {
+          placement.scale = std::clamp(CGFloat(scale.doubleValue), CGFloat(0.5), CGFloat(2.0));
+        }
+        placement.hidden = [entry[@"hidden"] boolValue];
+      }
+    }
+  }
+  [self setNeedsLayout];
+  [self setNeedsDisplay];
+}
+
+- (NSDictionary*)layoutDictionary {
+  NSMutableDictionary* controls = [NSMutableDictionary dictionary];
+  for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
+    const XeniaTouchPadPlacement& placement = placements_[i];
+    NSMutableDictionary* entry = [NSMutableDictionary dictionary];
+    if (placement.position.x >= 0.0 && placement.position.y >= 0.0) {
+      entry[@"x"] = @(placement.position.x);
+      entry[@"y"] = @(placement.position.y);
+    }
+    if (placement.scale != 1.0) {
+      entry[@"scale"] = @(placement.scale);
+    }
+    if (placement.hidden) {
+      entry[@"hidden"] = @YES;
+    }
+    if (entry.count) {
+      controls[controls_[i].label] = entry;
+    }
+  }
+  return @{@"opacity" : @(_layoutOpacity), @"controls" : controls};
+}
+
+- (void)loadLayoutForTitleID:(uint32_t)title_id {
+  // The labels key the saved controls, so they need the controls set up.
+  [self layoutIfNeeded];
+  if (!controls_[0].label) {
+    [self layoutSubviews];
+  }
+  _layoutTitleID = title_id;
+  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+  NSDictionary* layout = title_id ? [defaults dictionaryForKey:XeniaTouchLayoutKey(title_id)] : nil;
+  _layoutIsPerGame = layout != nil;
+  if (!layout) {
+    layout = [defaults dictionaryForKey:XeniaTouchLayoutKey(0)];
+  }
+  [self applyLayoutDictionary:layout];
+}
+
+- (void)saveLayoutPerGame:(BOOL)per_game {
+  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+  NSDictionary* layout = [self layoutDictionary];
+  if (per_game && _layoutTitleID) {
+    [defaults setObject:layout forKey:XeniaTouchLayoutKey(_layoutTitleID)];
+    _layoutIsPerGame = YES;
+  } else {
+    [defaults setObject:layout forKey:XeniaTouchLayoutKey(0)];
+    if (_layoutTitleID) {
+      [defaults removeObjectForKey:XeniaTouchLayoutKey(_layoutTitleID)];
+    }
+    _layoutIsPerGame = NO;
+  }
+}
+
+- (void)resetLayout {
+  [self applyLayoutDictionary:nil];
+  if (self.selectionHandler) {
+    self.selectionHandler();
+  }
+}
+
+- (NSString*)selectedControlLabel {
+  return _selectedControl >= 0 ? controls_[_selectedControl].label : nil;
+}
+
+- (CGFloat)selectedScale {
+  return _selectedControl >= 0 ? placements_[_selectedControl].scale : 1.0;
+}
+
+- (void)setSelectedScale:(CGFloat)scale {
+  if (_selectedControl < 0) {
+    return;
+  }
+  placements_[_selectedControl].scale = std::clamp(scale, CGFloat(0.5), CGFloat(2.0));
+  [self setNeedsLayout];
+  [self layoutIfNeeded];
+}
+
+- (BOOL)selectedHidden {
+  return _selectedControl >= 0 && placements_[_selectedControl].hidden;
+}
+
+- (void)toggleSelectedHidden {
+  if (_selectedControl < 0 || controls_[_selectedControl].kind == XeniaTouchPadControlKindMenu) {
+    return;
+  }
+  placements_[_selectedControl].hidden = !placements_[_selectedControl].hidden;
+  [self setNeedsDisplay];
+}
+
+- (void)setLayoutOpacity:(CGFloat)opacity {
+  _layoutOpacity = std::clamp(opacity, CGFloat(0.1), CGFloat(1.0));
+  [self setNeedsDisplay];
+}
+
 - (void)drawRect:(CGRect)rect {
+  const CGFloat opacity = _layoutOpacity;
   NSDictionary* attributes = @{
     NSFontAttributeName : [UIFont boldSystemFontOfSize:13],
-    NSForegroundColorAttributeName : [UIColor colorWithWhite:1.0 alpha:0.75],
+    NSForegroundColorAttributeName : [UIColor colorWithWhite:1.0 alpha:0.75 * opacity],
   };
+  if (self.editing) {
+    // Dim the game so the controls stand out while they're moved.
+    [[UIColor colorWithWhite:0.0 alpha:0.35] setFill];
+    UIRectFill(self.bounds);
+  }
   for (NSInteger i = 0; i < kXeniaTouchPadControlCount; ++i) {
+    if (![self controlIsActive:i]) {
+      continue;
+    }
     const XeniaTouchPadControl& control = controls_[i];
+    const BOOL hidden = placements_[i].hidden && control.kind != XeniaTouchPadControlKindMenu;
     BOOL active = NO;
     CGPoint knob = control.center;
     for (NSUInteger j = 0; j < pad_touches_.count; ++j) {
@@ -9007,10 +9437,17 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
                                    startAngle:0
                                      endAngle:2 * M_PI
                                     clockwise:YES];
-    [[UIColor colorWithWhite:(active ? 1.0 : 0.0) alpha:(active ? 0.35 : 0.25)] setFill];
+    [[UIColor colorWithWhite:(active ? 1.0 : 0.0)
+                       alpha:(active ? 0.35 : 0.25) * (hidden ? 0.4 : opacity)] setFill];
     [outline fill];
-    [[UIColor colorWithWhite:1.0 alpha:0.55] setStroke];
-    outline.lineWidth = 1.5;
+    const BOOL selected = self.editing && i == _selectedControl;
+    [(selected ? [UIColor systemYellowColor]
+               : [UIColor colorWithWhite:1.0 alpha:0.55 * (hidden ? 0.5 : opacity)]) setStroke];
+    outline.lineWidth = selected ? 3.0 : 1.5;
+    if (hidden) {
+      const CGFloat dashes[] = {4.0, 4.0};
+      [outline setLineDash:dashes count:2 phase:0.0];
+    }
     [outline stroke];
     if (control.kind == XeniaTouchPadControlKindLeftStick ||
         control.kind == XeniaTouchPadControlKindRightStick) {
@@ -9020,7 +9457,7 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
                                      startAngle:0
                                        endAngle:2 * M_PI
                                       clockwise:YES];
-      [[UIColor colorWithWhite:1.0 alpha:0.45] setFill];
+      [[UIColor colorWithWhite:1.0 alpha:0.45 * opacity] setFill];
       [knob_path fill];
     }
     const CGSize label_size = [control.label sizeWithAttributes:attributes];
@@ -9055,6 +9492,7 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 @property(nonatomic, strong) UIButton* inGameSettingsButton;
 @property(nonatomic, strong) UIButton* inGameLiveLogButton;
 @property(nonatomic, strong) UIButton* inGameExitButton;
+@property(nonatomic, strong) UIButton* inGameEditControlsButton;
 @property(nonatomic, assign) BOOL gameRunning;
 @property(nonatomic, assign) BOOL gameStopInProgress;
 @property(nonatomic, assign) xe::ui::IOSWindowedAppContext* appContext;
@@ -9082,6 +9520,9 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
                                                        NSString* text))completion;
 - (void)setupInGameMenuOverlay;
 - (void)toggleInGameMenuTapped:(UITapGestureRecognizer*)recognizer;
+- (void)showAchievementNamed:(NSString*)name gamerscore:(uint32_t)gamerscore icon:(NSData*)icon;
+- (void)openInGameMenu;
+- (void)inGameEditControlsTapped:(UIButton*)sender;
 - (void)resumeGameTapped:(UIButton*)sender;
 - (void)inGameSettingsTapped:(UIButton*)sender;
 - (void)inGameLiveLogTapped:(UIButton*)sender;
@@ -9117,6 +9558,21 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   // Settings > Display > Device Status, and the thermal state it shows.
   UILabel* device_status_label_;
   NSInteger device_status_thermal_;
+  // Whether the app's UI over the running game was last reported to XAM as
+  // system UI (IOSWindowedAppContext::SetSystemUIActive).
+  BOOL system_ui_reported_;
+  // Achievement pop-ups waiting for the one on screen ({name, gamerscore,
+  // icon}), and whether one is on screen.
+  NSMutableArray<NSArray*>* achievement_queue_;
+  BOOL achievement_showing_;
+  // The touch layout editor's bar and its controls (built on first use).
+  UIVisualEffectView* touch_editor_bar_;
+  UILabel* touch_editor_label_;
+  UIButton* touch_editor_hide_button_;
+  UISlider* touch_editor_opacity_slider_;
+  UISegmentedControl* touch_editor_scope_;
+  NSLayoutConstraint* touch_editor_top_;
+  NSLayoutConstraint* touch_editor_bottom_;
 }
 
 - (void)viewDidLoad {
@@ -9147,6 +9603,15 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
       UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   self.touchPadView.hidden = YES;
   [self.view addSubview:self.touchPadView];
+  // The pad holds no strong reference back: the controller owns it.
+  __block XeniaViewController* weak_self = self;
+  self.touchPadView.menuHandler = ^{
+    [weak_self openInGameMenu];
+  };
+  self.touchPadView.selectionHandler = ^{
+    [weak_self updateTouchEditorBar];
+  };
+  [self.touchPadView loadLayoutForTitleID:0];
 
   // Device status (Settings > Display): the iOS version and thermal state in
   // the top-left corner while a game runs. The Metal HUD shows neither on
@@ -9954,11 +10419,31 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 }
 
 - (void)pollControllerNavigation:(NSTimer* __unused)timer {
+  const BOOL controller_connected = [GCController controllers].count != 0;
+  // A game that ended while its touch layout was being edited ends the edit
+  // unsaved.
+  if (self.touchPadView.editing && !self.gameRunning) {
+    self.touchPadView.editing = NO;
+    touch_editor_bar_.hidden = YES;
+    [self.touchPadView loadLayoutForTitleID:0];
+  }
+  // The in-game menu or a sheet over the running game holds the game's input
+  // like a XAM dialog, so the presses that navigate and close it don't reach
+  // the game.
+  const BOOL system_ui =
+      self.gameRunning && self.launcherOverlay.hidden &&
+      (!self.inGameMenuOverlay.hidden || self.presentedViewController || self.touchPadView.editing);
+  if (system_ui != system_ui_reported_ && self.appContext) {
+    system_ui_reported_ = system_ui;
+    self.appContext->SetSystemUIActive(system_ui);
+  }
+
   // Show the on-screen controller only while a game is on screen and no
   // physical controller is connected.
-  const BOOL hide_touch_pad = !self.gameRunning || !self.launcherOverlay.hidden ||
-                              !self.inGameMenuOverlay.hidden || self.presentedViewController ||
-                              [GCController controllers].count != 0;
+  const BOOL hide_touch_pad =
+      !self.touchPadView.editing &&
+      (!self.gameRunning || !self.launcherOverlay.hidden || !self.inGameMenuOverlay.hidden ||
+       self.presentedViewController || controller_connected);
   if (self.touchPadView.hidden != hide_touch_pad) {
     self.touchPadView.hidden = hide_touch_pad;
     if (hide_touch_pad) {
@@ -10020,6 +10505,13 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
     controller_navigation_was_enabled_ = YES;
     [self rebuildLauncherFocusGraph];
     [self applyLauncherFocusVisuals];
+  }
+
+  // With no controller connected there is nothing to navigate with, and the
+  // input system and the launch mutex stay free for the game.
+  if (!controller_connected) {
+    controller_navigation_mapper_.Reset();
+    return;
   }
 
   xe::hid::X_INPUT_STATE state = {};
@@ -10544,6 +11036,22 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
                      forControlEvents:UIControlEventTouchUpInside];
   [panel addSubview:self.inGameLiveLogButton];
 
+  UIButtonConfiguration* edit_controls_config = [UIButtonConfiguration tintedButtonConfiguration];
+  edit_controls_config.title = @"Edit Touch Controls";
+  edit_controls_config.image = [UIImage systemImageNamed:@"gamecontroller"];
+  edit_controls_config.imagePadding = 6;
+  edit_controls_config.baseForegroundColor = [XeniaTheme textPrimary];
+  edit_controls_config.baseBackgroundColor = [XeniaTheme bgSurface2];
+  edit_controls_config.cornerStyle = UIButtonConfigurationCornerStyleLarge;
+  edit_controls_config.contentInsets = NSDirectionalEdgeInsetsMake(10, 16, 10, 16);
+  self.inGameEditControlsButton = [UIButton buttonWithConfiguration:edit_controls_config
+                                                      primaryAction:nil];
+  self.inGameEditControlsButton.translatesAutoresizingMaskIntoConstraints = NO;
+  [self.inGameEditControlsButton addTarget:self
+                                    action:@selector(inGameEditControlsTapped:)
+                          forControlEvents:UIControlEventTouchUpInside];
+  [panel addSubview:self.inGameEditControlsButton];
+
   UIButtonConfiguration* exit_config = [UIButtonConfiguration tintedButtonConfiguration];
   exit_config.title = @"Exit To Library";
   exit_config.image = [UIImage systemImageNamed:@"rectangle.portrait.and.arrow.right"];
@@ -10562,10 +11070,12 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   [NSLayoutConstraint activateConstraints:@[
     [panel.centerXAnchor constraintEqualToAnchor:self.inGameMenuOverlay.centerXAnchor],
     [panel.centerYAnchor constraintEqualToAnchor:self.inGameMenuOverlay.centerYAnchor],
-    [panel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.inGameMenuOverlay.safeAreaLayoutGuide.leadingAnchor
+    [panel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.inGameMenuOverlay
+                                                                  .safeAreaLayoutGuide.leadingAnchor
                                                      constant:24],
-    [panel.trailingAnchor constraintLessThanOrEqualToAnchor:self.inGameMenuOverlay.safeAreaLayoutGuide.trailingAnchor
-                                                   constant:-24],
+    [panel.trailingAnchor
+        constraintLessThanOrEqualToAnchor:self.inGameMenuOverlay.safeAreaLayoutGuide.trailingAnchor
+                                 constant:-24],
     [panel.widthAnchor constraintLessThanOrEqualToConstant:420],
 
     [title.topAnchor constraintEqualToAnchor:panel.topAnchor constant:18],
@@ -10578,27 +11088,144 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 
     [self.inGameResumeButton.topAnchor constraintEqualToAnchor:subtitle.bottomAnchor constant:16],
     [self.inGameResumeButton.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:14],
-    [self.inGameResumeButton.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-14],
+    [self.inGameResumeButton.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor
+                                                           constant:-14],
 
-    [self.inGameSettingsButton.topAnchor constraintEqualToAnchor:self.inGameResumeButton.bottomAnchor
-                                                        constant:10],
-    [self.inGameSettingsButton.leadingAnchor constraintEqualToAnchor:self.inGameResumeButton.leadingAnchor],
+    [self.inGameSettingsButton.topAnchor
+        constraintEqualToAnchor:self.inGameResumeButton.bottomAnchor
+                       constant:10],
+    [self.inGameSettingsButton.leadingAnchor
+        constraintEqualToAnchor:self.inGameResumeButton.leadingAnchor],
     [self.inGameSettingsButton.trailingAnchor
         constraintEqualToAnchor:self.inGameResumeButton.trailingAnchor],
 
-    [self.inGameLiveLogButton.topAnchor constraintEqualToAnchor:self.inGameSettingsButton.bottomAnchor
-                                                       constant:10],
-    [self.inGameLiveLogButton.leadingAnchor constraintEqualToAnchor:self.inGameResumeButton.leadingAnchor],
+    [self.inGameLiveLogButton.topAnchor
+        constraintEqualToAnchor:self.inGameSettingsButton.bottomAnchor
+                       constant:10],
+    [self.inGameLiveLogButton.leadingAnchor
+        constraintEqualToAnchor:self.inGameResumeButton.leadingAnchor],
     [self.inGameLiveLogButton.trailingAnchor
         constraintEqualToAnchor:self.inGameResumeButton.trailingAnchor],
 
-    [self.inGameExitButton.topAnchor constraintEqualToAnchor:self.inGameLiveLogButton.bottomAnchor
-                                                    constant:10],
-    [self.inGameExitButton.leadingAnchor constraintEqualToAnchor:self.inGameResumeButton.leadingAnchor],
+    [self.inGameEditControlsButton.topAnchor
+        constraintEqualToAnchor:self.inGameLiveLogButton.bottomAnchor
+                       constant:10],
+    [self.inGameEditControlsButton.leadingAnchor
+        constraintEqualToAnchor:self.inGameResumeButton.leadingAnchor],
+    [self.inGameEditControlsButton.trailingAnchor
+        constraintEqualToAnchor:self.inGameResumeButton.trailingAnchor],
+
+    [self.inGameExitButton.topAnchor
+        constraintEqualToAnchor:self.inGameEditControlsButton.bottomAnchor
+                       constant:10],
+    [self.inGameExitButton.leadingAnchor
+        constraintEqualToAnchor:self.inGameResumeButton.leadingAnchor],
     [self.inGameExitButton.trailingAnchor
         constraintEqualToAnchor:self.inGameResumeButton.trailingAnchor],
     [self.inGameExitButton.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-14],
   ]];
+}
+
+// Achievement pop-up: a banner at the top of the screen for 4 s, one at a
+// time, with the sound chosen in Settings > Interface.
+- (void)showAchievementNamed:(NSString*)name gamerscore:(uint32_t)gamerscore icon:(NSData*)icon {
+  if (!achievement_queue_) {
+    achievement_queue_ = [[NSMutableArray alloc] init];
+  }
+  [achievement_queue_ addObject:@[ name ?: @"", @(gamerscore), icon ?: [NSData data] ]];
+  if (!achievement_showing_) {
+    [self showNextAchievement];
+  }
+}
+
+- (void)showNextAchievement {
+  if (achievement_queue_.count == 0) {
+    achievement_showing_ = NO;
+    return;
+  }
+  achievement_showing_ = YES;
+  NSArray* entry = [[achievement_queue_[0] retain] autorelease];
+  [achievement_queue_ removeObjectAtIndex:0];
+
+  UIVisualEffectView* banner = [[[UIVisualEffectView alloc]
+      initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThickMaterialDark]]
+      autorelease];
+  banner.translatesAutoresizingMaskIntoConstraints = NO;
+  banner.layer.cornerRadius = 16.0;
+  banner.clipsToBounds = YES;
+  banner.userInteractionEnabled = NO;
+
+  UIImage* icon_image = [UIImage imageWithData:entry[2]];
+  UIImageView* icon_view = [[[UIImageView alloc]
+      initWithImage:icon_image ?: [UIImage systemImageNamed:@"trophy.fill"]] autorelease];
+  icon_view.translatesAutoresizingMaskIntoConstraints = NO;
+  icon_view.contentMode = UIViewContentModeScaleAspectFit;
+  icon_view.tintColor = [UIColor systemYellowColor];
+  icon_view.layer.cornerRadius = 6.0;
+  icon_view.clipsToBounds = YES;
+
+  UILabel* heading = [[[UILabel alloc] init] autorelease];
+  heading.translatesAutoresizingMaskIntoConstraints = NO;
+  heading.text = @"Achievement unlocked";
+  heading.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
+  heading.textColor = [UIColor colorWithWhite:1.0 alpha:0.7];
+
+  UILabel* title = [[[UILabel alloc] init] autorelease];
+  title.translatesAutoresizingMaskIntoConstraints = NO;
+  title.text = [NSString stringWithFormat:@"%@G · %@", entry[1], entry[0]];
+  title.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
+  title.textColor = [UIColor whiteColor];
+  title.lineBreakMode = NSLineBreakByTruncatingTail;
+
+  [banner.contentView addSubview:icon_view];
+  [banner.contentView addSubview:heading];
+  [banner.contentView addSubview:title];
+  [self.view addSubview:banner];
+  NSLayoutConstraint* top =
+      [banner.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor
+                                       constant:-120.0];
+  [NSLayoutConstraint activateConstraints:@[
+    top,
+    [banner.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+    [banner.widthAnchor constraintLessThanOrEqualToConstant:420.0],
+    [banner.widthAnchor constraintGreaterThanOrEqualToConstant:260.0],
+    [banner.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor
+                                                      constant:16.0],
+    [icon_view.leadingAnchor constraintEqualToAnchor:banner.contentView.leadingAnchor
+                                            constant:12.0],
+    [icon_view.centerYAnchor constraintEqualToAnchor:banner.contentView.centerYAnchor],
+    [icon_view.widthAnchor constraintEqualToConstant:44.0],
+    [icon_view.heightAnchor constraintEqualToConstant:44.0],
+    [heading.leadingAnchor constraintEqualToAnchor:icon_view.trailingAnchor constant:12.0],
+    [heading.trailingAnchor constraintEqualToAnchor:banner.contentView.trailingAnchor
+                                           constant:-16.0],
+    [heading.topAnchor constraintEqualToAnchor:banner.contentView.topAnchor constant:12.0],
+    [title.leadingAnchor constraintEqualToAnchor:heading.leadingAnchor],
+    [title.trailingAnchor constraintEqualToAnchor:heading.trailingAnchor],
+    [title.topAnchor constraintEqualToAnchor:heading.bottomAnchor constant:2.0],
+    [title.bottomAnchor constraintEqualToAnchor:banner.contentView.bottomAnchor constant:-12.0],
+  ]];
+  [self.view layoutIfNeeded];
+  xe_play_achievement_sound();
+  top.constant = 8.0;
+  [UIView animateWithDuration:0.3
+      animations:^{
+        [self.view layoutIfNeeded];
+      }
+      completion:^(__unused BOOL finished) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(4.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+                         top.constant = -120.0;
+                         [UIView animateWithDuration:0.3
+                             animations:^{
+                               [self.view layoutIfNeeded];
+                             }
+                             completion:^(__unused BOOL done) {
+                               [banner removeFromSuperview];
+                               [self showNextAchievement];
+                             }];
+                       });
+      }];
 }
 
 - (void)toggleInGameMenuTapped:(UITapGestureRecognizer*)recognizer {
@@ -10617,6 +11244,9 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   }
 
   BOOL should_show = self.inGameMenuOverlay.hidden;
+  if (should_show && (!cvars::ios_tap_to_open_menu || self.touchPadView.editing)) {
+    return;
+  }
   if (should_show) {
     [self rebuildInGameFocusGraph];
     in_game_focus_graph_.SetCurrent(kInGameFocusResume);
@@ -10649,6 +11279,173 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 
 - (void)resumeGameTapped:(UIButton*)sender {
   [self hideInGameMenuOverlay];
+}
+
+// The menu control on the touch pad.
+- (void)openInGameMenu {
+  if (!self.gameRunning || !self.launcherOverlay.hidden || self.presentedViewController ||
+      !self.inGameMenuOverlay.hidden || self.touchPadView.editing) {
+    return;
+  }
+  [self rebuildInGameFocusGraph];
+  in_game_focus_graph_.SetCurrent(kInGameFocusResume);
+  self.inGameMenuOverlay.alpha = 0.0;
+  self.inGameMenuOverlay.hidden = NO;
+  [self applyInGameMenuFocusVisuals];
+  [UIView animateWithDuration:0.18
+                   animations:^{
+                     self.inGameMenuOverlay.alpha = 1.0;
+                   }];
+}
+
+// ---- Touch layout editor: drag a control to move it; the bar sizes, hides
+// and sets the opacity, and saves for all games or for this game.
+
+static UIButton* XeniaTouchEditorButton(NSString* title, id target, SEL action) {
+  UIButton* button = [UIButton buttonWithType:UIButtonTypeSystem];
+  [button setTitle:title forState:UIControlStateNormal];
+  button.tintColor = [UIColor whiteColor];
+  button.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+  button.contentEdgeInsets = UIEdgeInsetsMake(6, 8, 6, 8);
+  [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
+  return button;
+}
+
+- (void)buildTouchEditorBar {
+  touch_editor_bar_ = [[UIVisualEffectView alloc]
+      initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThickMaterialDark]];
+  touch_editor_bar_.translatesAutoresizingMaskIntoConstraints = NO;
+  touch_editor_bar_.layer.cornerRadius = 14.0;
+  touch_editor_bar_.clipsToBounds = YES;
+
+  touch_editor_label_ = [[UILabel alloc] init];
+  touch_editor_label_.textColor = [UIColor whiteColor];
+  touch_editor_label_.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
+  [touch_editor_label_ setContentHuggingPriority:UILayoutPriorityRequired
+                                         forAxis:UILayoutConstraintAxisHorizontal];
+
+  touch_editor_hide_button_ =
+      [XeniaTouchEditorButton(@"Hide", self, @selector(touchEditorHideTapped:)) retain];
+
+  UILabel* opacity_label = [[[UILabel alloc] init] autorelease];
+  opacity_label.text = @"Opacity";
+  opacity_label.textColor = [UIColor colorWithWhite:1.0 alpha:0.7];
+  opacity_label.font = [UIFont systemFontOfSize:13];
+  touch_editor_opacity_slider_ = [[UISlider alloc] init];
+  touch_editor_opacity_slider_.minimumValue = 0.1f;
+  touch_editor_opacity_slider_.maximumValue = 1.0f;
+  [touch_editor_opacity_slider_ addTarget:self
+                                   action:@selector(touchEditorOpacityChanged:)
+                         forControlEvents:UIControlEventValueChanged];
+  [touch_editor_opacity_slider_.widthAnchor constraintEqualToConstant:110.0].active = YES;
+
+  touch_editor_scope_ = [[UISegmentedControl alloc] initWithItems:@[ @"All Games", @"This Game" ]];
+  touch_editor_scope_.selectedSegmentTintColor = [XeniaTheme accent];
+
+  UIStackView* row = [[[UIStackView alloc] initWithArrangedSubviews:@[
+    touch_editor_label_,
+    XeniaTouchEditorButton(@"−", self, @selector(touchEditorSmallerTapped:)),
+    XeniaTouchEditorButton(@"+", self, @selector(touchEditorLargerTapped:)),
+    touch_editor_hide_button_,
+    opacity_label,
+    touch_editor_opacity_slider_,
+    touch_editor_scope_,
+    XeniaTouchEditorButton(@"Reset", self, @selector(touchEditorResetTapped:)),
+    XeniaTouchEditorButton(@"⇅", self, @selector(touchEditorMoveBarTapped:)),
+    XeniaTouchEditorButton(@"Done", self, @selector(touchEditorDoneTapped:)),
+  ]] autorelease];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+  row.axis = UILayoutConstraintAxisHorizontal;
+  row.alignment = UIStackViewAlignmentCenter;
+  row.spacing = 6.0;
+  [touch_editor_bar_.contentView addSubview:row];
+  [self.view addSubview:touch_editor_bar_];
+
+  touch_editor_top_ =
+      [[touch_editor_bar_.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor
+                                                   constant:8.0] retain];
+  touch_editor_bottom_ = [[touch_editor_bar_.bottomAnchor
+      constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor
+                     constant:-8.0] retain];
+  [NSLayoutConstraint activateConstraints:@[
+    touch_editor_top_,
+    [touch_editor_bar_.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+    [touch_editor_bar_.leadingAnchor
+        constraintGreaterThanOrEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor],
+    [row.leadingAnchor constraintEqualToAnchor:touch_editor_bar_.contentView.leadingAnchor
+                                      constant:12.0],
+    [row.trailingAnchor constraintEqualToAnchor:touch_editor_bar_.contentView.trailingAnchor
+                                       constant:-8.0],
+    [row.topAnchor constraintEqualToAnchor:touch_editor_bar_.contentView.topAnchor constant:6.0],
+    [row.bottomAnchor constraintEqualToAnchor:touch_editor_bar_.contentView.bottomAnchor
+                                     constant:-6.0],
+  ]];
+}
+
+- (void)updateTouchEditorBar {
+  if (!touch_editor_bar_) {
+    return;
+  }
+  XeniaTouchPadView* pad = self.touchPadView;
+  NSString* label = pad.selectedControlLabel;
+  touch_editor_label_.text = label ?: @"Drag a control";
+  [touch_editor_hide_button_ setTitle:pad.selectedHidden ? @"Show" : @"Hide"
+                             forState:UIControlStateNormal];
+  // The menu control always shows, so the menu stays reachable.
+  touch_editor_hide_button_.enabled = label != nil && ![label isEqualToString:@"☰"];
+  touch_editor_opacity_slider_.value = float(pad.layoutOpacity);
+}
+
+- (void)inGameEditControlsTapped:(UIButton*)sender {
+  [self hideInGameMenuOverlay];
+  if (!touch_editor_bar_) {
+    [self buildTouchEditorBar];
+  }
+  [self.view bringSubviewToFront:self.touchPadView];
+  [self.view bringSubviewToFront:touch_editor_bar_];
+  [touch_editor_scope_ setEnabled:self.touchPadView.layoutTitleID != 0 forSegmentAtIndex:1];
+  touch_editor_scope_.selectedSegmentIndex = self.touchPadView.layoutIsPerGame ? 1 : 0;
+  self.touchPadView.editing = YES;
+  self.touchPadView.hidden = NO;
+  touch_editor_bar_.hidden = NO;
+  [self updateTouchEditorBar];
+}
+
+- (void)touchEditorSmallerTapped:(UIButton*)sender {
+  self.touchPadView.selectedScale = self.touchPadView.selectedScale - 0.1;
+}
+
+- (void)touchEditorLargerTapped:(UIButton*)sender {
+  self.touchPadView.selectedScale = self.touchPadView.selectedScale + 0.1;
+}
+
+- (void)touchEditorHideTapped:(UIButton*)sender {
+  [self.touchPadView toggleSelectedHidden];
+  [self updateTouchEditorBar];
+}
+
+- (void)touchEditorOpacityChanged:(UISlider*)slider {
+  self.touchPadView.layoutOpacity = slider.value;
+}
+
+- (void)touchEditorResetTapped:(UIButton*)sender {
+  [self.touchPadView resetLayout];
+}
+
+- (void)touchEditorMoveBarTapped:(UIButton*)sender {
+  const BOOL to_bottom = touch_editor_top_.active;
+  touch_editor_top_.active = !to_bottom;
+  touch_editor_bottom_.active = to_bottom;
+  [UIView animateWithDuration:0.2
+                   animations:^{
+                     [self.view layoutIfNeeded];
+                   }];
+}
+
+- (void)touchEditorDoneTapped:(UIButton*)sender {
+  [self.touchPadView saveLayoutPerGame:touch_editor_scope_.selectedSegmentIndex == 1];
+  self.touchPadView.editing = NO;
+  touch_editor_bar_.hidden = YES;
 }
 
 - (void)inGameSettingsTapped:(UIButton*)sender {
@@ -11681,6 +12478,15 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
 
   self.statusLabel.text = [NSString stringWithFormat:@"Loading: %@", game_label];
   self.gameRunning = YES;
+  // The game's own touch layout if it has one, else the one for all games.
+  uint32_t layout_title_id = 0;
+  for (const IOSDiscoveredGame& game : discovered_games_) {
+    if (game.path == game_path) {
+      layout_title_id = game.title_id;
+      break;
+    }
+  }
+  [self.touchPadView loadLayoutForTitleID:layout_title_id];
 
   xe_request_landscape_orientation(self);
   [UIView animateWithDuration:0.3
@@ -12366,8 +13172,27 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
   app_context_->set_metal_view(vc.metalView);
   app_context_->set_view_controller(vc);
   vc.appContext = app_context_.get();
+  app_context_->set_achievement_callback(
+      [vc](const std::string& name, uint32_t gamerscore, std::vector<uint8_t> icon) {
+        // A guest thread, with no autorelease pool of its own.
+        NSString* name_string;
+        @autoreleasepool {
+          name_string = [ToNSString(name) copy];
+        }
+        NSData* icon_data = [[NSData alloc] initWithBytes:icon.data() length:icon.size()];
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [vc showAchievementNamed:name_string gamerscore:gamerscore icon:icon_data];
+          [name_string release];
+          [icon_data release];
+        });
+      });
   app_context_->set_signin_ui_prompt_callback(
       [vc](uint32_t user_index, uint32_t users_needed) {
+        // Off: answered as shown and closed with no one picked, so the game
+        // stays signed out (false would make XAM sign profiles in itself).
+        if (!cvars::ios_signin_prompt) {
+          return true;
+        }
         if ([NSThread isMainThread]) {
           return false;
         }
@@ -12386,8 +13211,14 @@ static const NSInteger kXeniaTouchPadControlCount = 19;
       });
   app_context_->set_keyboard_prompt_callback(
       [vc](const std::string& title, const std::string& description,
-           const std::string& default_text, std::string* text_out,
-           bool* cancelled_out) {
+           const std::string& default_text, std::string* text_out, bool* cancelled_out) {
+        // Off: answered as cancelled.
+        if (!cvars::ios_keyboard_prompt) {
+          if (cancelled_out) {
+            *cancelled_out = true;
+          }
+          return true;
+        }
         if ([NSThread isMainThread]) {
           if (cancelled_out) {
             *cancelled_out = true;

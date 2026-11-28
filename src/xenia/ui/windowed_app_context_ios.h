@@ -198,6 +198,33 @@ class IOSWindowedAppContext final : public WindowedAppContext {
     return keyboard_prompt_callback_(title, description, default_text, text_out, cancelled_out);
   }
 
+  // The app's own UI over a running game (the in-game menu, sheets): the game
+  // gets no input and the system UI notification while it shows, as with
+  // XAM's dialogs.
+  using SystemUICallback = std::function<void(bool)>;
+  void set_system_ui_callback(SystemUICallback callback) {
+    system_ui_callback_ = std::move(callback);
+  }
+  void SetSystemUIActive(bool active) const {
+    if (system_ui_callback_) {
+      system_ui_callback_(active);
+    }
+  }
+
+  // An achievement unlocked: its name, gamerscore and icon (PNG, may be
+  // empty), for the app's pop-up. Called from a guest thread.
+  using AchievementCallback =
+      std::function<void(const std::string&, uint32_t, std::vector<uint8_t>)>;
+  void set_achievement_callback(AchievementCallback callback) {
+    achievement_callback_ = std::move(callback);
+  }
+  void ShowAchievement(const std::string& name, uint32_t gamerscore,
+                       std::vector<uint8_t> icon) const {
+    if (achievement_callback_) {
+      achievement_callback_(name, gamerscore, std::move(icon));
+    }
+  }
+
   // Callback invoked when the view layout changes (rotation, resize, etc.).
   using LayoutChangedCallback = std::function<void()>;
   void set_layout_changed_callback(LayoutChangedCallback callback) {
@@ -225,6 +252,8 @@ class IOSWindowedAppContext final : public WindowedAppContext {
   MessageBoxPromptCallback message_box_prompt_callback_;
   KeyboardPromptCallback keyboard_prompt_callback_;
   LayoutChangedCallback layout_changed_callback_;
+  SystemUICallback system_ui_callback_;
+  AchievementCallback achievement_callback_;
 };
 
 }  // namespace ui

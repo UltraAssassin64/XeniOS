@@ -107,7 +107,10 @@ dword_result_t XamInputGetState_entry(dword_t user_index, dword_t flags,
     return X_ERROR_DEVICE_NOT_CONNECTED;
   }
 
-  if (kernel_state()->xam_state()->IsUIActive()) {
+  auto input_system = kernel_state()->emulator()->input_system();
+  UIInputFilter& filter = kernel_state()->xam_state()->ui_input_filter();
+  if (filter.OnUIState(kernel_state()->xam_state()->IsUIActive(),
+                       input_system)) {
     return X_ERROR_SUCCESS;
   }
 
@@ -122,12 +125,15 @@ dword_result_t XamInputGetState_entry(dword_t user_index, dword_t flags,
   }
 
   X_RESULT result;
-  auto input_system = kernel_state()->emulator()->input_system();
   {
     auto lock = input_system->lock();
     result = input_system->GetState(
         user_index, !flags ? X_INPUT_FLAG::X_INPUT_FLAG_GAMEPAD : flags,
         input_state);
+    // Buttons held when XAM UI closed stay hidden until released.
+    if (input_state && result == X_ERROR_SUCCESS) {
+      filter.FilterState(user_index, input_state);
+    }
   }
 
   if (input_state && result == X_ERROR_SUCCESS) {
@@ -177,8 +183,22 @@ dword_result_t XamInputGetKeystroke_entry(
   }
 
   auto input_system = kernel_state()->emulator()->input_system();
+  UIInputFilter& filter = kernel_state()->xam_state()->ui_input_filter();
+  if (filter.OnUIState(kernel_state()->xam_state()->IsUIActive(),
+                       input_system)) {
+    keystroke.Zero();
+    return X_ERROR_EMPTY;
+  }
   auto lock = input_system->lock();
-  return input_system->GetKeystroke(user_index, flags, keystroke);
+  X_RESULT result = input_system->GetKeystroke(user_index, flags, keystroke);
+  // Repeats of a button held when XAM UI closed are dropped until it's
+  // released.
+  if (result == X_ERROR_SUCCESS &&
+      filter.ShouldDropKeystroke(input_system, *keystroke)) {
+    keystroke.Zero();
+    return X_ERROR_EMPTY;
+  }
+  return result;
 }
 DECLARE_XAM_EXPORT1(XamInputGetKeystroke, kInput, kImplemented);
 
@@ -192,12 +212,14 @@ dword_result_t XamInputGetKeystrokeEx_entry(
 
   keystroke.Zero();
 
-  if (kernel_state()->xam_state()->IsUIActive()) {
+  auto input_system = kernel_state()->emulator()->input_system();
+  UIInputFilter& filter = kernel_state()->xam_state()->ui_input_filter();
+  if (filter.OnUIState(kernel_state()->xam_state()->IsUIActive(),
+                       input_system)) {
     return X_ERROR_SUCCESS;
   }
 
   uint32_t user_index = *user_index_ptr;
-  auto input_system = kernel_state()->emulator()->input_system();
   auto lock = input_system->lock();
   if ((user_index & XUserIndexAny) == XUserIndexAny) {
     // Always pin user to 0.
@@ -212,7 +234,8 @@ dword_result_t XamInputGetKeystrokeEx_entry(
       auto result = input_system->GetKeystroke(i, flags, keystroke);
 
       // Return result from first user that have pending request
-      if (result == X_ERROR_SUCCESS) {
+      if (result == X_ERROR_SUCCESS &&
+          !filter.ShouldDropKeystroke(input_system, *keystroke)) {
         *user_index_ptr = keystroke->user_index;
         return result;
       }
@@ -221,6 +244,12 @@ dword_result_t XamInputGetKeystrokeEx_entry(
   }
 
   auto result = input_system->GetKeystroke(user_index, flags, keystroke);
+
+  if (result == X_ERROR_SUCCESS &&
+      filter.ShouldDropKeystroke(input_system, *keystroke)) {
+    keystroke.Zero();
+    return X_ERROR_EMPTY;
+  }
 
   if (XSUCCEEDED(result)) {
     *user_index_ptr = keystroke->user_index;

@@ -22,16 +22,16 @@ further edits.
 | `shared_lock` | local (lock guard) | Holds shared_drivers_mutex_. | `src/xenia/apu/sdl/sdl_audio_driver.cc` | 77, 171, 210 | 3 |
 | `mix_frame` | local in SDLCallback (iOS only) | Scratch buffer one driver is rendered into before being summed. | `src/xenia/apu/sdl/sdl_audio_driver.cc` | 212, 213, 218, 220 | 4 |
 | `mixed` | local in SDLCallback (iOS only) | The output stream viewed as float samples. | `src/xenia/apu/sdl/sdl_audio_driver.cc` | 216, 220 | 2 |
-| `session_log_path` | function-local static in GetLogFilePath | The log file chosen for this launch; read by the logger setup and the in-app log viewer. | `src/xenia/ui/windowed_app_main_ios.mm` | 1264, 1277 | 2 |
-| `now` | local in GetLogFilePath | Current time used to name the log file. | `src/xenia/ui/windowed_app_main_ios.mm` | 1269, 1271 | 2 |
-| `local_time` | local in GetLogFilePath | now broken down in the device's time zone. | `src/xenia/ui/windowed_app_main_ios.mm` | 1270, 1271, 1274 | 3 |
-| `log_name` | local in GetLogFilePath | File name xenia_<date>_<time>.log. | `src/xenia/ui/windowed_app_main_ios.mm` | 1272, 1273, 1275 | 4 |
-| `kText` | enumerator of IOSConfigControlType | Settings row whose value is edited as text. | `src/xenia/ui/windowed_app_main_ios.mm` | 548, 1235, 3919, 8525, 8582 | 5 |
-| `AddAllConfigVarSettings` | function | Adds a settings section per config category with every variable not already shown. | `src/xenia/ui/windowed_app_main_ios.mm` | 1209, 3835 | 2 |
-| `existing_keys` | local in AddAllConfigVarSettings | Config keys the curated sections already expose, so they are not listed twice. | `src/xenia/ui/windowed_app_main_ios.mm` | 1213, 1217, 1223 | 3 |
-| `by_category` | local in AddAllConfigVarSettings | Generated sections keyed by config category. | `src/xenia/ui/windowed_app_main_ios.mm` | 1221, 1239, 1243 | 3 |
-| `parsed` | local in ApplyIOSConfigSections | The edited text parsed as a TOML value. | `src/xenia/ui/windowed_app_main_ios.mm` | 3933, 3935, 3938, 3945 | 4 |
-| `editor` | local in tableView:didSelectRowAtIndexPath: | Alert with a text field used to edit a kText row. | `src/xenia/ui/windowed_app_main_ios.mm` | 8586, 8590, 8626, 8629, 8632, 8642 | 6 |
+| `session_log_path` | function-local static in GetLogFilePath | The log file chosen for this launch; read by the logger setup and the in-app log viewer. | `src/xenia/ui/windowed_app_main_ios.mm` | 1286, 1299 | 2 |
+| `now` | local in GetLogFilePath | Current time used to name the log file. | `src/xenia/ui/windowed_app_main_ios.mm` | 1291, 1293 | 2 |
+| `local_time` | local in GetLogFilePath | now broken down in the device's time zone. | `src/xenia/ui/windowed_app_main_ios.mm` | 1292, 1293, 1296 | 3 |
+| `log_name` | local in GetLogFilePath | File name xenia_<date>_<time>.log. | `src/xenia/ui/windowed_app_main_ios.mm` | 1294, 1295, 1297 | 4 |
+| `kText` | enumerator of IOSConfigControlType | Settings row whose value is edited as text. | `src/xenia/ui/windowed_app_main_ios.mm` | 568, 1257, 3985, 8591, 8701 | 5 |
+| `AddAllConfigVarSettings` | function | Adds a settings section per config category with every variable not already shown. | `src/xenia/ui/windowed_app_main_ios.mm` | 1231, 3901 | 2 |
+| `existing_keys` | local in AddAllConfigVarSettings | Config keys the curated sections already expose, so they are not listed twice. | `src/xenia/ui/windowed_app_main_ios.mm` | 1235, 1239, 1245 | 3 |
+| `by_category` | local in AddAllConfigVarSettings | Generated sections keyed by config category. | `src/xenia/ui/windowed_app_main_ios.mm` | 1243, 1261, 1265 | 3 |
+| `parsed` | local in ApplyIOSConfigSections | The edited text parsed as a TOML value. | `src/xenia/ui/windowed_app_main_ios.mm` | 3999, 4001, 4004, 4011 | 4 |
+| `editor` | local in tableView:didSelectRowAtIndexPath: | Alert with a text field used to edit a kText row. | `src/xenia/ui/windowed_app_main_ios.mm` | 8705, 8709, 8745, 8748, 8751, 8761 | 6 |
 | `DrawStats` | struct in MetalCommandProcessor | Counters describing what happened to guest draws. | `src/xenia/gpu/metal/metal_command_processor.h` | 667, 685, 695 | 3 |
 | `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.h` | 685, 687 | 2 |
 | `draw_stats_` | member of MetalCommandProcessor | Current DrawStats; logged and reset every kDrawStatsFrames frames. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2921, 2928, 2929, 2930, 2931, 2932, 2933, 2984, 2992, 2993, 2994, 2995, 2996, 2999, 3006, 3007, 3008, 3009, 3010, 3011, 3012, 3013, 3030, 3041, 3042, 3043, 3044, 3076, 3106, 3113, 3124, 3133, 3143, 3144, 3146, 3423, 3425, 3461, 3486, 3547, 5005, 5036, 5137, 6866, 6867, 7547, 7560 | 57 |
@@ -47,7 +47,7 @@ further edits.
 | `touch` | namespace `xe::hid::touch` | Holds the on-screen controller driver and its state. | `src/xenia/hid/touch_input_driver_ios.cc` | 20, 185 | 2 |
 | `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/hid/touch_input_driver_ios.h` | 27 | 1 |
 | `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/hid/touch_input_driver_ios.cc` | 159 | 1 |
-| `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/ui/windowed_app_main_ios.mm` | 8776, 8932 | 2 |
+| `SetTouchState` | function | Stores the on-screen controller state; called by the UI, read by the driver. | `src/xenia/ui/windowed_app_main_ios.mm` | 8895, 9173 | 2 |
 | `TouchInputDriver` | class (anonymous namespace) | Input driver presenting the on-screen controller as a fallback gamepad. | `src/xenia/hid/touch_input_driver_ios.cc` | 29, 31, 182 | 3 |
 | `touch_state_mutex_` | file-scope variable | Guards `touch_state_`. | `src/xenia/hid/touch_input_driver_ios.cc` | 24, 25, 66, 107, 162 | 5 |
 | `touch_state_` | file-scope variable | Latest on-screen controller state and packet number. | `src/xenia/hid/touch_input_driver_ios.cc` | 27, 67, 108, 109, 113, 163, 177 | 8 |
@@ -57,51 +57,51 @@ further edits.
 | `keystroke_bit` | local in GetKeystroke | Bit of the button being examined. | `src/xenia/hid/touch_input_driver_ios.cc` | 121, 122, 124, 128 | 4 |
 | `pressed` | local in GetKeystroke | Whether that button is currently down. | `src/xenia/hid/touch_input_driver_ios.cc` | 122, 125, 132 | 3 |
 | `last_keystroke_buttons_` | member of TouchInputDriver | Buttons already reported through GetKeystroke. | `src/xenia/hid/touch_input_driver_ios.cc` | 124, 128, 154 | 3 |
-| `XeniaTouchPadView` | Objective-C class | The on-screen controller view. | `src/xenia/ui/windowed_app_main_ios.mm` | 8774, 8796, 8803, 9043, 9145 | 5 |
-| `XeniaTouchPadControl` | struct | One control of the on-screen controller: kind, button bit, label, centre, radius. | `src/xenia/ui/windowed_app_main_ios.mm` | 8786, 8804, 8837, 8982 | 4 |
-| `XeniaTouchPadControlKind` | enum | Kind of control. | `src/xenia/ui/windowed_app_main_ios.mm` | 8778, 8787 | 2 |
-| `XeniaTouchPadControlKindButton` | enumerator | A digital button. | `src/xenia/ui/windowed_app_main_ios.mm` | 8779, 8842, 8844, 8846, 8848, 8849, 8851, 8853, 8855, 8857, 8859, 8861, 8863, 8865, 8867, 8869 | 16 |
-| `XeniaTouchPadControlKindLeftTrigger` | enumerator | Left trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8780, 8840, 8924 | 3 |
-| `XeniaTouchPadControlKindRightTrigger` | enumerator | Right trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8781, 8841, 8926 | 3 |
-| `XeniaTouchPadControlKindLeftStick` | enumerator | Left thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8782, 8838, 8903, 8914, 8987, 9015 | 6 |
-| `XeniaTouchPadControlKindRightStick` | enumerator | Right thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8783, 8839, 8904, 8988, 9016 | 5 |
-| `kXeniaTouchPadControlCount` | file-scope constant | Number of controls (19). | `src/xenia/ui/windowed_app_main_ios.mm` | 8794, 8804, 8837, 8872, 8879, 8981 | 6 |
-| `controls_` | instance variable of XeniaTouchPadView | The controls with their current positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 8804, 8873, 8880, 8881, 8883, 8903, 8904, 8906, 8907, 8914, 8924, 8926, 8929, 8982 | 16 |
-| `pad_touches_` | instance variable of XeniaTouchPadView | Touches currently on the pad. | `src/xenia/ui/windowed_app_main_ios.mm` | 8806, 8817, 8824, 8900, 8901, 8938, 8941, 8950, 8963, 8965, 8985, 8986 | 12 |
-| `pad_touch_controls_` | instance variable of XeniaTouchPadView | Control each of those touches started on. | `src/xenia/ui/windowed_app_main_ios.mm` | 8807, 8818, 8825, 8902, 8942, 8951, 8966, 8989 | 8 |
-| `controlIndexAtPoint` | method of XeniaTouchPadView | Index of the control at a point, or -1. | `src/xenia/ui/windowed_app_main_ios.mm` | 8798, 8878, 8893, 8920, 8948, 8990, 10614 | 7 |
-| `resetTouches` | method of XeniaTouchPadView | Releases every control and reports the idle state. | `src/xenia/ui/windowed_app_main_ios.mm` | 8800, 8937, 9965 | 3 |
-| `reportState` | method of XeniaTouchPadView | Computes the gamepad state from the touches and passes it to SetTouchState. | `src/xenia/ui/windowed_app_main_ios.mm` | 8896, 8943, 8954, 8958, 8969 | 5 |
-| `touchPadView` | property of XeniaViewController | The on-screen controller view instance. | `src/xenia/ui/windowed_app_main_ios.mm` | 9043, 9145, 9146, 9148, 9149, 9962, 9963, 9965, 10613, 10614 | 11 |
-| `hide_touch_pad` | local in pollControllerNavigation | Whether the on-screen controller should be hidden now. | `src/xenia/ui/windowed_app_main_ios.mm` | 9959, 9962, 9963, 9964 | 4 |
-| `width` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8831, 8835, 8836, 9027 | 5 |
-| `height` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8832, 8838, 8839, 8852, 8854, 8856, 8858, 8860, 8862, 8864, 8866, 8868, 8870, 9028 | 15 |
-| `insets` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8833, 8834, 8835 | 3 |
-| `left` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8834, 8838, 8840, 8843, 8852, 8854, 8856, 8858, 8868 | 10 |
-| `right` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8835, 8839, 8841, 8845, 8860, 8862, 8864, 8866, 8870 | 10 |
-| `middle` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8836, 8847, 8848, 8850 | 4 |
-| `controls` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8837, 8873, 8891 | 3 |
-| `reach` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8883, 8884 | 3 |
-| `dx` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8880, 8884 | 3 |
-| `dy` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8881, 8884 | 3 |
-| `buttons` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8788, 8897, 8929, 8932 | 4 |
-| `triggers` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8898, 8919, 8925, 8927, 8932 | 6 |
-| `axes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8899, 8915, 8916, 8932, 8933 | 7 |
-| `point` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8797, 8798, 8878, 8880, 8881, 8892, 8893, 8901, 8906, 8907, 8920, 8986, 8990, 8993, 8994 | 15 |
-| `index` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8902, 8903, 8904, 8906, 8907, 8914, 8920, 8921, 8924, 8926, 8929, 8948, 8949, 8951 | 16 |
-| `x` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8880, 8906, 8908, 8910, 8915, 8993, 8995, 8997, 9000, 9027 | 18 |
-| `y` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8881, 8907, 8908, 8911, 8916, 8994, 8995, 8998, 9000, 9028 | 18 |
-| `length` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8908, 8909, 8910, 8911, 8995, 8996, 8997, 8998 | 8 |
-| `axis` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8913, 8915, 8916 | 3 |
-| `position` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8963, 8964, 8965, 8966 | 4 |
-| `attributes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8977, 9026, 9029 | 3 |
-| `control` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8797, 8799, 8805, 8882, 8982, 8984, 8987, 8988, 8993, 8994, 8996, 8997, 8998, 9000, 9005, 9006, 9015, 9016, 9019, 9026, 9027 | 22 |
-| `active` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8983, 8991, 9010 | 4 |
-| `knob` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8984, 9000, 9018, 9027, 9028 | 5 |
-| `is_stick` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8987, 8989, 8992 | 3 |
-| `outline` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9004, 9011, 9013, 9014 | 4 |
-| `knob_path` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9017, 9024 | 2 |
-| `label_size` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9026, 9027, 9028 | 3 |
+| `XeniaTouchPadView` | Objective-C class | The on-screen controller view. | `src/xenia/ui/windowed_app_main_ios.mm` | 8926, 8955, 9480, 9601, 11389 | 5 |
+| `XeniaTouchPadControl` | struct | One control of the on-screen controller: kind, button bit, label, centre, radius. | `src/xenia/ui/windowed_app_main_ios.mm` | 8907, 8956, 9004, 9411 | 4 |
+| `XeniaTouchPadControlKind` | enum | Kind of control. | `src/xenia/ui/windowed_app_main_ios.mm` | 8897, 8908 | 2 |
+| `XeniaTouchPadControlKindButton` | enumerator | A digital button. | `src/xenia/ui/windowed_app_main_ios.mm` | 8898, 9009, 9014, 9019, 9024, 9025, 9030, 9035, 9040, 9045, 9050, 9055, 9060, 9065, 9070, 9075 | 16 |
+| `XeniaTouchPadControlKindLeftTrigger` | enumerator | Left trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8899, 9007, 9165 | 3 |
+| `XeniaTouchPadControlKindRightTrigger` | enumerator | Right trigger. | `src/xenia/ui/windowed_app_main_ios.mm` | 8900, 9008, 9167 | 3 |
+| `XeniaTouchPadControlKindLeftStick` | enumerator | Left thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8901, 9005, 9144, 9155, 9417, 9452 | 6 |
+| `XeniaTouchPadControlKindRightStick` | enumerator | Right thumbstick. | `src/xenia/ui/windowed_app_main_ios.mm` | 8902, 9006, 9145, 9418, 9453 | 5 |
+| `kXeniaTouchPadControlCount` | file-scope constant | Number of controls (19). | `src/xenia/ui/windowed_app_main_ios.mm` | 8915, 8956, 8957, 9004, 9082, 9102, 9267, 9278, 9304, 9407 | 10 |
+| `controls_` | instance variable of XeniaTouchPadView | The controls with their current positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 8956, 9083, 9086, 9089, 9097, 9106, 9107, 9109, 9144, 9145, 9147, 9148, 9155, 9165, 9167, 9170, 9199, 9212, 9232, 9279, 9318, 9327, 9363, 9384, 9411 | 28 |
+| `pad_touches_` | instance variable of XeniaTouchPadView | Touches currently on the pad. | `src/xenia/ui/windowed_app_main_ios.mm` | 8959, 8973, 8982, 9141, 9142, 9179, 9182, 9218, 9251, 9253, 9415, 9416 | 12 |
+| `pad_touch_controls_` | instance variable of XeniaTouchPadView | Control each of those touches started on. | `src/xenia/ui/windowed_app_main_ios.mm` | 8960, 8974, 8983, 9143, 9183, 9219, 9254, 9419 | 8 |
+| `controlIndexAtPoint` | method of XeniaTouchPadView | Index of the control at a point, or -1. | `src/xenia/ui/windowed_app_main_ios.mm` | 8934, 9100, 9120, 9161, 9194, 9208, 9420, 11241 | 8 |
+| `resetTouches` | method of XeniaTouchPadView | Releases every control and reports the idle state. | `src/xenia/ui/windowed_app_main_ios.mm` | 8936, 9127, 9178, 10450 | 4 |
+| `reportState` | method of XeniaTouchPadView | Computes the gamepad state from the touches and passes it to SetTouchState. | `src/xenia/ui/windowed_app_main_ios.mm` | 9137, 9184, 9221, 9240, 9257 | 5 |
+| `touchPadView` | property of XeniaViewController | The on-screen controller view instance. | `src/xenia/ui/windowed_app_main_ios.mm` | 9480, 9601, 9602, 9604, 9605, 10447, 10448, 10450, 11240, 11241 | 11 |
+| `hide_touch_pad` | local in pollControllerNavigation | Whether the on-screen controller should be hidden now. | `src/xenia/ui/windowed_app_main_ios.mm` | 10443, 10447, 10448, 10449 | 4 |
+| `width` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8998, 9002, 9003, 9087, 9230, 9234, 9464 | 8 |
+| `height` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8999, 9005, 9006, 9033, 9038, 9043, 9048, 9053, 9058, 9063, 9068, 9073, 9078, 9080, 9087, 9231, 9235, 9465 | 19 |
+| `insets` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9000, 9001, 9002 | 3 |
+| `left` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9001, 9005, 9007, 9012, 9033, 9038, 9043, 9048, 9073 | 10 |
+| `right` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9002, 9006, 9008, 9017, 9053, 9058, 9063, 9068, 9078 | 10 |
+| `middle` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9003, 9022, 9024, 9028, 9080 | 5 |
+| `controls` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9004, 9083, 9276, 9277, 9279, 9303, 9318, 9321 | 8 |
+| `reach` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9109, 9110 | 3 |
+| `dx` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9106, 9110 | 3 |
+| `dy` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9107, 9110 | 3 |
+| `buttons` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9138, 9170, 9173 | 3 |
+| `triggers` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9139, 9166, 9168, 9173 | 5 |
+| `axes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9140, 9156, 9157, 9173, 9174 | 7 |
+| `point` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8934, 9100, 9106, 9107, 9119, 9120, 9142, 9147, 9148, 9161, 9193, 9194, 9199, 9227, 9229, 9416, 9420, 9423, 9424 | 21 |
+| `index` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9094, 9096, 9097, 9143, 9144, 9145, 9147, 9148, 9155, 9161, 9162, 9165, 9167, 9170, 9194, 9195, 9196, 9199, 9208, 9209, 9212, 9219 | 25 |
+| `x` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9085, 9087, 9106, 9147, 9149, 9151, 9156, 9199, 9229, 9230, 9234, 9284, 9286, 9288, 9307, 9308, 9423, 9425, 9427, 9430, 9464 | 32 |
+| `y` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9085, 9087, 9107, 9148, 9149, 9152, 9157, 9199, 9229, 9231, 9235, 9285, 9286, 9288, 9307, 9309, 9424, 9425, 9428, 9430, 9465 | 32 |
+| `length` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9149, 9150, 9151, 9152, 9425, 9426, 9427, 9428 | 8 |
+| `axis` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9154, 9156, 9157 | 3 |
+| `position` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 8921, 9085, 9087, 9233, 9251, 9252, 9253, 9254, 9287, 9307, 9308, 9309 | 15 |
+| `attributes` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9398, 9463, 9466 | 3 |
+| `control` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9411, 9412, 9414, 9417, 9418, 9423, 9424, 9426, 9427, 9428, 9430, 9435, 9436, 9452, 9453, 9456, 9463, 9464 | 19 |
+| `active` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9413, 9421, 9440, 9441 | 4 |
+| `knob` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9414, 9430, 9455, 9464, 9465 | 5 |
+| `is_stick` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9417, 9419, 9422 | 3 |
+| `outline` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9434, 9442, 9446, 9449, 9451 | 5 |
+| `knob_path` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9454, 9461 | 2 |
+| `label_size` | local in a XeniaTouchPadView method | Working value for layout, hit-testing, state or drawing. | `src/xenia/ui/windowed_app_main_ios.mm` | 9463, 9464, 9465 | 3 |
 | `ppc-test-binaries` | job id and artifact name, CPU tests workflow | Assembles the PowerPC instruction tests on Linux and hands the binaries to the macOS job. | `.github/workflows/cpu-tests.yml` | 19, 55, 64, 128 | 4 |
 | `cpu-tests-macos-arm64` | job id, CPU tests workflow | Builds and runs the CPU test programs on Apple Silicon. | `.github/workflows/cpu-tests.yml` | 62 | 1 |
 | `cache-binutils` | step id, CPU tests workflow | Cache of the patched PowerPC binutils build. | `.github/workflows/cpu-tests.yml` | 26, 35 | 2 |
@@ -142,9 +142,9 @@ further edits.
 | `mmio_text` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Text of one dump line. | `src/xenia/cpu/mmio_handler.cc` | 648, 652, 658, 675, 678, 683 | 6 |
 | `mmio_word` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Index of the word being added to a dump line. | `src/xenia/cpu/mmio_handler.cc` | 649, 650, 651, 655, 676, 677, 680 | 9 |
 | `mmio_end` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | End address of the guest function, or start + 0x200 if unknown. | `src/xenia/cpu/mmio_handler.cc` | 662, 666, 669 | 3 |
-| `kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey` | static NSString constant, iOS UI | User-defaults key of the "Auto-Enable JIT via TrollStore" toggle (stored as ios_auto_enable_jit_via_trollstore). | `src/xenia/ui/windowed_app_main_ios.mm` | 599, 3798, 11359, 11389 | 4 |
-| `jit_provider_name` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | "TrollStore" or "StikDebug", for the status label and log lines. | `src/xenia/ui/windowed_app_main_ios.mm` | 11387, 11394, 11426, 11427, 11437, 11439 | 6 |
-| `trollstore_url` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | apple-magnifier://enable-jit?bundle-id=... request for TrollStore. | `src/xenia/ui/windowed_app_main_ios.mm` | 11390, 11392, 11393 | 4 |
+| `kXeniaAutoEnableTrollStoreJITOnLaunchPreferenceKey` | static NSString constant, iOS UI | User-defaults key of the "Auto-Enable JIT via TrollStore" toggle (stored as ios_auto_enable_jit_via_trollstore). | `src/xenia/ui/windowed_app_main_ios.mm` | 621, 3864, 12156, 12186 | 4 |
+| `jit_provider_name` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | "TrollStore" or "StikDebug", for the status label and log lines. | `src/xenia/ui/windowed_app_main_ios.mm` | 12184, 12191, 12223, 12224, 12234, 12236 | 6 |
+| `trollstore_url` | local in requestAutomaticStikDebugJITHandoffForPendingLaunchPath: | apple-magnifier://enable-jit?bundle-id=... request for TrollStore. | `src/xenia/ui/windowed_app_main_ios.mm` | 12187, 12189, 12190 | 4 |
 | `mmio_frame` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Guest stack frame being walked (starts at r1). | `src/xenia/cpu/mmio_handler.cc` | 688, 690, 693, 694, 705 | 6 |
 | `mmio_depth` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Depth of the frame in the guest stack walk. | `src/xenia/cpu/mmio_handler.cc` | 689, 690, 691, 699, 701 | 5 |
 | `mmio_caller_frame` | local in MMIOHandler::ExceptionCallback (ARM64), hang diagnostics | Back-chain pointer: the caller's frame. | `src/xenia/cpu/mmio_handler.cc` | 692, 694, 698, 700, 705 | 6 |
@@ -261,7 +261,7 @@ further edits.
 | `kernel_call_sample` | local | Index of the extra samples (7, 1 ms apart). | `src/xenia/kernel/util/shim_utils.cc` | 371, 372 | 3 |
 | `kernel_call_sample_pc` | local | Host PC of one extra sample. | `src/xenia/kernel/util/shim_utils.cc` | 374, 377, 378, 385 | 4 |
 | `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/kernel/util/shim_utils.h` | 554 | 1 |
-| `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/app/xenia_main_ios.mm` | 619 | 1 |
+| `LogKernelCallThreads` | function, kernel shim | Logs every guest thread: inside or last kernel call, for how long, guest lr, call count; for a thread blocked a second or more, its wait object and guest stack. Also called when the iOS app stops a game. | `src/xenia/app/xenia_main_ios.mm` | 641 | 1 |
 
 | `MetalPerfCounters` | struct | Performance counters filled in across the Metal backend, logged and reset with the draw stats. | `src/xenia/gpu/metal/metal_perf_counters.h` | 26, 76 | 2 |
 | `gpu_us` | MetalPerfCounters field | GPU execution time of completed submission command buffers (us). | `src/xenia/gpu/metal/metal_perf_counters.h` | 28 | 1 |
@@ -460,7 +460,7 @@ further edits.
 | `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 4113, 4126, 4234, 4957, 5173, 5704, 6188 | 7 |
 | `metal_gpu_pass_timer` | inline global | The one MetalGpuPassTimer. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 1112, 1241 | 2 |
 | `metal_gpu_pass_timing` | cvar (Metal); iOS settings key | Turns pass timing, the traffic estimate, per-pipeline time and compile stall tracking on (default) or off; Diagnostics section toggle. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 10, 19, 217, 221, 737, 750 | 7 |
-| `metal_gpu_pass_timing` | cvar (Metal); iOS settings key | Turns pass timing, the traffic estimate, per-pipeline time and compile stall tracking on (default) or off; Diagnostics section toggle. | `src/xenia/ui/windowed_app_main_ios.mm` | 3816 | 1 |
+| `metal_gpu_pass_timing` | cvar (Metal); iOS settings key | Turns pass timing, the traffic estimate, per-pipeline time and compile stall tracking on (default) or off; Diagnostics section toggle. | `src/xenia/ui/windowed_app_main_ios.mm` | 3882 | 1 |
 | `metal_gpu_pass_record_` | MetalCommandProcessor member | Record of the current render encoder, for its draw count. | `src/xenia/gpu/metal/metal_command_processor.h` | 465 | 1 |
 | `metal_gpu_pass_record_` | MetalCommandProcessor member | Record of the current render encoder, for its draw count. | `src/xenia/gpu/metal/metal_command_processor.cc` | 768, 2161, 2235, 6870, 7801, 8089 | 6 |
 | `timestamp_set` | local in Initialize | The timestamp counter set. | `src/xenia/gpu/metal/metal_gpu_pass_timing.cc` | 129, 148, 150, 156, 164 | 5 |
@@ -595,7 +595,7 @@ further edits.
 | `argument_encoder_begin` | local in CompileToMsl | Start of the argument encoder creation, timed for the compile timings line. | `src/xenia/gpu/metal/msl_shader.cc` | 2146, 2171 | 2 |
 | `argument_encoder_ms` | local in CompileToMsl | Its time (argument-encoder= in the compile timings line). | `src/xenia/gpu/metal/msl_shader.cc` | 2170, 2188, 2197 | 3 |
 | `metal_async_compile_wait_ms` | cvar (Metal); iOS settings key | How long draws may wait per frame for a compile before being skipped; 0 (default) never waits. Settings > Performance > Wait for Shader Compiles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 144, 153, 999 | 3 |
-| `metal_async_compile_wait_ms` | cvar (Metal); iOS settings key | How long draws may wait per frame for a compile before being skipped; 0 (default) never waits. Settings > Performance > Wait for Shader Compiles. | `src/xenia/ui/windowed_app_main_ios.mm` | 3615 | 1 |
+| `metal_async_compile_wait_ms` | cvar (Metal); iOS settings key | How long draws may wait per frame for a compile before being skipped; 0 (default) never waits. Settings > Performance > Wait for Shader Compiles. | `src/xenia/ui/windowed_app_main_ios.mm` | 3654 | 1 |
 | `queue_arrival` | MslShaderCompileRequest and MslPipelineCompileRequest field | Queue order within a priority: the latest shader request first (a shader still needed in a later frame is queued again), pipelines first in, first out. | `src/xenia/gpu/metal/metal_command_processor.h` | 580, 600, 613, 622 | 6 |
 | `queue_arrival` | MslShaderCompileRequest and MslPipelineCompileRequest field | Queue order within a priority: the latest shader request first (a shader still needed in a later frame is queued again), pipelines first in, first out. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1060, 1065, 1067, 1104, 1258 | 5 |
 | `msl_compile_arrivals_` | MetalCommandProcessor member | Compiles queued so far: the next queue_arrival. | `src/xenia/gpu/metal/metal_command_processor.h` | 648 | 1 |
@@ -618,7 +618,7 @@ further edits.
 | `completions` | local in WaitForMslCompileProgress | msl_compile_completions_ when the wait started. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1013, 1019 | 2 |
 | `waited_us` | local in WaitForMslCompileProgress | Time waited. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1023, 1024, 1026 | 3 |
 | `metal_render_pass_area_from_scissor` | cvar (Metal); iOS settings key | Limit guest draw render passes to the area their scissors cover, and transfer passes to their rectangles (default off). Settings > Performance > Limit Render Pass Area. | `src/xenia/gpu/metal/metal_command_processor.cc` | 132, 142, 3552, 3556 | 4 |
-| `metal_render_pass_area_from_scissor` | cvar (Metal); iOS settings key | Limit guest draw render passes to the area their scissors cover, and transfer passes to their rectangles (default off). Settings > Performance > Limit Render Pass Area. | `src/xenia/ui/windowed_app_main_ios.mm` | 3657 | 1 |
+| `metal_render_pass_area_from_scissor` | cvar (Metal); iOS settings key | Limit guest draw render passes to the area their scissors cover, and transfer passes to their rectangles (default off). Settings > Performance > Limit Render Pass Area. | `src/xenia/ui/windowed_app_main_ios.mm` | 3696 | 1 |
 | `render_area_needed_width_` | MetalCommandProcessor member | Right edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.h` | 473 | 1 |
 | `render_area_needed_width_` | MetalCommandProcessor member | Right edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3554, 3579, 7934, 7949, 7990, 8102 | 6 |
 | `render_area_needed_height_` | MetalCommandProcessor member | Bottom edge of the current draw's scissor (0: whole target). | `src/xenia/gpu/metal/metal_command_processor.h` | 474 | 1 |
@@ -650,7 +650,7 @@ further edits.
 | `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/kernel/kernel_flags.cc` | 24 | 1 |
 | `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/kernel/kernel_flags.h` | 17 | 1 |
 | `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/kernel/util/shim_utils.cc` | 604 | 1 |
-| `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/ui/windowed_app_main_ios.mm` | 3823 | 1 |
+| `log_guest_thread_hotspots` | cvar (Logging); iOS settings key | Sample running guest threads with the Metal perf lines and log where busy ones spend their time (default on). Settings > Diagnostics > Guest Thread Hotspots. | `src/xenia/ui/windowed_app_main_ios.mm` | 3889 | 1 |
 | `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/kernel/util/shim_utils.h` | 558 | 1 |
 | `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/kernel/util/shim_utils.cc` | 603 | 1 |
 | `LogGuestThreadHotspots` | function, kernel shim | Samples every running guest thread 16 times, 1 ms apart, and logs where each busy one spends its time (Apple ARM64). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3145 | 1 |
@@ -693,7 +693,7 @@ further edits.
 | `row` | loop variable | Line of eight words in the code dump. | `src/xenia/kernel/util/shim_utils.cc` | 749, 755, 757 | 5 |
 | `word` | loop variable | Word within that line. | `src/xenia/kernel/util/shim_utils.cc` | 751, 755 | 4 |
 | `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/gpu/metal/msl_shader.cc` | 52, 2021 | 2 |
-| `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 3678 | 1 |
+| `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 3717 | 1 |
 | `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.h` | 226, 673 | 2 |
 | `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.cc` | 623, 841 | 2 |
 | `last_update_height_used` | RenderTargetCache member function | Getter for last_update_height_used_. | `src/xenia/gpu/render_target_cache.h` | 226 | 1 |
@@ -728,7 +728,7 @@ further edits.
 | `area_transfer_limited` | local in IssueSwap | render_area_transfer_limited for the log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3097, 3108, 3110 | 4 |
 | `area_transfer_rows` | local in IssueSwap | render_area_transfer_rows for the log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3099, 3110 | 2 |
 | `area_attachments` | structured binding in IssueSwap, local in BeginCommandBuffer | Attachment textures keying render_area_by_attachments_. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3155, 7977, 7979, 7983, 7986, 7988 | 6 |
-| `accuracy` | local in BuildIOSConfigSections | The Accuracy settings section. | `src/xenia/ui/windowed_app_main_ios.mm` | 3673, 3674, 3675, 3678, 3683, 3687, 3705, 3711, 3712 | 9 |
+| `accuracy` | local in BuildIOSConfigSections | The Accuracy settings section. | `src/xenia/ui/windowed_app_main_ios.mm` | 3712, 3713, 3714, 3717, 3722, 3726, 3744, 3750, 3751 | 9 |
 | `metal_uniform_buffers_max` | cvar (GPU) | Most SPIRV-Cross uniform buffers (8 draws each) in flight before draws wait for the GPU; 0 for the default (96 on iOS, 12 elsewhere). | `src/xenia/gpu/metal/metal_command_processor.cc` | 112, 185, 187, 188 | 4 |
 | `MetalUniformBuffersMax` | function (anonymous namespace) | metal_uniform_buffers_max, or its platform default. | `src/xenia/gpu/metal/metal_command_processor.cc` | 186, 3084, 8247, 8476 | 4 |
 | `uniform_waits` | MetalPerfCounters field | Draws that waited for a free SPIRV-Cross uniform buffer. | `src/xenia/gpu/metal/metal_perf_counters.h` | 44 | 1 |
@@ -797,7 +797,7 @@ further edits.
 | `slot_offset` | local in IssueDrawMsl | Byte offset of the slot in the visibility buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6483, 6486, 6488 | 3 |
 | `zpd_pass` | local in BeginCommandBuffer | The draw pass must be created with the visibility buffer (a query is being counted). | `src/xenia/gpu/metal/metal_command_processor.cc` | 7923, 7925, 8008, 8095, 8099 | 5 |
 | `metal_frame_detail_log` | cvar (GPU); iOS settings key | Changed to N while a game runs: logs every render pass, draw, texture fetch constant, resolve, render target transfer and occlusion query of the next N frames. Settings > Diagnostics > Frame Detail Log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 118, 1617, 2915, 2937, 2938 | 5 |
-| `metal_frame_detail_log` | cvar (GPU); iOS settings key | Changed to N while a game runs: logs every render pass, draw, texture fetch constant, resolve, render target transfer and occlusion query of the next N frames. Settings > Frame Capture > Frame Detail Log (first section). | `src/xenia/ui/windowed_app_main_ios.mm` | 3519, 3865 | 2 |
+| `metal_frame_detail_log` | cvar (GPU); iOS settings key | Changed to N while a game runs: logs every render pass, draw, texture fetch constant, resolve, render target transfer and occlusion query of the next N frames. Settings > Frame Capture > Frame Detail Log (first section). | `src/xenia/ui/windowed_app_main_ios.mm` | 3558, 3931 | 2 |
 | `frame_detail_frames` | MetalPerfCounters field | Frames left to log in detail; counted down at swaps, read by the render target cache for transfers. | `src/xenia/gpu/metal/metal_perf_counters.h` | 73 | 1 |
 | `frame_detail_frames` | MetalPerfCounters field | Frames left to log in detail; counted down at swaps, read by the render target cache for transfers. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2918, 2934, 2941, 6363, 6908, 7530, 7548, 7614, 7699, 8122 | 10 |
 | `frame_detail_frames` | MetalPerfCounters field | Frames left to log in detail; counted down at swaps, read by the render target cache for transfers. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5086 | 1 |
@@ -817,7 +817,7 @@ further edits.
 | `fetch_bits` | local in IssueDrawMsl | used_texture_mask fetches not yet logged. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6367, 6369, 6370 | 3 |
 | `frame_detail_sources` | local in MetalRenderTargetCache::PerformTransfersAndResolveClears | A render target's transfer sources, for its log line. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 5092, 5094, 5103 | 3 |
 | `metal_inline_shader_constants` | cvar (GPU); iOS settings key | SPIRV-Cross path: pass each draw's shader constants with setVertexBytes/setFragmentBytes when they change instead of through the pooled 8-draw uniform buffers (default on). Settings > Performance > Inline Shader Constants. | `src/xenia/gpu/metal/metal_command_processor.cc` | 105, 3627, 5388, 7171 | 4 |
-| `metal_inline_shader_constants` | cvar (GPU); iOS settings key | SPIRV-Cross path: pass each draw's shader constants with setVertexBytes/setFragmentBytes when they change instead of through the pooled 8-draw uniform buffers (default on). Settings > Performance > Inline Shader Constants. | `src/xenia/ui/windowed_app_main_ios.mm` | 3663 | 1 |
+| `metal_inline_shader_constants` | cvar (GPU); iOS settings key | SPIRV-Cross path: pass each draw's shader constants with setVertexBytes/setFragmentBytes when they change instead of through the pooled 8-draw uniform buffers (default on). Settings > Performance > Inline Shader Constants. | `src/xenia/ui/windowed_app_main_ios.mm` | 3702 | 1 |
 | `inline_constants` | local in IssueDrawMsl | metal_inline_shader_constants for this draw. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5387, 5396, 5407, 5460, 5684, 5745 | 6 |
 | `write_constant_block` | lambda in IssueDrawMsl | Passes one constant block with set*Bytes if its version is not bound in this encoder, or writes it to the draw's table. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5453, 5482, 5487, 5572, 5583, 5598, 5602, 5618, 5622, 5629, 5637, 5643 | 12 |
 | `pixel_stage` | write_constant_block parameter | The block is for the pixel stage. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5454, 5464, 5472 | 3 |
@@ -887,7 +887,7 @@ further edits.
 | `programmable_sample_positions_supported_` | member of MetalRenderTargetCache | MTLDevice areProgrammableSamplePositionsSupported, read at Initialize. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 734, 739, 741, 3911 | 4 |
 | `use_xenos_positions` | local in ApplyXenosSamplePositions | Whether this pass gets the Xenos positions. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 3910, 3916, 3920, 3922 | 4 |
 | `metal_gpu_ordered_fences` | cvar (Metal) | Publish shader-done fences only once the GPU has completed the work before them (zero-copy shared memory). Default true; Settings > Accuracy. | `src/xenia/gpu/metal/metal_command_processor.cc` | 98, 2097 | 2 |
-| `metal_gpu_ordered_fences` | cvar (Metal) | Publish shader-done fences only once the GPU has completed the work before them (zero-copy shared memory). Default true; Settings > Accuracy. | `src/xenia/ui/windowed_app_main_ios.mm` | 3699 | 1 |
+| `metal_gpu_ordered_fences` | cvar (Metal) | Publish shader-done fences only once the GPU has completed the work before them (zero-copy shared memory). Default true; Settings > Accuracy. | `src/xenia/ui/windowed_app_main_ios.mm` | 3738 | 1 |
 | `AttachShaderDoneFences` | member function of MetalCommandProcessor | Moves pending_shader_done_fences_ into a completion handler of a command buffer about to be committed, which stores them in guest memory. | `src/xenia/gpu/metal/metal_command_processor.h` | 1001 | 1 |
 | `AttachShaderDoneFences` | member function of MetalCommandProcessor | Moves pending_shader_done_fences_ into a completion handler of a command buffer about to be committed, which stores them in guest memory. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2117, 2122, 2181, 3178, 7094, 8708 | 6 |
 | `pending_shader_done_fences_` | member of MetalCommandProcessor | Shader-done fences (physical address, value) waiting for the open command buffer. | `src/xenia/gpu/metal/metal_command_processor.h` | 998 | 1 |
@@ -964,14 +964,14 @@ further edits.
 | `vertex_words` | local in IssueDraw (frame detail) | Words of vertex data dumped (at most 48). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6423, 6429, 6432 | 3 |
 | `frame_detail_vertices` | local in IssueDraw (frame detail) | The dumped vertex data as text. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6428, 6436, 6447 | 3 |
 | `word_float` | local in IssueDraw (frame detail) | One vertex word as a float. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6434, 6435, 6440 | 3 |
-| `OnlyFrameDetailLogChanged` | function | Whether edited settings differ from the stored ones only in metal_frame_detail_log (then saving closes Settings without the alert). | `src/xenia/ui/windowed_app_main_ios.mm` | 3843, 8743 | 2 |
-| `frame_capture` | local in BuildIOSConfigSections | The Frame Capture section, first in Settings. | `src/xenia/ui/windowed_app_main_ios.mm` | 3514, 3515, 3516, 3519, 3536, 3537 | 6 |
-| `frame_detail_changed` | local in OnlyFrameDetailLogChanged | Whether the Frame Detail Log differs. | `src/xenia/ui/windowed_app_main_ios.mm` | 3848, 3869, 3872 | 3 |
-| `only_frame_detail_log` | local in saveTapped: | Result of OnlyFrameDetailLogChanged before the settings are applied. | `src/xenia/ui/windowed_app_main_ios.mm` | 8743, 8747 | 2 |
+| `OnlyFrameDetailLogChanged` | function | Whether edited settings differ from the stored ones only in metal_frame_detail_log (then saving closes Settings without the alert). | `src/xenia/ui/windowed_app_main_ios.mm` | 3909, 8862 | 2 |
+| `frame_capture` | local in BuildIOSConfigSections | The Frame Capture section, first in Settings. | `src/xenia/ui/windowed_app_main_ios.mm` | 3553, 3554, 3555, 3558, 3575, 3576 | 6 |
+| `frame_detail_changed` | local in OnlyFrameDetailLogChanged | Whether the Frame Detail Log differs. | `src/xenia/ui/windowed_app_main_ios.mm` | 3914, 3935, 3938 | 3 |
+| `only_frame_detail_log` | local in saveTapped: | Result of OnlyFrameDetailLogChanged before the settings are applied. | `src/xenia/ui/windowed_app_main_ios.mm` | 8862, 8866 | 2 |
 | `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/gpu/render_target_cache.cc` | 50, 2084 | 2 |
 | `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/gpu/metal/metal_command_processor.cc` | 95, 3125 | 2 |
 | `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/emulator.cc` | 122, 2279 | 2 |
-| `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/ui/windowed_app_main_ios.mm` | 3631 | 1 |
+| `skip_unchanged_render_target_transfers` | cvar; iOS settings key | Skip transfers back to a render target whose copy of the EDRAM range is unchanged (default off). Settings > Performance > Skip Unchanged Render Target Copies. | `src/xenia/ui/windowed_app_main_ios.mm` | 3670 | 1 |
 | `TakeUnchangedTransferCounts` | member function of RenderTargetCache | Returns and resets unchanged_transfers_ and skipped_transfers_ for the Metal perf log. | `src/xenia/gpu/render_target_cache.h` | 243 | 1 |
 | `TakeUnchangedTransferCounts` | member function of RenderTargetCache | Returns and resets unchanged_transfers_ and skipped_transfers_ for the Metal perf log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3118 | 1 |
 | `unchanged_out` | parameter of TakeUnchangedTransferCounts | Receives unchanged_transfers_. | `src/xenia/gpu/render_target_cache.h` | 243, 245 | 2 |
@@ -997,7 +997,7 @@ further edits.
 | `UserApcPendingForHostWait` | function (xobject.cc) | Whether an alertable host wait should end at once for a pending guest user APC (POSIX host waits are not woken by one). | `src/xenia/kernel/xobject.cc` | 42, 442, 450, 680, 688, 722, 730 | 7 |
 | `kAlertableWaitPollIntervalIOS` | constant (iOS only) | Slice of an alertable host wait on iOS, so an APC queued by another thread is seen within 10 ms. | `src/xenia/kernel/xobject.cc` | 59, 138 | 2 |
 | `slice` | local in WaitWithTitleStopPollIOS (iOS only) | The next wait slice, capped at kAlertableWaitPollIntervalIOS for alertable waits. | `src/xenia/kernel/xobject.cc` | 136, 138, 140 | 4 |
-| `typed_utf8` | local in the keyboard prompt callback | UTF-8 of the typed text (nil-safe) before the copy is released. | `src/xenia/ui/windowed_app_main_ios.mm` | 12417, 12418 | 3 |
+| `typed_utf8` | local in the keyboard prompt callback | UTF-8 of the typed text (nil-safe) before the copy is released. | `src/xenia/ui/windowed_app_main_ios.mm` | 13248, 13249 | 3 |
 | `ordinal` | member of MetalCommandProcessor::MetalZPDQuery | The query's place among the frame's query ends. | `src/xenia/gpu/metal/metal_command_processor.h` | 497 | 1 |
 | `ordinal` | member of MetalCommandProcessor::MetalZPDQuery | The query's place among the frame's query ends. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7575, 7576, 7577, 7583, 7584, 7594, 7595, 7679, 7680, 7704 | 11 |
 | `address_guess` | member of MetalCommandProcessor::MetalZPDQuery | What the last count at its address predicted. | `src/xenia/gpu/metal/metal_command_processor.h` | 498 | 1 |
@@ -1015,7 +1015,7 @@ further edits.
 | `address_miss` | local in ProcessCompletedZPDQueries | How far the guess by address was. | `src/xenia/gpu/metal/metal_command_processor.cc` | 7672, 7673, 7675 | 3 |
 | `signin_state_logged` | function-local static in XamUserGetSigninState_entry | The value last logged per user, to log only changes. | `src/xenia/kernel/xam/xam_user.cc` | 104, 106, 107 | 3 |
 | `metal_gpu_trace_frames` | cvar (Metal); iOS settings key | Changed to N during a game: records the GPU commands of the next N frames into a trace under trace_gpu_prefix. Settings > Frame Capture > GPU Trace. | `src/xenia/gpu/metal/metal_command_processor.cc` | 125, 2962, 2963 | 3 |
-| `metal_gpu_trace_frames` | cvar (Metal); iOS settings key | Changed to N during a game: records the GPU commands of the next N frames into a trace under trace_gpu_prefix. Settings > Frame Capture > GPU Trace. | `src/xenia/ui/windowed_app_main_ios.mm` | 3528, 3866 | 2 |
+| `metal_gpu_trace_frames` | cvar (Metal); iOS settings key | Changed to N during a game: records the GPU commands of the next N frames into a trace under trace_gpu_prefix. Settings > Frame Capture > GPU Trace. | `src/xenia/ui/windowed_app_main_ios.mm` | 3567, 3932 | 2 |
 | `gpu_trace_setting_` | member of MetalCommandProcessor | metal_gpu_trace_frames when last seen (a change starts a recording). | `src/xenia/gpu/metal/metal_command_processor.h` | 691 | 1 |
 | `gpu_trace_setting_` | member of MetalCommandProcessor | metal_gpu_trace_frames when last seen (a change starts a recording). | `src/xenia/gpu/metal/metal_command_processor.cc` | 2962, 2963, 2964, 2979 | 4 |
 | `gpu_trace_frames_left_` | member of MetalCommandProcessor | Frames of the current recording still to write. | `src/xenia/gpu/metal/metal_command_processor.h` | 692 | 1 |
@@ -1054,7 +1054,7 @@ further edits.
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/gpu/render_target_cache.cc` | 60, 781, 1748 | 3 |
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/gpu/render_target_cache.h` | 36 | 1 |
 | `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/emulator.cc` | 123, 2280 | 2 |
-| `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/ui/windowed_app_main_ios.mm` | 3640 | 1 |
+| `msaa_samples_as_pixels` | cvar; iOS settings key | Draw MSAA rectangle lists (clears, screen-space passes) into the 1x render target whose pixels are the samples, scaled by the sample grid, unless the host MSAA render target holds the EDRAM (default off). Settings > Performance > MSAA Samples as Pixels. | `src/xenia/ui/windowed_app_main_ios.mm` | 3679 | 1 |
 | `last_update_samples_as_pixels_` | member of RenderTargetCache | Guest MSAA of the surface the last Update bound as 1x render targets of its samples, or k1X. | `src/xenia/gpu/render_target_cache.h` | 233, 236, 676 | 3 |
 | `last_update_samples_as_pixels_` | member of RenderTargetCache | Guest MSAA of the surface the last Update bound as 1x render targets of its samples, or k1X. | `src/xenia/gpu/render_target_cache.cc` | 624, 793 | 2 |
 | `last_update_samples_as_pixels_x_log2` | member function of RenderTargetCache | Horizontal draw scale (log2) on top of the resolution scale for msaa_samples_as_pixels: 1 at 4x MSAA. | `src/xenia/gpu/render_target_cache.h` | 232 | 1 |
@@ -1101,26 +1101,26 @@ further edits.
 | `caller_frame` | local in NoteSignal | Back chain of the current guest stack frame. | `src/xenia/kernel/xevent.cc` | 85, 87, 91, 92 | 5 |
 | `metal_hud` | cvar; iOS settings key | Show the Metal performance HUD (developerHUDProperties mode; MTL_HUD_ENABLED unset when off). Settings > Display > Metal Performance HUD. | `src/xenia/ui/metal/metal_presenter.mm` | 50, 911, 914 | 3 |
 | `metal_hud` | cvar; iOS settings key | Show the Metal performance HUD (developerHUDProperties mode; MTL_HUD_ENABLED unset when off). Settings > Display > Metal Performance HUD. | `src/xenia/app/xenia_main_ios.mm` | 82, 186 | 2 |
-| `metal_hud` | cvar; iOS settings key | Show the Metal performance HUD (developerHUDProperties mode; MTL_HUD_ENABLED unset when off). Settings > Display > Metal Performance HUD. | `src/xenia/ui/windowed_app_main_ios.mm` | 3543 | 1 |
+| `metal_hud` | cvar; iOS settings key | Show the Metal performance HUD (developerHUDProperties mode; MTL_HUD_ENABLED unset when off). Settings > Display > Metal Performance HUD. | `src/xenia/ui/windowed_app_main_ios.mm` | 3582 | 1 |
 | `metal_hud_elements` | cvar; iOS settings key | MTL_HUD_ELEMENTS for the HUD, set after the config is read (empty: Apple default). Settings > Display > HUD Contents. | `src/xenia/ui/metal/metal_presenter.mm` | 54 | 1 |
 | `metal_hud_elements` | cvar; iOS settings key | MTL_HUD_ELEMENTS for the HUD, set after the config is read (empty: Apple default). Settings > Display > HUD Contents. | `src/xenia/app/xenia_main_ios.mm` | 84, 187, 188 | 3 |
-| `metal_hud_elements` | cvar; iOS settings key | MTL_HUD_ELEMENTS for the HUD, set after the config is read (empty: Apple default). Settings > Display > HUD Contents. | `src/xenia/ui/windowed_app_main_ios.mm` | 3548 | 1 |
+| `metal_hud_elements` | cvar; iOS settings key | MTL_HUD_ELEMENTS for the HUD, set after the config is read (empty: Apple default). Settings > Display > HUD Contents. | `src/xenia/ui/windowed_app_main_ios.mm` | 3587 | 1 |
 | `metal_hud_alignment` | cvar; iOS settings key | MTL_HUD_ALIGNMENT for the HUD. Settings > Display > HUD Position. | `src/xenia/ui/metal/metal_presenter.mm` | 60 | 1 |
 | `metal_hud_alignment` | cvar; iOS settings key | MTL_HUD_ALIGNMENT for the HUD. Settings > Display > HUD Position. | `src/xenia/app/xenia_main_ios.mm` | 83, 190, 191 | 3 |
-| `metal_hud_alignment` | cvar; iOS settings key | MTL_HUD_ALIGNMENT for the HUD. Settings > Display > HUD Position. | `src/xenia/ui/windowed_app_main_ios.mm` | 3559 | 1 |
-| `ios_device_status` | cvar; iOS settings key | Show the iOS version and thermal state while a game runs. Settings > Display > Device Status. | `src/xenia/ui/windowed_app_main_ios.mm` | 70, 3567, 9971 | 3 |
-| `device_status_label_` | ivar of XeniaViewController | The device status label (top left, below menus). | `src/xenia/ui/windowed_app_main_ios.mm` | 9118, 9154, 9155, 9156, 9158, 9159, 9160, 9161, 9162, 9164, 9166, 9168, 9996, 9999, 10002, 10003 | 16 |
-| `device_status_thermal_` | ivar of XeniaViewController | Thermal state the label shows (-1 before the first). | `src/xenia/ui/windowed_app_main_ios.mm` | 9119, 9163, 9976, 9977 | 4 |
-| `show_device_status` | local in pollControllerNavigation: | Whether the device status label is shown now. | `src/xenia/ui/windowed_app_main_ios.mm` | 9971, 9974, 10002, 10003 | 4 |
-| `thermal` | local in pollControllerNavigation: | NSProcessInfo thermalState as read this tick. | `src/xenia/ui/windowed_app_main_ios.mm` | 9975, 9976, 9977, 9980 | 4 |
-| `thermal_name` | local in pollControllerNavigation: | Name of that thermal state for the label. | `src/xenia/ui/windowed_app_main_ios.mm` | 9978, 9982, 9986, 9990, 9998 | 5 |
-| `thermal_color` | local in pollControllerNavigation: | Label color for that thermal state. | `src/xenia/ui/windowed_app_main_ios.mm` | 9979, 9983, 9987, 9991, 9999 | 5 |
-| `shown_sections_` | ivar of XeniaConfigViewController | Sections the settings search shows, as indices into sections_. | `src/xenia/ui/windowed_app_main_ios.mm` | 8031, 8249, 8270, 8437, 8444, 8448, 8452, 8459, 8462, 8466, 8469 | 11 |
-| `shown_items_` | ivar of XeniaConfigViewController | Per shown section, the items the settings search shows, as indices into its items. | `src/xenia/ui/windowed_app_main_ios.mm` | 8032, 8250, 8271, 8440, 8455 | 5 |
-| `applySettingsSearch` | method of XeniaConfigViewController | Fills shown_sections_ and shown_items_ with the settings matching every word of the search text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8202, 8242, 8277 | 3 |
-| `search_text` | parameter of applySettingsSearch: | The search bar text (nil for none). | `src/xenia/ui/windowed_app_main_ios.mm` | 8242, 8244 | 2 |
-| `filtering` | local in applySettingsSearch: | The search text has a word, so sections without matches are hidden. | `src/xenia/ui/windowed_app_main_ios.mm` | 8245, 8247, 8269 | 4 |
-| `shown` | local in tableView:titleForFooterInSection: | The section shown at that index. | `src/xenia/ui/windowed_app_main_ios.mm` | 8469, 8470 | 3 |
+| `metal_hud_alignment` | cvar; iOS settings key | MTL_HUD_ALIGNMENT for the HUD. Settings > Display > HUD Position. | `src/xenia/ui/windowed_app_main_ios.mm` | 3598 | 1 |
+| `ios_device_status` | cvar; iOS settings key | Show the iOS version and thermal state while a game runs. Settings > Display > Device Status. | `src/xenia/ui/windowed_app_main_ios.mm` | 71, 3606, 10456 | 3 |
+| `device_status_label_` | ivar of XeniaViewController | The device status label (top left, below menus). | `src/xenia/ui/windowed_app_main_ios.mm` | 9559, 9619, 9620, 9621, 9623, 9624, 9625, 9626, 9627, 9629, 9631, 9633, 10481, 10484, 10487, 10488 | 16 |
+| `device_status_thermal_` | ivar of XeniaViewController | Thermal state the label shows (-1 before the first). | `src/xenia/ui/windowed_app_main_ios.mm` | 9560, 9628, 10461, 10462 | 4 |
+| `show_device_status` | local in pollControllerNavigation: | Whether the device status label is shown now. | `src/xenia/ui/windowed_app_main_ios.mm` | 10456, 10459, 10487, 10488 | 4 |
+| `thermal` | local in pollControllerNavigation: | NSProcessInfo thermalState as read this tick. | `src/xenia/ui/windowed_app_main_ios.mm` | 10460, 10461, 10462, 10465 | 4 |
+| `thermal_name` | local in pollControllerNavigation: | Name of that thermal state for the label. | `src/xenia/ui/windowed_app_main_ios.mm` | 10463, 10467, 10471, 10475, 10483 | 5 |
+| `thermal_color` | local in pollControllerNavigation: | Label color for that thermal state. | `src/xenia/ui/windowed_app_main_ios.mm` | 10464, 10468, 10472, 10476, 10484 | 5 |
+| `shown_sections_` | ivar of XeniaConfigViewController | Sections the settings search shows, as indices into sections_. | `src/xenia/ui/windowed_app_main_ios.mm` | 8097, 8315, 8336, 8503, 8510, 8514, 8518, 8525, 8528, 8532, 8535 | 11 |
+| `shown_items_` | ivar of XeniaConfigViewController | Per shown section, the items the settings search shows, as indices into its items. | `src/xenia/ui/windowed_app_main_ios.mm` | 8098, 8316, 8337, 8506, 8521 | 5 |
+| `applySettingsSearch` | method of XeniaConfigViewController | Fills shown_sections_ and shown_items_ with the settings matching every word of the search text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8268, 8308, 8343 | 3 |
+| `search_text` | parameter of applySettingsSearch: | The search bar text (nil for none). | `src/xenia/ui/windowed_app_main_ios.mm` | 8308, 8310 | 2 |
+| `filtering` | local in applySettingsSearch: | The search text has a word, so sections without matches are hidden. | `src/xenia/ui/windowed_app_main_ios.mm` | 8311, 8313, 8335 | 4 |
+| `shown` | local in tableView:titleForFooterInSection: | The section shown at that index. | `src/xenia/ui/windowed_app_main_ios.mm` | 8535, 8536 | 3 |
 | `last_signal_caller` | member function of XEvent | Return address 0 or 1 above the last set or pulse, for the code dump in the thread report. | `src/xenia/kernel/xevent.h` | 49 | 1 |
 | `last_signal_caller` | member function of XEvent | Return address 0 or 1 above the last set or pulse, for the code dump in the thread report. | `src/xenia/kernel/util/shim_utils.cc` | 265, 267 | 2 |
 | `kernel_call_signal_callers` | local in LogKernelCallThreads | The two callers that last set the event a thread waits on, whose code is dumped. | `src/xenia/kernel/util/shim_utils.cc` | 247, 264, 266, 282 | 4 |
@@ -1162,24 +1162,24 @@ further edits.
 | `dump_global` | local in StartGuestValueWatch | The global critical region mutex. | `src/xenia/kernel/util/shim_utils.cc` | 524, 527 | 3 |
 | `dump_words` | local in StartGuestValueWatch | One dumped line's words. | `src/xenia/kernel/util/shim_utils.cc` | 525, 530, 537, 538 | 4 |
 | `dump_lock` | local in StartGuestValueWatch | Holds dump_global. | `src/xenia/kernel/util/shim_utils.cc` | 527 | 1 |
-| `IOSConfigItemValuesDiffer` | function | Whether a settings row holds a different value from its global counterpart (per-game settings). | `src/xenia/ui/windowed_app_main_ios.mm` | 3965, 4041, 8065 | 3 |
-| `ApplyGameConfigToSections` | function | Puts a game's config overrides onto the settings rows. | `src/xenia/ui/windowed_app_main_ios.mm` | 3980, 8198 | 2 |
-| `BuildGameConfigTable` | function | The game's config with the rows that differ from global written and the others' overrides removed. | `src/xenia/ui/windowed_app_main_ios.mm` | 4030, 8710 | 2 |
-| `game_title_id_` | ivar of XeniaConfigViewController | The game whose settings are shown (0: global settings). | `src/xenia/ui/windowed_app_main_ios.mm` | 8037, 8045, 8054, 8181, 8198, 8218, 8678, 8708, 8710, 8714, 8716 | 11 |
-| `global_sections_` | ivar of XeniaConfigViewController | The rows' global values, to save only what differs. | `src/xenia/ui/windowed_app_main_ios.mm` | 8039, 8061, 8062, 8066, 8197, 8710 | 6 |
-| `initWithGameTitleId` | method of XeniaConfigViewController | Settings screen for one game. | `src/xenia/ui/windowed_app_main_ios.mm` | 8024, 8042, 12095 | 3 |
-| `isGameOverrideAtIndexPath` | method of XeniaConfigViewController | Whether a row differs from global (shown as "Changed for this game"). | `src/xenia/ui/windowed_app_main_ios.mm` | 8053, 8504, 8534 | 3 |
-| `useGlobalSettingsTapped` | method of XeniaConfigViewController | Deletes the game's overrides after confirming. | `src/xenia/ui/windowed_app_main_ios.mm` | 8223, 8666 | 2 |
-| `presentGameSettingsForIndex` | method of XeniaViewController | Long-press menu > Game Settings. | `src/xenia/ui/windowed_app_main_ios.mm` | 11958, 12089 | 2 |
-| `presentSettingsController` | method of XeniaViewController | Presents a settings screen (global or a game's), as Settings did. | `src/xenia/ui/windowed_app_main_ios.mm` | 12084, 12094, 12099 | 3 |
-| `game_settings_action` | local in the library context menu | The Game Settings menu item. | `src/xenia/ui/windowed_app_main_ios.mm` | 11953, 11961, 11995 | 3 |
-| `use_global` | local in XeniaConfigViewController viewDidLoad | The Use Global button. | `src/xenia/ui/windowed_app_main_ios.mm` | 8219, 8224 | 2 |
-| `game_saved` | local in saveTapped: | Whether the game's config was written. | `src/xenia/ui/windowed_app_main_ios.mm` | 8711, 8714, 8719, 8724, 8725 | 5 |
-| `game_alert` | local in saveTapped: | The saved alert for a game. | `src/xenia/ui/windowed_app_main_ios.mm` | 8723, 8734, 8740 | 3 |
-| `copy_button` | local in the text setting editor | Copies the field's text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8599, 8600, 8601, 8602, 8603, 8607 | 6 |
-| `paste_button` | local in the text setting editor | Pastes the clipboard into the field. | `src/xenia/ui/windowed_app_main_ios.mm` | 8609, 8610, 8612, 8613, 8614, 8623 | 6 |
-| `pasted` | local in the paste button handler | The clipboard text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8615, 8616, 8617 | 3 |
-| `text_stream` | local in ApplyGameConfigToSections | Writes an override as TOML text. | `src/xenia/ui/windowed_app_main_ios.mm` | 3992, 3993, 3994 | 3 |
+| `IOSConfigItemValuesDiffer` | function | Whether a settings row holds a different value from its global counterpart (per-game settings). | `src/xenia/ui/windowed_app_main_ios.mm` | 4031, 4107, 8131 | 3 |
+| `ApplyGameConfigToSections` | function | Puts a game's config overrides onto the settings rows. | `src/xenia/ui/windowed_app_main_ios.mm` | 4046, 8264 | 2 |
+| `BuildGameConfigTable` | function | The game's config with the rows that differ from global written and the others' overrides removed. | `src/xenia/ui/windowed_app_main_ios.mm` | 4096, 8829 | 2 |
+| `game_title_id_` | ivar of XeniaConfigViewController | The game whose settings are shown (0: global settings). | `src/xenia/ui/windowed_app_main_ios.mm` | 8103, 8111, 8120, 8247, 8264, 8284, 8797, 8827, 8829, 8833, 8835 | 11 |
+| `global_sections_` | ivar of XeniaConfigViewController | The rows' global values, to save only what differs. | `src/xenia/ui/windowed_app_main_ios.mm` | 8105, 8127, 8128, 8132, 8263, 8829 | 6 |
+| `initWithGameTitleId` | method of XeniaConfigViewController | Settings screen for one game. | `src/xenia/ui/windowed_app_main_ios.mm` | 8090, 8108, 12901 | 3 |
+| `isGameOverrideAtIndexPath` | method of XeniaConfigViewController | Whether a row differs from global (shown as "Changed for this game"). | `src/xenia/ui/windowed_app_main_ios.mm` | 8119, 8570, 8600 | 3 |
+| `useGlobalSettingsTapped` | method of XeniaConfigViewController | Deletes the game's overrides after confirming. | `src/xenia/ui/windowed_app_main_ios.mm` | 8289, 8785 | 2 |
+| `presentGameSettingsForIndex` | method of XeniaViewController | Long-press menu > Game Settings. | `src/xenia/ui/windowed_app_main_ios.mm` | 12764, 12895 | 2 |
+| `presentSettingsController` | method of XeniaViewController | Presents a settings screen (global or a game's), as Settings did. | `src/xenia/ui/windowed_app_main_ios.mm` | 12890, 12900, 12905 | 3 |
+| `game_settings_action` | local in the library context menu | The Game Settings menu item. | `src/xenia/ui/windowed_app_main_ios.mm` | 12759, 12767, 12801 | 3 |
+| `use_global` | local in XeniaConfigViewController viewDidLoad | The Use Global button. | `src/xenia/ui/windowed_app_main_ios.mm` | 8285, 8290 | 2 |
+| `game_saved` | local in saveTapped: | Whether the game's config was written. | `src/xenia/ui/windowed_app_main_ios.mm` | 8830, 8833, 8838, 8843, 8844 | 5 |
+| `game_alert` | local in saveTapped: | The saved alert for a game. | `src/xenia/ui/windowed_app_main_ios.mm` | 8842, 8853, 8859 | 3 |
+| `copy_button` | local in the text setting editor | Copies the field's text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8718, 8719, 8720, 8721, 8722, 8726 | 6 |
+| `paste_button` | local in the text setting editor | Pastes the clipboard into the field. | `src/xenia/ui/windowed_app_main_ios.mm` | 8728, 8729, 8731, 8732, 8733, 8742 | 6 |
+| `pasted` | local in the paste button handler | The clipboard text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8734, 8735, 8736 | 3 |
+| `text_stream` | local in ApplyGameConfigToSections | Writes an override as TOML text. | `src/xenia/ui/windowed_app_main_ios.mm` | 4058, 4059, 4060 | 3 |
 | `metal_share_argument_encoders` | cvar; iOS settings key | Share one texture/sampler argument encoder between shaders with the same argument buffer layout instead of reflecting each compiled function (default on). Settings > All Options: Metal. | `src/xenia/gpu/metal/msl_shader.cc` | 89, 506, 2232, 2234 | 4 |
 | `g_argument_encoder_cache_mutex` | file-local static (anonymous namespace) | Guards g_argument_encoder_cache (compile threads translate concurrently). | `src/xenia/gpu/metal/msl_shader.cc` | 509, 2238, 2249 | 3 |
 | `g_argument_encoder_cache` | file-local static (anonymous namespace) | Argument encoders by GetArgumentBufferLayoutKey, one reference each, kept for the process lifetime. | `src/xenia/gpu/metal/msl_shader.cc` | 510, 2239, 2240, 2250, 2259 | 5 |
@@ -1490,6 +1490,109 @@ further edits.
 | `has_stencil` | local in MetalRenderTargetCache::PerformDepthClearRetarget | The owner's host format has stencil. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 9463, 9471, 9539 | 3 |
 | `depth_clear_retargets` | DrawStats field | Depth clears through a 4x view written into the owner of the tiles instead of drawn (depth_clear_retarget_4x). | `src/xenia/gpu/metal/metal_command_processor.h` | 676 | 1 |
 | `depth_clear_retargets` | DrawStats field | Depth clears through a 4x view written into the owner of the tiles instead of drawn (depth_clear_retarget_4x). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3008, 3012, 3547 | 3 |
+| `ios_tap_to_open_menu` | cvar (UI); iOS settings key | Tapping the game away from the touch controls opens the in-game menu (default on). | `src/xenia/ui/windowed_app_main_ios.mm` | 75, 11247 | 2 |
+| `ios_signin_prompt` | cvar (UI); iOS settings key | Show the Xbox sign-in prompt; off answers it with no one signed in (default on). | `src/xenia/ui/windowed_app_main_ios.mm` | 80, 13193 | 2 |
+| `ios_keyboard_prompt` | cvar (UI); iOS settings key | Show the keyboard prompt; off answers it as cancelled (default on). | `src/xenia/ui/windowed_app_main_ios.mm` | 84, 13216 | 2 |
+| `kChooseAchievementSound` | IOSConfigAction enumerator | Settings action: pick the achievement sound file. | `src/xenia/ui/windowed_app_main_ios.mm` | 580, 3773, 8675 | 3 |
+| `kClearAchievementSound` | IOSConfigAction enumerator | Settings action: remove the achievement sound. | `src/xenia/ui/windowed_app_main_ios.mm` | 581, 3777, 8685 | 3 |
+| `interface` | local in BuildIOSConfigSections | The Interface settings section. | `src/xenia/ui/windowed_app_main_ios.mm` | 3754, 3755, 3756, 3761, 3765, 3769, 3773, 3777, 3779 | 9 |
+| `xe_play_achievement_sound` | file-scope function | Plays achievement_sound_path once unless muted. | `src/xenia/ui/windowed_app_main_ios.mm` | 1593, 8655, 11209 | 3 |
+| `player` | static local in xe_play_achievement_sound | The AVAudioPlayer kept for the sound. | `src/xenia/ui/windowed_app_main_ios.mm` | 1594, 1599, 1600, 1601, 1602, 1604, 1605 | 8 |
+| `destination` | local in the settings documentPicker | Where the picked sound is copied. | `src/xenia/ui/windowed_app_main_ios.mm` | 8637, 8641, 8644, 8653 | 4 |
+| `extension` | local in the settings documentPicker | The picked file's extension. | `src/xenia/ui/windowed_app_main_ios.mm` | 8636, 8639 | 2 |
+| `XeniaTouchPadControlKindMenu` | enumerator | The menu control: opens the in-game menu, never reaches the game. | `src/xenia/ui/windowed_app_main_ios.mm` | 8904, 9080, 9097, 9212, 9384, 9412 | 6 |
+| `XeniaTouchPadPlacement` | struct | A control's place in a saved layout: position, scale, hidden. | `src/xenia/ui/windowed_app_main_ios.mm` | 8920, 8957, 9084, 9268, 9283, 9305 | 6 |
+| `placements_` | instance variable of XeniaTouchPadView | Each control's placement in the loaded layout. | `src/xenia/ui/windowed_app_main_ios.mm` | 8957, 9084, 9096, 9233, 9268, 9283, 9305, 9367, 9374, 9380, 9387, 9412 | 13 |
+| `placement` | local in XeniaTouchPadView methods | One control's placement. | `src/xenia/ui/windowed_app_main_ios.mm` | 9084, 9085, 9087, 9089, 9283, 9287, 9292, 9294, 9305, 9307, 9308, 9309, 9311, 9312, 9314 | 18 |
+| `scale` | member of XeniaTouchPadPlacement; locals and parameter in XeniaTouchPadView | Size against the default (0.5-2). | `src/xenia/ui/windowed_app_main_ios.mm` | 8922, 9089, 9290, 9291, 9292, 9311, 9312, 9367, 9370, 9374 | 12 |
+| `hidden` | member of XeniaTouchPadPlacement; local in drawRect | Whether the control is hidden. | `src/xenia/ui/windowed_app_main_ios.mm` | 8923, 9096, 9294, 9314, 9380, 9387, 9412, 9441, 9445, 9447 | 12 |
+| `edit_touch_` | instance variable of XeniaTouchPadView | The touch dragging a control in edit mode. | `src/xenia/ui/windowed_app_main_ios.mm` | 8962, 9129, 9189, 9197, 9226, 9227, 9245, 9246 | 10 |
+| `edit_offset_` | instance variable of XeniaTouchPadView | Its offset from the control's center. | `src/xenia/ui/windowed_app_main_ios.mm` | 8963, 9198, 9229 | 4 |
+| `editing` | property of XeniaTouchPadView, and setEditing: parameter | Edit mode: touches move controls instead of reaching the game. | `src/xenia/ui/windowed_app_main_ios.mm` | 8928, 9096, 9120, 9123, 9124, 9128, 9188, 9225, 9244, 9402, 9443, 10425, 10426, 10435, 10444, 11247, 11287, 11408, 11447 | 19 |
+| `menuHandler` | property of XeniaTouchPadView | Called when the menu control is pressed. | `src/xenia/ui/windowed_app_main_ios.mm` | 8930, 9213, 9214, 9608 | 4 |
+| `selectionHandler` | property of XeniaTouchPadView | Called when the selected control changes in edit mode. | `src/xenia/ui/windowed_app_main_ios.mm` | 8932, 9131, 9132, 9201, 9202, 9357, 9358, 9611 | 8 |
+| `loadLayoutForTitleID` | method of XeniaTouchPadView | Loads a title's layout, or the one for all games. | `src/xenia/ui/windowed_app_main_ios.mm` | 8939, 9324, 9614, 10428, 12489 | 5 |
+| `layoutTitleID` | property of XeniaTouchPadView | The title whose layout is loaded. | `src/xenia/ui/windowed_app_main_ios.mm` | 8941, 11406 | 2 |
+| `layoutIsPerGame` | property of XeniaTouchPadView | Whether that title has a layout of its own. | `src/xenia/ui/windowed_app_main_ios.mm` | 8942, 11407 | 2 |
+| `saveLayoutPerGame` | method of XeniaTouchPadView | Saves the layout for the title alone or for all games. | `src/xenia/ui/windowed_app_main_ios.mm` | 8945, 9340, 11446 | 3 |
+| `resetLayout` | method of XeniaTouchPadView | Back to the default layout. | `src/xenia/ui/windowed_app_main_ios.mm` | 8946, 9355, 11432 | 3 |
+| `selectedControl` | property of XeniaTouchPadView | The control selected in edit mode, or -1. | `src/xenia/ui/windowed_app_main_ios.mm` | 8947 | 1 |
+| `selectedControlLabel` | property of XeniaTouchPadView | Its label. | `src/xenia/ui/windowed_app_main_ios.mm` | 8948, 9362, 11390 | 3 |
+| `selectedScale` | property of XeniaTouchPadView | Its size. | `src/xenia/ui/windowed_app_main_ios.mm` | 8949, 9366, 11415, 11419 | 6 |
+| `toggleSelectedHidden` | method of XeniaTouchPadView | Hides or shows it (not the menu control). | `src/xenia/ui/windowed_app_main_ios.mm` | 8950, 9383, 11423 | 3 |
+| `selectedHidden` | property of XeniaTouchPadView | Whether it is hidden. | `src/xenia/ui/windowed_app_main_ios.mm` | 8951, 9379, 11392 | 3 |
+| `layoutOpacity` | property of XeniaTouchPadView | Opacity of the whole pad (0.1-1). | `src/xenia/ui/windowed_app_main_ios.mm` | 8952, 11396, 11428 | 3 |
+| `XeniaTouchLayoutKey` | function in XeniaTouchPadView | NSUserDefaults key of a layout. | `src/xenia/ui/windowed_app_main_ios.mm` | 8991, 9332, 9335, 9344, 9347, 9349 | 6 |
+| `controlIsActive` | method of XeniaTouchPadView | Whether a control takes touches and is drawn. | `src/xenia/ui/windowed_app_main_ios.mm` | 9094, 9103, 9408 | 3 |
+| `applyLayoutDictionary` | method of XeniaTouchPadView | Applies a saved layout. | `src/xenia/ui/windowed_app_main_ios.mm` | 9266, 9337, 9356 | 3 |
+| `layoutDictionary` | method of XeniaTouchPadView | The layout as saved. | `src/xenia/ui/windowed_app_main_ios.mm` | 9302, 9342 | 2 |
+| `opacity` | locals in XeniaTouchPadView methods | A layout's opacity. | `src/xenia/ui/windowed_app_main_ios.mm` | 9272, 9273, 9274, 9391, 9392, 9397, 9400, 9441, 9445, 9460 | 10 |
+| `defaults` | local in XeniaTouchPadView methods | NSUserDefaults. | `src/xenia/ui/windowed_app_main_ios.mm` | 9331, 9332, 9335, 9341, 9344, 9347, 9349 | 7 |
+| `layout` | local in XeniaTouchPadView methods | A saved layout dictionary. | `src/xenia/ui/windowed_app_main_ios.mm` | 9266, 9271, 9272, 9276, 9332, 9333, 9334, 9335, 9337, 9342, 9344, 9347 | 12 |
+| `per_game` | parameter of saveLayoutPerGame: | For the title alone. | `src/xenia/ui/windowed_app_main_ios.mm` | 8945, 9340, 9343 | 3 |
+| `center` | local in touchesMoved | A dragged control's new center. | `src/xenia/ui/windowed_app_main_ios.mm` | 8911, 9086, 9106, 9107, 9147, 9148, 9199, 9229, 9230, 9231, 9232, 9234, 9235, 9414, 9423, 9424, 9430, 9435 | 23 |
+| `selected` | local in drawRect | Whether the control is selected in edit mode. | `src/xenia/ui/windowed_app_main_ios.mm` | 9443, 9444, 9446 | 3 |
+| `dashes` | local in drawRect | Dash pattern of a hidden control. | `src/xenia/ui/windowed_app_main_ios.mm` | 9448, 9449 | 2 |
+| `system_ui_reported_` | instance variable of XeniaViewController | Whether the app's UI over the game was last reported as system UI. | `src/xenia/ui/windowed_app_main_ios.mm` | 9563, 10436, 10437 | 3 |
+| `system_ui` | local in pollControllerNavigation | Whether the menu, a sheet or the editor covers the game. | `src/xenia/ui/windowed_app_main_ios.mm` | 10433, 10436, 10437, 10438 | 4 |
+| `controller_connected` | local in pollControllerNavigation | Whether a GCController is connected. | `src/xenia/ui/windowed_app_main_ios.mm` | 10422, 10446, 10512 | 3 |
+| `achievement_queue_` | instance variable of XeniaViewController | Achievement pop-ups waiting. | `src/xenia/ui/windowed_app_main_ios.mm` | 9566, 11132, 11133, 11135, 11142, 11147, 11148 | 7 |
+| `achievement_showing_` | instance variable of XeniaViewController | Whether one is on screen. | `src/xenia/ui/windowed_app_main_ios.mm` | 9567, 11136, 11143, 11146 | 4 |
+| `showAchievementNamed` | method of XeniaViewController | Queues an achievement pop-up. | `src/xenia/ui/windowed_app_main_ios.mm` | 9523, 11131, 13184 | 3 |
+| `showNextAchievement` | method of XeniaViewController | Shows the next pop-up and plays the sound. | `src/xenia/ui/windowed_app_main_ios.mm` | 11137, 11141, 11225 | 3 |
+| `banner` | local in showNextAchievement | The pop-up view. | `src/xenia/ui/windowed_app_main_ios.mm` | 11150, 11153, 11154, 11155, 11156, 11180, 11181, 11182, 11183, 11185, 11189, 11190, 11191, 11192, 11194, 11196, 11200, 11202, 11206, 11224 | 20 |
+| `icon_image` | local in showNextAchievement | The achievement's icon. | `src/xenia/ui/windowed_app_main_ios.mm` | 11158, 11160 | 2 |
+| `icon_view` | local in showNextAchievement | Its image view. | `src/xenia/ui/windowed_app_main_ios.mm` | 11159, 11161, 11162, 11163, 11164, 11165, 11180, 11194, 11196, 11197, 11198, 11199 | 12 |
+| `heading` | local in showNextAchievement | "Achievement unlocked" label. | `src/xenia/ui/windowed_app_main_ios.mm` | 11167, 11168, 11169, 11170, 11171, 11181, 11199, 11200, 11202, 11203, 11204, 11205 | 12 |
+| `top` | local in showNextAchievement | The banner's top constraint, animated. | `src/xenia/ui/windowed_app_main_ios.mm` | 11184, 11188, 11210, 11218 | 4 |
+| `name_string` | local in the achievement callback | The name for the main thread. | `src/xenia/ui/windowed_app_main_ios.mm` | 13178, 13180, 13184, 13185 | 4 |
+| `inGameEditControlsButton` | property of XeniaViewController | The menu's Edit Touch Controls button. | `src/xenia/ui/windowed_app_main_ios.mm` | 9495, 11047, 11049, 11050, 11053, 11110, 11113, 11115, 11119 | 9 |
+| `edit_controls_config` | local in setupInGameMenuOverlay | Its configuration. | `src/xenia/ui/windowed_app_main_ios.mm` | 11039, 11040, 11041, 11042, 11043, 11044, 11045, 11046, 11047 | 9 |
+| `openInGameMenu` | method of XeniaViewController | Opens the in-game menu (the menu control). | `src/xenia/ui/windowed_app_main_ios.mm` | 9524, 9609, 11285 | 3 |
+| `inGameEditControlsTapped` | method of XeniaViewController | Starts the touch layout editor. | `src/xenia/ui/windowed_app_main_ios.mm` | 9525, 11051, 11399 | 3 |
+| `weak_self` | local in viewDidLoad | Self, unretained by the pad's handlers. | `src/xenia/ui/windowed_app_main_ios.mm` | 9607, 9609, 9612 | 3 |
+| `layout_title_id` | local in launchGameAtPath: | The launched game's title ID, for its touch layout. | `src/xenia/ui/windowed_app_main_ios.mm` | 12482, 12485, 12489 | 3 |
+| `touch_editor_bar_` | instance variable of XeniaViewController | Touch layout editor: the editor bar. | `src/xenia/ui/windowed_app_main_ios.mm` | 9569, 10427, 11315, 11317, 11318, 11319, 11361, 11362, 11365, 11367, 11372, 11373, 11375, 11377, 11379, 11380, 11386, 11401, 11405, 11410, 11448 | 21 |
+| `touch_editor_label_` | instance variable of XeniaViewController | Touch layout editor: the selected control's name. | `src/xenia/ui/windowed_app_main_ios.mm` | 9570, 11321, 11322, 11323, 11324, 11346, 11391 | 7 |
+| `touch_editor_hide_button_` | instance variable of XeniaViewController | Touch layout editor: Hide/Show. | `src/xenia/ui/windowed_app_main_ios.mm` | 9571, 11327, 11349, 11392, 11395 | 5 |
+| `touch_editor_opacity_slider_` | instance variable of XeniaViewController | Touch layout editor: Opacity. | `src/xenia/ui/windowed_app_main_ios.mm` | 9572, 11334, 11335, 11336, 11337, 11340, 11351, 11396 | 8 |
+| `touch_editor_scope_` | instance variable of XeniaViewController | Touch layout editor: All Games / This Game. | `src/xenia/ui/windowed_app_main_ios.mm` | 9573, 11342, 11343, 11352, 11406, 11407, 11446 | 7 |
+| `touch_editor_top_` | instance variable of XeniaViewController | Touch layout editor: the bar at the top. | `src/xenia/ui/windowed_app_main_ios.mm` | 9574, 11364, 11371, 11436, 11437 | 5 |
+| `touch_editor_bottom_` | instance variable of XeniaViewController | Touch layout editor: the bar at the bottom. | `src/xenia/ui/windowed_app_main_ios.mm` | 9575, 11367, 11438 | 3 |
+| `XeniaTouchEditorButton` | file-scope function of XeniaViewController | Touch layout editor: a button of the editor bar. | `src/xenia/ui/windowed_app_main_ios.mm` | 11304, 11328, 11347, 11348, 11353, 11354, 11355 | 7 |
+| `buildTouchEditorBar` | method of XeniaViewController | Touch layout editor: builds the bar. | `src/xenia/ui/windowed_app_main_ios.mm` | 11314, 11402 | 2 |
+| `updateTouchEditorBar` | method of XeniaViewController | Touch layout editor: shows the selection. | `src/xenia/ui/windowed_app_main_ios.mm` | 9612, 11385, 11411, 11424 | 4 |
+| `touchEditorSmallerTapped` | action of XeniaViewController | Touch layout editor: smaller. | `src/xenia/ui/windowed_app_main_ios.mm` | 11347, 11414 | 2 |
+| `touchEditorLargerTapped` | action of XeniaViewController | Touch layout editor: larger. | `src/xenia/ui/windowed_app_main_ios.mm` | 11348, 11418 | 2 |
+| `touchEditorHideTapped` | action of XeniaViewController | Touch layout editor: hide or show. | `src/xenia/ui/windowed_app_main_ios.mm` | 11328, 11422 | 2 |
+| `touchEditorOpacityChanged` | action of XeniaViewController | Touch layout editor: opacity. | `src/xenia/ui/windowed_app_main_ios.mm` | 11338, 11427 | 2 |
+| `touchEditorResetTapped` | action of XeniaViewController | Touch layout editor: default layout. | `src/xenia/ui/windowed_app_main_ios.mm` | 11353, 11431 | 2 |
+| `touchEditorMoveBarTapped` | action of XeniaViewController | Touch layout editor: bar top or bottom. | `src/xenia/ui/windowed_app_main_ios.mm` | 11354, 11435 | 2 |
+| `touchEditorDoneTapped` | action of XeniaViewController | Touch layout editor: save and leave. | `src/xenia/ui/windowed_app_main_ios.mm` | 11355, 11445 | 2 |
+| `opacity_label` | local in buildTouchEditorBar | "Opacity" label. | `src/xenia/ui/windowed_app_main_ios.mm` | 11330, 11331, 11332, 11333, 11350 | 5 |
+| `row` | local in buildTouchEditorBar | The bar's stack view. | `src/xenia/ui/windowed_app_main_ios.mm` | 11345, 11357, 11358, 11359, 11360, 11361, 11375, 11377, 11379, 11380 | 10 |
+| `pad` | local in updateTouchEditorBar | The touch pad. | `src/xenia/ui/windowed_app_main_ios.mm` | 11389, 11390, 11392, 11396 | 4 |
+| `to_bottom` | local in touchEditorMoveBarTapped: | Whether the bar moves to the bottom. | `src/xenia/ui/windowed_app_main_ios.mm` | 11436, 11437, 11438 | 3 |
+| `SystemUICallback` | type in IOSWindowedAppContext | Callback: the app's UI covers the game or not. | `src/xenia/ui/windowed_app_context_ios.h` | 204, 205, 255 | 3 |
+| `set_system_ui_callback` | method of IOSWindowedAppContext | Sets the callback. | `src/xenia/ui/windowed_app_context_ios.h` | 205 | 1 |
+| `system_ui_callback_` | member of IOSWindowedAppContext | The callback. | `src/xenia/ui/windowed_app_context_ios.h` | 206, 209, 210, 255 | 4 |
+| `AchievementCallback` | type in IOSWindowedAppContext | Callback: an achievement unlocked (name, gamerscore, icon). | `src/xenia/ui/windowed_app_context_ios.h` | 216, 218, 256 | 3 |
+| `set_achievement_callback` | method of IOSWindowedAppContext | Sets the callback. | `src/xenia/ui/windowed_app_context_ios.h` | 218 | 1 |
+| `achievement_callback_` | member of IOSWindowedAppContext | The callback. | `src/xenia/ui/windowed_app_context_ios.h` | 219, 223, 224, 256 | 4 |
+| `SetSystemUIActive` | method of IOSWindowedAppContext | Reports the app's UI over the game to XAM. | `src/xenia/ui/windowed_app_context_ios.h` | 208 | 1 |
+| `SetSystemUIActive` | method of IOSWindowedAppContext | Reports the app's UI over the game to XAM. | `src/xenia/ui/windowed_app_main_ios.mm` | 10438 | 1 |
+| `set_system_ui_callback` | method of IOSWindowedAppContext | Setter. | `src/xenia/app/xenia_main_ios.mm` | 527 | 1 |
+| `counted` | capture of the system UI callback | The kernel state the dialog count was taken on. | `src/xenia/app/xenia_main_ios.mm` | 528, 531, 532, 534, 539, 542 | 7 |
+| `ShowAchievement` | method of IOSWindowedAppContext | Shows the achievement pop-up. | `src/xenia/ui/windowed_app_context_ios.h` | 221 | 1 |
+| `ShowAchievement` | method of IOSWindowedAppContext | Shows the achievement pop-up. | `src/xenia/kernel/xam/achievement_manager.cc` | 172 | 1 |
+| `set_achievement_callback` | method of IOSWindowedAppContext | Setter. | `src/xenia/ui/windowed_app_main_ios.mm` | 13175 | 1 |
+| `OnUIState` | method of UIInputFilter | Runs OnUIClosed on the first input call after XAM UI closes. | `src/xenia/kernel/xam/ui_input_filter.h` | 42 | 1 |
+| `OnUIState` | method of UIInputFilter | Runs OnUIClosed on the first input call after XAM UI closes. | `src/xenia/kernel/xam/ui_input_filter.cc` | 47 | 1 |
+| `OnUIState` | method of UIInputFilter | Runs OnUIClosed on the first input call after XAM UI closes. | `src/xenia/kernel/xam/xam_input.cc` | 112, 187, 217 | 3 |
+| `ui_was_active_` | member of UIInputFilter | Whether UI was active at the last input call. | `src/xenia/kernel/xam/ui_input_filter.h` | 53 | 1 |
+| `ui_was_active_` | member of UIInputFilter | Whether UI was active at the last input call. | `src/xenia/kernel/xam/ui_input_filter.cc` | 49, 50 | 2 |
+| `ui_active` | parameter of OnUIState | Whether XAM UI is active now. | `src/xenia/kernel/xam/ui_input_filter.h` | 42 | 1 |
+| `ui_active` | parameter of OnUIState | Whether XAM UI is active now. | `src/xenia/kernel/xam/ui_input_filter.cc` | 47, 48, 54 | 3 |
 
 ## Total references per name
 
@@ -1537,12 +1640,12 @@ further edits.
 | `XeniaTouchPadControlKindRightTrigger` | 3 |
 | `XeniaTouchPadControlKindLeftStick` | 6 |
 | `XeniaTouchPadControlKindRightStick` | 5 |
-| `kXeniaTouchPadControlCount` | 6 |
-| `controls_` | 16 |
+| `kXeniaTouchPadControlCount` | 10 |
+| `controls_` | 28 |
 | `pad_touches_` | 12 |
 | `pad_touch_controls_` | 8 |
-| `controlIndexAtPoint` | 7 |
-| `resetTouches` | 3 |
+| `controlIndexAtPoint` | 8 |
+| `resetTouches` | 4 |
 | `reportState` | 5 |
 | `touchPadView` | 11 |
 | `hide_touch_pad` | 4 |
@@ -1772,8 +1875,8 @@ further edits.
 | `first_sample` | 11 |
 | `sample_count` | 12 |
 | `label` | 22 |
-| `width` | 30 |
-| `height` | 31 |
+| `width` | 33 |
+| `height` | 35 |
 | `samples` | 22 |
 | `color_formats` | 6 |
 | `depth_format` | 3 |
@@ -2125,7 +2228,7 @@ further edits.
 | `tile_x` | 4 |
 | `texels_line` | 3 |
 | `positions` | 2 |
-| `position` | 15 |
+| `position` | 26 |
 | `edram_texel` | 3 |
 | `in_resolve` | 2 |
 | `in_edram` | 2 |
@@ -2379,7 +2482,7 @@ further edits.
 | `it` | 7 |
 | `i` | 8 |
 | `hotspot_start` | 3 |
-| `row` | 5 |
+| `row` | 15 |
 | `word` | 4 |
 | `resolve_check_mask` | 2 |
 | `would_load` | 4 |
@@ -2484,9 +2587,9 @@ further edits.
 | `answered` | 3 |
 | `answer` | 13 |
 | `run` | 15 |
-| `controls` | 6 |
+| `controls` | 11 |
 | `control_salt` | 2 |
-| `control` | 25 |
+| `control` | 22 |
 | `count` | 20 |
 | `best_mode` | 5 |
 | `best_built` | 5 |
@@ -2526,7 +2629,7 @@ further edits.
 | `function_of` | 3 |
 | `module` | 5 |
 | `entry` | 4 |
-| `index` | 19 |
+| `index` | 28 |
 | `inserted` | 2 |
 | `build` | 3 |
 | `log_success` | 2 |
@@ -2581,8 +2684,121 @@ further edits.
 | `stale_end` | 2 |
 | `has_stencil` | 3 |
 | `depth_clear_retargets` | 4 |
+| `ios_tap_to_open_menu` | 2 |
+| `ios_signin_prompt` | 2 |
+| `ios_keyboard_prompt` | 2 |
+| `kChooseAchievementSound` | 3 |
+| `kClearAchievementSound` | 3 |
+| `interface` | 9 |
+| `xe_play_achievement_sound` | 3 |
+| `player` | 8 |
+| `destination` | 4 |
+| `extension` | 2 |
+| `XeniaTouchPadControlKindMenu` | 6 |
+| `XeniaTouchPadPlacement` | 6 |
+| `placements_` | 13 |
+| `placement` | 18 |
+| `scale` | 12 |
+| `hidden` | 12 |
+| `edit_touch_` | 10 |
+| `edit_offset_` | 4 |
+| `editing` | 19 |
+| `menuHandler` | 4 |
+| `selectionHandler` | 8 |
+| `loadLayoutForTitleID` | 5 |
+| `layoutTitleID` | 2 |
+| `layoutIsPerGame` | 2 |
+| `saveLayoutPerGame` | 3 |
+| `resetLayout` | 3 |
+| `selectedControl` | 1 |
+| `selectedControlLabel` | 3 |
+| `selectedScale` | 6 |
+| `toggleSelectedHidden` | 3 |
+| `selectedHidden` | 3 |
+| `layoutOpacity` | 3 |
+| `XeniaTouchLayoutKey` | 6 |
+| `controlIsActive` | 3 |
+| `applyLayoutDictionary` | 3 |
+| `layoutDictionary` | 2 |
+| `opacity` | 10 |
+| `defaults` | 7 |
+| `layout` | 12 |
+| `per_game` | 3 |
+| `center` | 23 |
+| `selected` | 3 |
+| `dashes` | 2 |
+| `system_ui_reported_` | 3 |
+| `system_ui` | 4 |
+| `controller_connected` | 3 |
+| `achievement_queue_` | 7 |
+| `achievement_showing_` | 4 |
+| `showAchievementNamed` | 3 |
+| `showNextAchievement` | 3 |
+| `banner` | 20 |
+| `icon_image` | 2 |
+| `icon_view` | 12 |
+| `heading` | 12 |
+| `top` | 4 |
+| `name_string` | 4 |
+| `inGameEditControlsButton` | 9 |
+| `edit_controls_config` | 9 |
+| `openInGameMenu` | 3 |
+| `inGameEditControlsTapped` | 3 |
+| `weak_self` | 3 |
+| `layout_title_id` | 3 |
+| `touch_editor_bar_` | 21 |
+| `touch_editor_label_` | 7 |
+| `touch_editor_hide_button_` | 5 |
+| `touch_editor_opacity_slider_` | 8 |
+| `touch_editor_scope_` | 7 |
+| `touch_editor_top_` | 5 |
+| `touch_editor_bottom_` | 3 |
+| `XeniaTouchEditorButton` | 7 |
+| `buildTouchEditorBar` | 2 |
+| `updateTouchEditorBar` | 4 |
+| `touchEditorSmallerTapped` | 2 |
+| `touchEditorLargerTapped` | 2 |
+| `touchEditorHideTapped` | 2 |
+| `touchEditorOpacityChanged` | 2 |
+| `touchEditorResetTapped` | 2 |
+| `touchEditorMoveBarTapped` | 2 |
+| `touchEditorDoneTapped` | 2 |
+| `opacity_label` | 5 |
+| `pad` | 4 |
+| `to_bottom` | 3 |
+| `SystemUICallback` | 3 |
+| `set_system_ui_callback` | 2 |
+| `system_ui_callback_` | 4 |
+| `AchievementCallback` | 3 |
+| `set_achievement_callback` | 2 |
+| `achievement_callback_` | 4 |
+| `SetSystemUIActive` | 2 |
+| `counted` | 10 |
+| `ShowAchievement` | 2 |
+| `OnUIState` | 5 |
+| `ui_was_active_` | 3 |
+| `ui_active` | 4 |
 
 ## Checks
+
+- Input after XAM UI closes (`src/xenia/kernel/xam/ui_input_filter.h`,
+  `.cc`) is ported from XeniOS 7a7b08993: `UIInputFilter`, `OnUIClosed`,
+  `FilterState`, `ShouldDropKeystroke`, `held_buttons_`,
+  `kMaxQueuedKeystrokes`, XamState's `ui_input_filter()`/`ui_input_filter_`
+  and the `filter` locals in `xam_input.cc` have upstream's names and roles,
+  so they are not listed; only `OnUIState` and `ui_was_active_`, which this
+  branch adds because its dialog counters change in many places, are.
+  `achievement_sound_path` (DEFINE_path in `windowed_app_main_ios.mm`) has
+  the name and role of the Qt build's cvar of that name (the pop-up's
+  sound), which isn't built on iOS. In the iOS interface work
+  (`windowed_app_main_ios.mm`: achievement pop-up, settings sound picker,
+  touch layout editor, prompt toggles; `xenia_main_ios.mm`;
+  `achievement_manager.cc`) the locals and parameters `title`, `url`, `ec`,
+  `button`, `label`, `name`, `icon`, `icon_data`, `gamerscore`, `target`,
+  `action`, `finished`, `done`, `size`, `touch`, `entry`, `access_granted`,
+  `kernel_state`, `ios_context`, `game`, `title_id`, `slider` and `sender`
+  are named and used as elsewhere in those files, so they are not listed.
+  `position` is also XeniaTouchPadPlacement's member, counted in its row.
 
 - `msl_shader_compile_pending_` (not listed, from the branch's base) is now a
   map from the translation to the queue_arrival of its latest entry instead of

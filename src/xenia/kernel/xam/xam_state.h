@@ -16,6 +16,7 @@
 #include "xenia/kernel/xam/app_manager.h"
 #include "xenia/kernel/xam/content_manager.h"
 #include "xenia/kernel/xam/profile_manager.h"
+#include "xenia/kernel/xam/ui_input_filter.h"
 #include "xenia/kernel/xam/user_tracker.h"
 #include "xenia/kernel/xam/xam.h"
 
@@ -62,6 +63,8 @@ class XamState {
     return xam_dialogs_shown_ > 0 || xam_nui_dialogs_shown_ > 0;
   }
 
+  UIInputFilter& ui_input_filter() { return ui_input_filter_; }
+
   uint32_t GetLanguageFallbackAddress(uint32_t index) const {
     return language_fallback_address_[index];
   }
@@ -89,6 +92,8 @@ class XamState {
   std::unique_ptr<ProfileManager> profile_manager_;
 
   std::unique_ptr<SpaInfo> spa_info_;
+
+  UIInputFilter ui_input_filter_;
 
   // Custom XAM stuff
   std::array<uint32_t, 0x12> language_fallback_address_{};

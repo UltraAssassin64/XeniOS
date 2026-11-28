@@ -19,6 +19,9 @@
 #include "xenia/ui/audio_helper.h"
 #endif
 #include "xenia/ui/imgui_guest_notification.h"
+#if XE_PLATFORM_IOS
+#include "xenia/ui/windowed_app_context_ios.h"
+#endif
 
 DEFINE_bool(show_achievement_notification, true,
             "Show achievement notification on screen.", "UI");
@@ -91,7 +94,7 @@ void AchievementManager::EarnAchievement(const uint64_t xuid,
     // Something went really wrong!
     return;
   }
-  ShowAchievementEarnedNotification(&achievement.value());
+  ShowAchievementEarnedNotification(xuid, title_id, &achievement.value());
 }
 
 void AchievementManager::LoadTitleAchievements(const uint64_t xuid) const {
@@ -149,6 +152,7 @@ bool AchievementManager::DoesAchievementExist(
 }
 
 void AchievementManager::ShowAchievementEarnedNotification(
+    const uint64_t xuid, const uint32_t title_id,
     const Achievement* achievement) const {
   const std::string description =
       fmt::format("{}G - {}", achievement->gamerscore,
@@ -158,6 +162,19 @@ void AchievementManager::ShowAchievementEarnedNotification(
   ui::WindowedAppContext& app_context =
       emulator->display_window()->app_context();
   ui::ImGuiDrawer* imgui_drawer = emulator->imgui_drawer();
+
+#if XE_PLATFORM_IOS
+  // iOS draws no ImGui: the app shows its own pop-up, with the icon.
+  if (auto* ios_context =
+          dynamic_cast<ui::IOSWindowedAppContext*>(&app_context)) {
+    const auto icon =
+        GetAchievementIcon(xuid, title_id, achievement->achievement_id);
+    ios_context->ShowAchievement(
+        xe::to_utf8(achievement->achievement_name), achievement->gamerscore,
+        std::vector<uint8_t>(icon.begin(), icon.end()));
+    return;
+  }
+#endif
 
   if (!imgui_drawer) {
     // No UI drawer available (e.g. iOS without ImGui); just log.

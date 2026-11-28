@@ -3602,6 +3602,49 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   case; the call cases and game pairs take the guest variant; mode 1 is
   no longer tried (3 minutes of failures).
 
+### iOS input and interface (owner's request, 2026-11-28)
+
+Owner asked for XeniOS's custom touch layouts, its lag and repeated-input
+fixes, a toggle for tap-to-menu and a menu button, an achievement pop-up with
+a sound from the file picker, and toggles for the sign-in and keyboard
+prompts. Upstream XeniOS now requires iOS 26 and has split its app into ~150
+files (touch layouts alone ~13,000 lines), so these are rewritten here for
+iOS 16, using upstream's behaviour as the reference. Owner's choices: core
+layout editor first; sign-in prompt off leaves the game signed out; keyboard
+prompt off cancels.
+
+- Repeated inputs: `kernel/xam/ui_input_filter.{h,cc}` ported from XeniOS
+  7a7b08993 (buttons held when XAM UI closes stay hidden from the game until
+  released, their repeats and queued keystrokes dropped), wired into
+  XamInputGetState, XamInputGetKeystroke and XamInputGetKeystrokeEx;
+  `OnUIState` detects the close, as this branch counts dialogs in many
+  places. The in-game menu, any sheet over a running game and the layout
+  editor now count as system UI (IOSWindowedAppContext::SetSystemUIActive ->
+  one count in xam_dialogs_shown_ plus the system UI notification, as the
+  Xbox guide): before, the game kept running behind the menu and got every
+  press used to navigate and close it.
+- Lag: the 60 Hz controller navigation poll no longer reads controllers
+  while none is connected; it read 4 users through the input system lock
+  and launch_mutex_ every tick, the main thread blocking behind a loading
+  game.
+- Settings > Interface: Tap To Open Menu (ios_tap_to_open_menu), Xbox
+  Sign-In Prompt (ios_signin_prompt: off answers "shown, no one picked"),
+  Keyboard Prompt (ios_keyboard_prompt: off answers cancelled), Achievement
+  Pop-Up (show_achievement_notification), Choose/Remove Achievement Sound
+  (copied to Documents/achievement_sound.<ext>, achievement_sound_path,
+  played with AVAudioPlayer, skipped when muted).
+- Achievement pop-up: AchievementManager calls
+  IOSWindowedAppContext::ShowAchievement with the name, gamerscore and icon;
+  a banner at the top for 4 s, queued.
+- Touch pad: a ☰ menu control (opens the menu, never reaches the game, can
+  be moved and resized but not hidden). In-game menu > Edit Touch Controls:
+  drag controls; the bar sizes (−/+), hides, sets opacity, chooses All Games
+  or This Game, resets, moves itself top/bottom (⇅), Done saves. Layouts in
+  NSUserDefaults (XeniaTouchLayout, XeniaTouchLayout.<title ID>) as
+  fractions of the screen, scale, hidden, opacity; loaded at launch.
+- Not built on device yet (UIKit can't be compiled here); first CI build
+  will show compile errors if any.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

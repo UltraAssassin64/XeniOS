@@ -522,6 +522,28 @@ bool EmulatorAppIOS::OnInitialize() {
                X_ERROR_SUCCESS;
       });
 
+  // One count in XAM's dialog counter while the app's UI covers the game, on
+  // the kernel state it was taken on.
+  ios_context.set_system_ui_callback(
+      [this, counted = static_cast<kernel::KernelState*>(nullptr)](bool active) mutable {
+        std::lock_guard<std::mutex> lock(launch_mutex_);
+        kernel::KernelState* kernel_state = emulator_ ? emulator_->kernel_state() : nullptr;
+        if (counted && counted != kernel_state) {
+          counted = nullptr;
+        }
+        if (!kernel_state || !kernel_state->xam_state() || active == (counted != nullptr)) {
+          return;
+        }
+        if (active) {
+          ++kernel_state->xam_state()->xam_dialogs_shown_;
+          counted = kernel_state;
+        } else {
+          --kernel_state->xam_state()->xam_dialogs_shown_;
+          counted = nullptr;
+        }
+        kernel_state->BroadcastNotification(kXNotificationSystemUI, active ? 1 : 0);
+      });
+
   ios_context.set_profiles_list_callback([this]() {
     std::vector<ui::IOSProfileSummary> profiles;
     if (!emulator_ || !emulator_->kernel_state() || !emulator_->kernel_state()->xam_state()) {
