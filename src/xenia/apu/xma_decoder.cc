@@ -218,9 +218,10 @@ X_STATUS XmaDecoder::Setup(kernel::KernelState* kernel_state) {
       kernel::object_ref<kernel::XHostThread>(new kernel::XHostThread(
           kernel_state, 128 * 1024, 0,
           [this]() {
-            if (cvars::use_dedicated_xma_thread) {
-              WorkerThreadMain();
-            }
+            // Always runs, idle unless a kick asks it to decode:
+            // use_dedicated_xma_thread is read at each kick, and a game's
+            // config is applied after this starts.
+            WorkerThreadMain();
             return 0;
           },
           kernel_state
@@ -419,18 +420,20 @@ void XmaDecoder::WriteRegister(uint32_t addr, uint32_t value) {
     // The context ID is a bit in the range of the entire context array.
     const uint32_t base_context_id = (r - XmaRegister::Context0Kick) * 32;
     const uint32_t kicked_value = value;
+    // Read once, so a kick is decoded either here or by the worker.
+    const bool use_dedicated_thread = cvars::use_dedicated_xma_thread;
     while (value) {
       const uint32_t context_id = base_context_id + std::countr_zero(value);
       auto& context = *contexts_[context_id];
       context.Enable();
-      if (!cvars::use_dedicated_xma_thread) {
+      if (!use_dedicated_thread) {
         context.Work();
       }
       value &= value - 1;
     }
-    // Signal the decoder thread to start processing.
-    work_event_->SetBoostPriority();
-    if (cvars::use_dedicated_xma_thread) {
+    if (use_dedicated_thread) {
+      // Signal the decoder thread to start processing.
+      work_event_->SetBoostPriority();
       // Block until the worker finishes, so the game sees updated context data.
       uint32_t remaining = kicked_value;
       while (remaining) {
@@ -559,6 +562,8 @@ void XmaDecoder::Pause() {
     return;
   }
 
+  // An idle worker waits for work and would never reach its pause point.
+  SignalWork();
   pause_fence_.Wait();
 }
 

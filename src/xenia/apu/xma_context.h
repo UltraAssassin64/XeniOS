@@ -237,10 +237,19 @@ class XmaContext {
       work_completion_event_->Set();
     }
   }
-  // Blocks until the worker has finished processing this context.
+  // Blocks until the worker has finished processing this context, or until
+  // nothing is left for it to do: a disable from another thread can take the
+  // kick before the worker gets to it.
   void WaitForWorkDone() {
-    if (work_completion_event_) {
-      xe::threading::Wait(work_completion_event_.get(), false);
+    if (!work_completion_event_) {
+      return;
+    }
+    while (xe::threading::Wait(work_completion_event_.get(), false,
+                               std::chrono::milliseconds(1)) ==
+           xe::threading::WaitResult::kTimeout) {
+      if (!is_enabled() && Block(true)) {
+        return;
+      }
     }
   }
 

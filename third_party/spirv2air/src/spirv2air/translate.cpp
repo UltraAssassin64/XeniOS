@@ -3277,6 +3277,9 @@ std::vector<uint8_t> Translator::run() {
                                                     : mtlb::FunctionType::Vertex;
   if (tese()) fn.tessellation = mtlb::tessellation_tag(patchDomain_ == PatchDomain::Quad, controlPoints_);
   fn.air = airVersion_;
+  // XeniOS: the language version Metal checks at pipeline creation, as in
+  // air.language_version (Metal 3.0 below AIR 2.6).
+  fn.language = {3, uint16_t(airVersion_.minor >= 6 ? 1 : 0)};
   fn.constants = fcEntries_.data();
   fn.num_constants = uint32_t(fcEntries_.size());
   fn.bitcode = bitcode.data();

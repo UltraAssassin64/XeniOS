@@ -10,10 +10,14 @@ Changes in this copy, so its output targets iOS 16:
 - `metallib.cpp` `make_target`: the iOS floor is 16 (upstream 18).
 - `metallib.cpp` `air_version`: iOS 16 is AIR 2.5 and iOS 17 AIR 2.6 (upstream: 2.7 below 26), so
   the triple is `air64_v25-apple-ios16.0.0` and the metallib file version 2.6.
-- `translate.cpp`: `air.language_version` is Metal 3.0 below AIR 2.6 (upstream always 3.1).
-- `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16".
+- `translate.cpp`: `air.language_version` is Metal 3.0 below AIR 2.6 (upstream always 3.1), and so is
+  the function's `VERS` language version in the metallib (upstream the `metallib.h` default, 3.1;
+  iOS 16 rejected every pipeline with "Function main is using language version 3.1 which is
+  incompatible with this OS").
+- `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.1".
 
-Not checked yet: that iOS 16's Metal accepts these libraries and every intrinsic spirv2air emits
-(the AIR is otherwise identical to upstream's iOS 18 output). `include/spirv/unified1` holds the
+Checked on iOS 16.5.1 (A16): Metal accepts the libraries and functions (build 9691). Not checked
+yet: that it accepts every pipeline and intrinsic spirv2air emits (the AIR is otherwise identical to
+upstream's iOS 18 output). `include/spirv/unified1` holds the
 Khronos headers the translator includes (spirv.hpp from third_party/SPIRV-Cross, GLSL.std.450.h from
 third_party/glslang, both MIT).

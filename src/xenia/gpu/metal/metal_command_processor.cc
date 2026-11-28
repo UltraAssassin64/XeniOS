@@ -5034,11 +5034,12 @@ bool MetalCommandProcessor::IssueDrawMsl(
   // spirv2air or all from the Metal Shading Language, as their stage
   // interfaces differ, and tessellated draws only the latter. A shader that
   // only has a spirv2air function gets the other one here, at once, where it
-  // goes with one that has none.
-  const bool use_spirv2air =
+  // goes with one that has none, or where Metal rejects the spirv2air
+  // pipeline.
+  bool use_spirv2air =
       !is_tessellated && vertex_translation->spirv2air_function() &&
       (!pixel_translation || pixel_translation->spirv2air_function());
-  if (!use_spirv2air) {
+  auto compile_msl_for_draw = [&]() -> bool {
     for (MslShader::MslTranslation* translation :
          {vertex_translation, pixel_translation}) {
       if (!translation || translation->metal_function()) {
@@ -5049,8 +5050,8 @@ bool MetalCommandProcessor::IssueDrawMsl(
           16) {
         XELOGI(
             "spirv2air: compiling {} shader {:016X} mod {:016X} with the "
-            "Metal Shading Language as well, for a draw whose other shader "
-            "or tessellation can't use spirv2air",
+            "Metal Shading Language as well, for a draw that can't use "
+            "spirv2air",
             translation->shader().type() == xenos::ShaderType::kVertex
                 ? "vertex"
                 : "pixel",
@@ -5062,6 +5063,10 @@ bool MetalCommandProcessor::IssueDrawMsl(
         return false;
       }
     }
+    return true;
+  };
+  if (!use_spirv2air && !compile_msl_for_draw()) {
+    return false;
   }
 
   // Create or retrieve pipeline state.
@@ -5072,15 +5077,27 @@ bool MetalCommandProcessor::IssueDrawMsl(
     pipeline = GetOrCreateMslTessPipelineState(
         vertex_translation, pixel_translation, host_vertex_shader_type, regs);
   } else {
-    pipeline =
-        GetOrCreateMslPipelineState(vertex_translation, pixel_translation, regs,
-                                    use_spirv2air, &pipeline_compile_status);
-    while (!pipeline &&
-           pipeline_compile_status == MslPipelineCompileStatus::kPending &&
-           WaitForMslCompileProgress()) {
+    for (;;) {
       pipeline = GetOrCreateMslPipelineState(
           vertex_translation, pixel_translation, regs, use_spirv2air,
           &pipeline_compile_status);
+      while (!pipeline &&
+             pipeline_compile_status == MslPipelineCompileStatus::kPending &&
+             WaitForMslCompileProgress()) {
+        pipeline = GetOrCreateMslPipelineState(
+            vertex_translation, pixel_translation, regs, use_spirv2air,
+            &pipeline_compile_status);
+      }
+      if (pipeline || !use_spirv2air ||
+          pipeline_compile_status != MslPipelineCompileStatus::kFailed) {
+        break;
+      }
+      // Metal rejected the spirv2air pipeline (the error is logged once per
+      // pipeline): the draw takes the Metal Shading Language shaders.
+      use_spirv2air = false;
+      if (!compile_msl_for_draw()) {
+        return false;
+      }
     }
   }
   if (!pipeline) {

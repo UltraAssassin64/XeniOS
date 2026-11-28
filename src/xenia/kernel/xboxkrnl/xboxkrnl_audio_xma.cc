@@ -22,6 +22,8 @@
 #include "xenia/kernel/xboxkrnl/xboxkrnl_private.h"
 #include "xenia/xbox.h"
 
+DECLARE_bool(use_dedicated_xma_thread);
+
 namespace xe {
 namespace kernel {
 namespace xboxkrnl {
@@ -333,9 +335,11 @@ dword_result_t XMASetInputBuffer0Valid_entry(lpvoid_t context_ptr) {
   context.input_buffer_0_valid = 1;
   context.Store(context_ptr);
 
-  // Wake up the worker thread so it can process the new input data.
+  // Wake up the worker thread so it can process the new input data. Without
+  // the dedicated thread, kicks decode on the kicking thread, and the worker
+  // waking could decode a context at the same time.
   auto audio_system = kernel_state()->emulator()->audio_system();
-  if (audio_system) {
+  if (audio_system && cvars::use_dedicated_xma_thread) {
     audio_system->xma_decoder()->SignalWork();
   }
 
@@ -380,9 +384,11 @@ dword_result_t XMASetInputBuffer1Valid_entry(lpvoid_t context_ptr) {
   context.input_buffer_1_valid = 1;
   context.Store(context_ptr);
 
-  // Wake up the worker thread so it can process the new input data.
+  // Wake up the worker thread so it can process the new input data. Without
+  // the dedicated thread, kicks decode on the kicking thread, and the worker
+  // waking could decode a context at the same time.
   auto audio_system = kernel_state()->emulator()->audio_system();
-  if (audio_system) {
+  if (audio_system && cvars::use_dedicated_xma_thread) {
     audio_system->xma_decoder()->SignalWork();
   }
 

@@ -3374,6 +3374,44 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   series: drawing it into the open pass, strip merging, held transfers,
   DontCare loads under clear quads.
 
+### Owner's runs on build 9695 (b8273f1a7; zip "9695_logs-1", 22 logs, and the "9695xenia" shader folders) and the next build
+
+- metal_shader_compiler = "spirv2air" (logs 19-45-46 EoT, 19-47-13 Arkham
+  City then AA, 19-48-24 GTA IV): every shader translated and loaded, but
+  every pipeline failed ("Function main is using language version 3.1 which
+  is incompatible with this OS"), so no draw was encoded (draw stats
+  encoded=0) and the screen was black, with black/cyan/white in videos.
+  spirv2air wrote Metal 3.0 into air.language_version for AIR 2.5, but the
+  metallib function list's VERS tag kept metallib.h's default 3.1; the 9691
+  probe only made libraries and functions, which Metal accepts either way.
+  Fixed in our copy (translate.cpp sets fn.language from the AIR version;
+  kVersion "xenios-ios16.1", which also keys the cached libraries; see
+  third_party/spirv2air/XENIOS.md). IssueDrawMsl now falls back to the Metal
+  Shading Language shaders for a draw whose spirv2air pipeline Metal rejects
+  (compile_msl_for_draw), so a rejected pipeline costs one synchronous MSL
+  compile instead of the draw. Whether the spirv2air path draws correctly is
+  still untested on the device.
+- GTA IV hung with use_dedicated_xma_thread off in the global config and on
+  in its per-game config (logs 17-18-49 and 17-21-05: no audio in the intro
+  video, new game never loads, no XMA census line ever printed). The owner
+  also saw it after turning the global setting on without relaunching.
+  Cause: SetupSubsystems ("Initializing Audio") runs before the game config
+  is applied, and the XMA worker thread checked the cvar once when it
+  started and exited when it was off; the kick path read the cvar live, so
+  once it was on, every kick waited for a worker that no longer ran (since
+  82f4ad4d5, which added the wait; 9691's runs had it off everywhere). Now the
+  worker always runs (idle on its event), each kick reads the cvar once
+  (use_dedicated_thread) and either decodes on the kicking thread or signals
+  the worker and waits; XMASetInputBuffer0/1Valid only wake the worker in
+  dedicated mode, so an inline kick and the worker never decode one context
+  together; WaitForWorkDone polls every 1 ms and stops waiting when the
+  context is no longer enabled and not locked (a disable from another thread
+  took the kick); XmaDecoder::Pause wakes an idle worker so it reaches its
+  pause point (it waited forever before, with the thread off always).
+- No device feedback yet on the Arkham City lines and GTA IV radio after
+  edcad3c19; GTA IV with adequate cooling holds about a minute longer before
+  its slowdown (owner), MSL performance otherwise unchanged.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings
