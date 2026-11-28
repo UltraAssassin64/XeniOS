@@ -3328,6 +3328,22 @@ std::vector<uint8_t> Translator::run() {
     dump("cleanup");
   }
   timer.lap(4);
+  // XeniOS: below AIR 2.6 (iOS 16) fneg is written as fsub -0.0, x, as before LLVM 8's unary operator record: iOS
+  // 16's Metal compiler failed a vertex function whose only instruction new to it was fneg ("Failed to
+  // materializeAll"), and refused the LLVM 9 and 10 attributes too.
+  if (airVersion_.minor < 6)
+    for (BasicBlock* b : main_->blocks)
+      for (Instruction* i : b->insts) {
+        if (i->op != Op::FNeg) continue;
+        Type* e = i->type->kind == Type::Vector ? i->type->elem : i->type;
+        Constant* z = m_.constFPBits(e, e->kind == Type::Half     ? 0x8000u
+                                        : e->kind == Type::Double ? 0x8000000000000000ull
+                                                                  : 0x80000000u);
+        if (i->type->kind == Type::Vector) z = m_.constAggregate(i->type, std::vector<Constant*>(i->type->n, z));
+        i->op = Op::BinOp;
+        i->sub = FSub;
+        i->ops = {z, i->ops[0]};
+      }
 #if !defined(NDEBUG) || defined(SPIRV2AIR_ENABLE_VERIFY)
   if (std::string problem = verifyFunction(main_); !problem.empty()) fail("malformed IR after cleanup: " + problem);
   if (std::string problem = verifyDominance(main_); !problem.empty()) fail("malformed IR after cleanup: " + problem);

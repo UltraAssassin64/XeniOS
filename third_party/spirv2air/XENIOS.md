@@ -26,7 +26,9 @@ Changes in this copy, so its output targets iOS 16:
   Apple's current compiler writes on intrinsic declarations are written: all (0, the default), all but
   `mustprogress` (1), only `nounwind`, `readnone`/`readonly`, `argmemonly` and `convergent` (2), or
   none and no `local_unnamed_addr` (3).
-- `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.3".
+- `translate.cpp` `run`: below AIR 2.6, `fneg` is written as `fsub -0.0, x` after the passes, as
+  before LLVM 8's unary operator record (upstream writes the record).
+- `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.4".
 
 Checked on iOS 16.5.1 (A16): Metal accepts the libraries and functions (build 9691). Pipelines:
 XeniOS's self-test (metal_spirv2air_self_test in msl_shader.cc, shaders in
@@ -41,6 +43,14 @@ difference. Only a module with a call has intrinsic declarations, and so an attr
 current compiler writes them. declarationAttributes 1-3 test whether iOS 16's compiler is the one
 that can't take them. Failures took multiples of about 10 s (one hung for an hour), so the
 compiler service retries a hung compile; the self-test now gives each pipeline 40 s.
+
+Build 9699: with declarationAttributes 2 and 3 every module with calls built (indexed constant
+buffer, discard, math functions, shared memory, a texture sample, a texture array with gradients);
+with 1 none did, so iOS 16's compiler can't take `willreturn`, `nofree` or `nosync` (LLVM 9 and 10).
+In Spider-Man: Edge of Time a vertex function with no call failed "Failed to materializeAll" (the
+bitcode reader). Of its instructions, the modules that built had none of `fdiv` and `select`, which
+are as old as the format, and `fneg`, which is LLVM 8's unary operator record. A reader older than
+LLVM 9's attributes may well be older than that record too, hence the `fsub` form.
 
 `include/spirv/unified1` holds the
 Khronos headers the translator includes (spirv.hpp from third_party/SPIRV-Cross, GLSL.std.450.h from

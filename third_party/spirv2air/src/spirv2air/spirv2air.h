@@ -15,7 +15,7 @@ namespace spirv2air {
 
 // Identifies the output format for caches: two builds with the same kVersion must produce byte-identical output
 // for the same input. Bump it with every change that changes any output byte.
-inline constexpr char kVersion[] = "spirv2air 1.0.8 xenios-ios16.3";
+inline constexpr char kVersion[] = "spirv2air 1.0.8 xenios-ios16.4";
 
 // Non-semantic extended instruction set read by spirv2air (SPV_KHR_non_semantic_info; other consumers ignore it).
 // KeepBranch (no operands; result type void) in a block makes the conditional branch ending that block reach the

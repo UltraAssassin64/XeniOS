@@ -111,11 +111,12 @@ DEFINE_bool(
 DEFINE_bool(
     metal_spirv2air_self_test, false,
     "Before a title starts, build Metal pipelines one at a time from small "
-    "shaders compiled with spirv2air, with each metal_spirv2air_options "
-    "variant that bears on them, and from the shaders of pipelines Metal "
-    "refused that earlier runs wrote to spirv2air_probe, and log which ones "
-    "Metal builds (\"spirv2air self-test\" lines). The title waits for it; "
-    "a pipeline Metal can't build can take 30 s to fail.",
+    "shaders compiled with spirv2air, with each "
+    "metal_spirv2air_declaration_attributes mode from 3 to 1, and from the "
+    "shaders of pipelines Metal refused that earlier runs wrote to "
+    "spirv2air_probe, and log which ones Metal builds (\"spirv2air "
+    "self-test\" lines). The title waits for it; a pipeline Metal can't "
+    "build can take 20 s or more to fail, and it stops after 10 minutes.",
     "Metal");
 DEFINE_int32(
     metal_spirv2air_options, 3,
@@ -130,14 +131,16 @@ DEFINE_int32(
     "1 and 2 bind as Metal Shading Language shaders do.",
     "Metal");
 DEFINE_int32(
-    metal_spirv2air_declaration_attributes, 3,
+    metal_spirv2air_declaration_attributes, 2,
     "With metal_shader_compiler \"spirv2air\", the attributes on the "
     "declarations of the Metal intrinsics a shader calls:\n"
     " 0: the ones Apple's current compiler writes.\n"
     " 1: without mustprogress.\n"
     " 2: without mustprogress, willreturn, nofree and nosync.\n"
     " 3: none.\n"
-    "iOS 16's Metal compiler failed every spirv2air shader with a call with 0.",
+    "iOS 16's Metal compiler failed every spirv2air shader with a call with "
+    "0 or 1. 2 keeps convergent, which stops the compiler from moving "
+    "derivatives and implicit-LOD samples into divergent branches.",
     "Metal");
 DEFINE_string(
     metal_shader_compiler, "msl",

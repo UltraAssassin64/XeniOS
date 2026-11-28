@@ -3534,6 +3534,39 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   (runs numbered pipelineN from 1 and mixed pairs up; old files are
   ignored).
 
+### Owner's runs on build 9699 (b1c0ac94e; zip "9699_logs": self-test in GTA IV 08-18-05 and EoT 08-23-57, then Arkham City 08-31-22 and EoT 08-31-37 with spirv2air and declaration attributes 2)
+
+- Self-test: declaration attributes 3 and 2 built all 6 call cases (indexed
+  constant buffer, discard, math, shared memory in a PS, texture, texture
+  array with gradients); 1 built none ("Compiler encountered an internal
+  error", the control then took ~10 s each time). So iOS 16's compiler can't
+  take willreturn, nofree or nosync (LLVM 9/10); mustprogress alone wasn't it.
+- Every run with spirv2air then crashed at the first spirv2air draw:
+  "Unhandled host exception ... write ... _platform_memmove ...
+  IssueDrawMsl+13B0", address 0, repeated millions of times. With
+  metal_inline_shader_constants on (the default) neither IssueDraw nor
+  EnsureCommandBuffer acquired the uniforms ring, and spirv2air draws (which
+  turn inline constants off, as their argument buffers point at the tables)
+  wrote the system constants to uniforms_buffer_->contents() of a null
+  buffer. No spirv2air pixel pipeline had built before, so this path never
+  ran on device until now.
+- EoT (415608B2): a vertex-only pipeline from VS B6C9863F710683EC mod
+  12000000 failed "Failed to materializeAll" (the bitcode reader), with mode
+  3 and 2 alike; dumped as pair_DE66D39FDB135E3E. Offline its AIR has no
+  calls; its only instructions no module that built had were fdiv, select
+  (old as the format) and fneg (LLVM 8's UNOP record, code 56). Every other
+  record spirv2air writes is LLVM 3.7 or older.
+- Next build: the uniforms ring is acquired with metal_shader_compiler
+  "spirv2air" whatever metal_inline_shader_constants says, and IssueDrawMsl
+  drops a table-path draw with no uniforms buffer instead of writing through
+  null. spirv2air writes fneg as fsub -0.0, x below AIR 2.6 (vendored, after
+  all passes; kVersion xenios-ios16.4 retires cached libraries).
+  metal_spirv2air_declaration_attributes defaults to 2 (keeps convergent,
+  readnone/readonly, argmemonly, nounwind). The ring holds 8 draws per buffer
+  (96 buffers on iOS), so spirv2air draws can wait for the GPU in heavy
+  scenes where MSL's inline constants don't; if spirv2air draws correctly,
+  its constants could go in the argument buffer pages instead.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

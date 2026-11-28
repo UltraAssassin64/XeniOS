@@ -94,6 +94,7 @@ DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
 DECLARE_bool(skip_unchanged_render_target_transfers);
 DECLARE_bool(metal_spirv2air_self_test);
+DECLARE_string(metal_shader_compiler);
 DEFINE_bool(
     metal_gpu_ordered_fences, true,
     "With shared memory aliasing guest RAM: publish the game's shader-done "
@@ -3624,7 +3625,11 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
     return true;
   }
 #else
-  if (UseSpirvCrossPath() && !cvars::metal_inline_shader_constants &&
+  // spirv2air shaders read their constants from the uniform buffers' tables
+  // whatever metal_inline_shader_constants says.
+  if (UseSpirvCrossPath() &&
+      (!cvars::metal_inline_shader_constants ||
+       cvars::metal_shader_compiler == "spirv2air") &&
       !EnsureSpirvUniformBufferCapacity()) {
     XELOGE(
         "IssueDraw: failed to prepare SPIRV-Cross uniforms ring; skipping "
@@ -5387,6 +5392,10 @@ bool MetalCommandProcessor::IssueDrawMsl(
   uint8_t* uniforms_vertex = nullptr;
   uint8_t* uniforms_pixel = nullptr;
   if (!inline_constants) {
+    if (!uniforms_buffer_) {
+      XELOGE("SPIRV-Cross: no uniforms buffer for the draw's constants");
+      return false;
+    }
     uint8_t* uniforms_base =
         static_cast<uint8_t*>(uniforms_buffer_->contents());
     uniforms_vertex =
@@ -7153,7 +7162,9 @@ MTL::CommandBuffer* MetalCommandProcessor::EnsureCommandBuffer() {
       NS::String::string("XeniaCommandBuffer", NS::UTF8StringEncoding));
 
 #if !METAL_SHADER_CONVERTER_AVAILABLE
-  if (UseSpirvCrossPath() && !cvars::metal_inline_shader_constants &&
+  if (UseSpirvCrossPath() &&
+      (!cvars::metal_inline_shader_constants ||
+       cvars::metal_shader_compiler == "spirv2air") &&
       !EnsureSpirvUniformBuffer()) {
     static auto last_ensure_uniforms_fail_log =
         std::chrono::steady_clock::time_point{};
