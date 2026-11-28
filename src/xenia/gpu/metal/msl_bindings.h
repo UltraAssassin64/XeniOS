@@ -113,13 +113,17 @@ constexpr uint32_t kMaxBindings = 256;
 // instead of the fast ones. Bits 4-5 (from
 // metal_spirv2air_declaration_attributes): spirv2air's declarationAttributes,
 // which of the attributes Apple's current compiler writes on intrinsic
-// declarations are written.
+// declarations are written. kDirectConstantBuffers (always set for guest
+// shaders): constant buffer n is [[buffer(kSystemConstants + n)]], where the
+// Metal Shading Language path binds it, instead of a pointer in the argument
+// buffer, so the draw passes the constants as that path does.
 constexpr uint32_t kDirectSharedMemory = 1;
 constexpr uint32_t kDirectTextures = 2;
 constexpr uint32_t kConstantTextureIndices = 4;
 constexpr uint32_t kPreciseMath = 8;
 constexpr uint32_t kOptionMask = 15;
 constexpr uint32_t kDeclarationAttributesShift = 4;
+constexpr uint32_t kDirectConstantBuffers = 64;
 }  // namespace Spirv2airLayout
 
 }  // namespace metal

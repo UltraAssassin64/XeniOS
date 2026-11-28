@@ -937,8 +937,26 @@ void Translator::buildSignature() {
   if (usesSamplers_ && !directTextures)
     argSmpHeap_ =
         int(addArg(m_.ptrTy(smpHeapTy_, 2), indirect(options_.graphics.samplerHeapBuffer, "struct.SamplerHeap")));
-  // XeniOS: direct resources (GraphicsBindings::sharedMemoryBuffer and directTextures), with the metadata MSL gives a
-  // `device uchar*` buffer, a `texture2d<float, sample>` (and the other dimensions) and a `sampler` argument.
+  // XeniOS: direct resources (GraphicsBindings::sharedMemoryBuffer, firstConstantBuffer and directTextures), with the
+  // metadata MSL gives a `device uchar*` or `constant uchar*` buffer, a `texture2d<float, sample>` (and the other
+  // dimensions) and a `sampler` argument.
+  if (options_.graphics.firstConstantBuffer >= 0) {
+    std::map<uint32_t, int> argOfBinding;
+    for (uint32_t var : globals_) {
+      if (type(varType_[var]).storage != spv::StorageClassUniform || isFunctionConstant(var)) continue;
+      const uint32_t binding = decor_[var].binding;
+      const uint32_t index = uint32_t(options_.graphics.firstConstantBuffer) + binding;
+      if (index > 30) fail("uniform binding " + std::to_string(binding) + " is above [[buffer(30)]]");
+      auto [it, inserted] = argOfBinding.try_emplace(binding, -1);
+      if (inserted)
+        it->second = int(addArg(m_.ptrTy(i8_, 2),
+                                {S("air.buffer"), S("air.location_index"), I(index), I(1), S("air.read"),
+                                 S("air.address_space"), I(2), S("air.arg_type_size"), I(1), S("air.arg_type_align_size"),
+                                 I(1), S("air.arg_type_name"), S("uchar"), S("air.arg_name"),
+                                 S("constants" + std::to_string(binding))}));
+      argOfInput_[var] = it->second;
+    }
+  }
   if (options_.graphics.sharedMemoryBuffer >= 0) {
     std::vector<uint32_t> sharedVars;
     bool writable = false;
@@ -1279,7 +1297,10 @@ void Translator::buildEntry() {
         }
         p.kind = Pointer::Buffer;
         p.addrSpace = 2;
-        p.ptr = tlabSlot(options_.graphics.constantBaseOffset + options_.graphics.constantStride * decor_[var].binding, m_.ptrTy(i8_, 2));
+        if (auto direct = argOfInput_.find(var); direct != argOfInput_.end())  // XeniOS: firstConstantBuffer
+          p.ptr = main_->args[direct->second];
+        else
+          p.ptr = tlabSlot(options_.graphics.constantBaseOffset + options_.graphics.constantStride * decor_[var].binding, m_.ptrTy(i8_, 2));
         p.offset = m_.constInt(i64_, 0);
         break;
       case spv::StorageClassStorageBuffer: {

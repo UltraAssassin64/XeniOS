@@ -26,6 +26,10 @@ Changes in this copy, so its output targets iOS 16:
   Apple's current compiler writes on intrinsic declarations are written: all (0, the default), all but
   `mustprogress` (1), only `nounwind`, `readnone`/`readonly`, `argmemonly` and `convergent` (2), or
   none and no `local_unnamed_addr` (3).
+- `spirv2air.h` `GraphicsBindings::firstConstantBuffer` (`translate.cpp` `buildSignature`,
+  `buildEntry`): uniform binding n as a `constant uchar*` `air.buffer` argument at
+  `[[buffer(firstConstantBuffer + n)]]` instead of a pointer loaded from the argument buffer, one
+  argument per binding. Off (-1) by default.
 - `translate.cpp` `run`: below AIR 2.6, `fneg` is written as `fsub -0.0, x` after the passes, as
   before LLVM 8's unary operator record (upstream writes the record).
 - `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.4".
@@ -51,6 +55,11 @@ In Spider-Man: Edge of Time a vertex function with no call failed "Failed to mat
 bitcode reader). Of its instructions, the modules that built had none of `fdiv` and `select`, which
 are as old as the format, and `fneg`, which is LLVM 8's unary operator record. A reader older than
 LLVM 9's attributes may well be older than that record too, hence the `fsub` form.
+
+Build 9700 (with the `fsub` form): every guest shader in Spider-Man: Edge of Time (425) and GTA IV
+(350) built and drew, with no pipeline refused. XeniOS then binds the constant buffers directly
+(firstConstantBuffer), as the draws on the argument buffer path waited for the uniform buffers
+holding the constant tables up to ~25 ms a frame in GTA IV.
 
 `include/spirv/unified1` holds the
 Khronos headers the translator includes (spirv.hpp from third_party/SPIRV-Cross, GLSL.std.450.h from

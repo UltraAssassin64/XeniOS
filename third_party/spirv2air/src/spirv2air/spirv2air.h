@@ -102,9 +102,12 @@ struct GraphicsBindings {
   // directTextures makes texture binding n [[texture(n)]] and sampler binding n [[sampler(n - the module's lowest
   // sampler binding)]], with no index records or heaps; a texture binding above 30 or a sampler index above 15 is an
   // error. constantTextureIndices reads the index records through a constant pointer instead of a device one.
+  // firstConstantBuffer >= 0 makes uniform binding n (in constantsSet) [[buffer(firstConstantBuffer + n)]] in the
+  // constant address space instead of a pointer loaded from the argument buffer; above [[buffer(30)]] is an error.
   int sharedMemoryBuffer = -1;
   bool directTextures = false;
   bool constantTextureIndices = false;
+  int firstConstantBuffer = -1;
 };
 
 // Target platform. The default, macOS 14, reproduces the original output byte for byte. iOS and iOS Simulator write

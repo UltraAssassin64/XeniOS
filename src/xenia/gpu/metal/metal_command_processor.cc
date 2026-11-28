@@ -94,7 +94,6 @@ DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
 DECLARE_bool(skip_unchanged_render_target_transfers);
 DECLARE_bool(metal_spirv2air_self_test);
-DECLARE_string(metal_shader_compiler);
 DEFINE_bool(
     metal_gpu_ordered_fences, true,
     "With shared memory aliasing guest RAM: publish the game's shader-done "
@@ -3625,11 +3624,7 @@ bool MetalCommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type,
     return true;
   }
 #else
-  // spirv2air shaders read their constants from the uniform buffers' tables
-  // whatever metal_inline_shader_constants says.
-  if (UseSpirvCrossPath() &&
-      (!cvars::metal_inline_shader_constants ||
-       cvars::metal_shader_compiler == "spirv2air") &&
+  if (UseSpirvCrossPath() && !cvars::metal_inline_shader_constants &&
       !EnsureSpirvUniformBufferCapacity()) {
     XELOGE(
         "IssueDraw: failed to prepare SPIRV-Cross uniforms ring; skipping "
@@ -5386,9 +5381,16 @@ bool MetalCommandProcessor::IssueDrawMsl(
   // metal_inline_shader_constants: each constant block is passed with
   // set*Bytes when it changed since it was last passed in this render encoder,
   // instead of written to this draw's tables in a pooled uniform buffer.
-  // spirv2air shaders read the blocks through pointers, so from the tables.
+  // spirv2air shaders take the blocks at the same buffer indices
+  // (Spirv2airLayout::kDirectConstantBuffers); one compiled without that would
+  // read them through pointers to the tables.
   const bool inline_constants =
-      cvars::metal_inline_shader_constants && !use_spirv2air;
+      cvars::metal_inline_shader_constants &&
+      (!use_spirv2air ||
+       (vertex_translation->spirv2air_options() &
+        (pixel_translation ? pixel_translation->spirv2air_options()
+                           : ~uint32_t(0)) &
+        Spirv2airLayout::kDirectConstantBuffers));
   uint8_t* uniforms_vertex = nullptr;
   uint8_t* uniforms_pixel = nullptr;
   if (!inline_constants) {
@@ -6020,19 +6022,23 @@ bool MetalCommandProcessor::IssueDrawMsl(
 
     uint64_t argument_buffer[Spirv2airLayout::kArgumentBufferBytes /
                              sizeof(uint64_t)] = {};
-    const uint64_t uniforms_address = uniforms_buffer_->gpuAddress();
-    const uint64_t stage_uniforms =
-        uniforms_address + (is_pixel_stage ? ps_base_offset : vs_base_offset);
     // SPIR-V bindings 0 to 6: system, float vertex, float pixel, bool/loop,
     // fetch, clip plane and tessellation constants, from the stage's table
-    // (a stage's float constants are its table's second block).
-    argument_buffer[0] = stage_uniforms + 0 * kCBVSize;
-    argument_buffer[1] = uniforms_address + vs_base_offset + 1 * kCBVSize;
-    argument_buffer[2] = uniforms_address + ps_base_offset + 1 * kCBVSize;
-    argument_buffer[3] = stage_uniforms + 2 * kCBVSize;
-    argument_buffer[4] = stage_uniforms + 3 * kCBVSize;
-    argument_buffer[5] = stage_uniforms + 4 * kCBVSize;
-    argument_buffer[6] = stage_uniforms + 5 * kCBVSize;
+    // (a stage's float constants are its table's second block), unless the
+    // shader takes them as buffer bindings.
+    if (!(translation->spirv2air_options() &
+          Spirv2airLayout::kDirectConstantBuffers)) {
+      const uint64_t uniforms_address = uniforms_buffer_->gpuAddress();
+      const uint64_t stage_uniforms =
+          uniforms_address + (is_pixel_stage ? ps_base_offset : vs_base_offset);
+      argument_buffer[0] = stage_uniforms + 0 * kCBVSize;
+      argument_buffer[1] = uniforms_address + vs_base_offset + 1 * kCBVSize;
+      argument_buffer[2] = uniforms_address + ps_base_offset + 1 * kCBVSize;
+      argument_buffer[3] = stage_uniforms + 2 * kCBVSize;
+      argument_buffer[4] = stage_uniforms + 3 * kCBVSize;
+      argument_buffer[5] = stage_uniforms + 4 * kCBVSize;
+      argument_buffer[6] = stage_uniforms + 5 * kCBVSize;
+    }
     const uint64_t shared_memory_address =
         shared_mem_buffer ? shared_mem_buffer->gpuAddress() : 0;
     argument_buffer[Spirv2airLayout::kSharedMemoryReadOffset / 8] =
@@ -7162,9 +7168,7 @@ MTL::CommandBuffer* MetalCommandProcessor::EnsureCommandBuffer() {
       NS::String::string("XeniaCommandBuffer", NS::UTF8StringEncoding));
 
 #if !METAL_SHADER_CONVERTER_AVAILABLE
-  if (UseSpirvCrossPath() &&
-      (!cvars::metal_inline_shader_constants ||
-       cvars::metal_shader_compiler == "spirv2air") &&
+  if (UseSpirvCrossPath() && !cvars::metal_inline_shader_constants &&
       !EnsureSpirvUniformBuffer()) {
     static auto last_ensure_uniforms_fail_log =
         std::chrono::steady_clock::time_point{};

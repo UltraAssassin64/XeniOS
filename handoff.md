@@ -3567,6 +3567,41 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   scenes where MSL's inline constants don't; if spirv2air draws correctly,
   its constants could go in the argument buffer pages instead.
 
+### Owner's runs on build 9700 (821224715; zip "9700_logs": self-test plus play in EoT 09-01-43 and GTA IV 09-07-48, spirv2air, attributes 2)
+
+- Owner: both games drew with spirv2air and performed about as with MSL.
+- Self-test: as on 9699 (modes 3 and 2 build all 6 call cases, 1 none). It
+  found 0 game pairs (no pair_ dumps in the probe folders sent).
+- Games: EoT 425 and GTA IV 350 spirv2air shaders, all accepted, no
+  pipeline failed, no MSL fallback. Translation 1.4-2 ms per shader;
+  pipelines 40-120 ms each with a cold Metal cache. 9699's short MSL run
+  (cache state unknown) had shaders at 15-35 ms and pipelines at 10-17 ms, so
+  the work seems to move from the library to the pipeline, with hitches
+  about even; a warm second spirv2air run would show its pipeline times.
+- EoT: 33.3 ms frames (its 30 FPS) with the GPU 100-130% busy; frames rose
+  to 40-60 ms as the thermal state went to 1 and then 2.
+- GTA IV: 35-39 ms with the GPU ~105-120% busy, then 64-72 ms with the GPU
+  only 61-74% busy at thermal state 0, the game's thread F8000CD0 at ~82% of
+  a core in guest code.
+- The uniforms ring (8 draws per buffer, 96 buffers) cost the spirv2air path:
+  per 120 frames GTA's draws waited for a free uniform buffer 600-3800 times
+  (0.7-3.0 s, up to ~25 ms a frame) and ended up to ~3600 command buffers
+  for want of one (each splitting a render pass); EoT up to 1057 waits
+  (1.2 s) late on. MSL draws avoid it with inline constants.
+- Next build: spirv2air GraphicsBindings::firstConstantBuffer (vendored);
+  guest shaders always get Spirv2airLayout::kDirectConstantBuffers (bit 64,
+  not a metal_spirv2air_options bit since configs save 3), which binds
+  constant buffer n at kSystemConstants + n, exactly where the MSL path binds
+  it, so spirv2air draws take metal_inline_shader_constants' set*Bytes path
+  (or the MSL table bindings with it off) and no longer need the ring; the
+  argument buffer keeps only shared memory and texture index pointers. The
+  uniforms ring is again acquired only with inline constants off. The
+  constants are also read straight from [[buffer(n)]] instead of through a
+  pointer loaded from the argument buffer (one dependent load fewer, and
+  Metal can preload them). Self-test: a direct constant buffer baseline
+  case; the call cases and game pairs take the guest variant; mode 1 is
+  no longer tried (3 minutes of failures).
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

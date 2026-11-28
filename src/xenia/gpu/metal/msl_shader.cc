@@ -111,8 +111,8 @@ DEFINE_bool(
 DEFINE_bool(
     metal_spirv2air_self_test, false,
     "Before a title starts, build Metal pipelines one at a time from small "
-    "shaders compiled with spirv2air, with each "
-    "metal_spirv2air_declaration_attributes mode from 3 to 1, and from the "
+    "shaders compiled with spirv2air, with the options guest shaders use and "
+    "metal_spirv2air_declaration_attributes 3 and 2, and from the "
     "shaders of pipelines Metal refused that earlier runs wrote to "
     "spirv2air_probe, and log which ones Metal builds (\"spirv2air "
     "self-test\" lines). The title waits for it; a pipeline Metal can't "
@@ -238,6 +238,9 @@ spirv2air::Options GetSpirv2airOptions(bool is_ios, uint32_t variant) {
   if (variant & Spirv2airLayout::kDirectSharedMemory) {
     bindings.sharedMemoryBuffer = int(MslBufferIndex::kSharedMemory);
   }
+  if (variant & Spirv2airLayout::kDirectConstantBuffers) {
+    bindings.firstConstantBuffer = int(MslBufferIndex::kSystemConstants);
+  }
   bindings.directTextures = (variant & Spirv2airLayout::kDirectTextures) != 0;
   bindings.constantTextureIndices =
       (variant & Spirv2airLayout::kConstantTextureIndices) != 0;
@@ -247,11 +250,13 @@ spirv2air::Options GetSpirv2airOptions(bool is_ios, uint32_t variant) {
   return options;
 }
 
-// The variant guest shaders are compiled with: metal_spirv2air_options and
-// metal_spirv2air_declaration_attributes.
+// The variant guest shaders are compiled with: metal_spirv2air_options,
+// metal_spirv2air_declaration_attributes, and the constant buffers bound as
+// the Metal Shading Language path binds them.
 uint32_t GetSpirv2airVariant() {
   return (uint32_t(cvars::metal_spirv2air_options) &
           Spirv2airLayout::kOptionMask) |
+         Spirv2airLayout::kDirectConstantBuffers |
          ((uint32_t(cvars::metal_spirv2air_declaration_attributes) & 3)
           << Spirv2airLayout::kDeclarationAttributesShift);
 }
@@ -726,6 +731,8 @@ void RunSpirv2airSelfTest(MTL::Device* device, bool is_ios,
        kSharedMemory},
       {"pixel shader with an input", 1, 4, 0},
       {"pixel shader reading a constant buffer", 0, 6, 0},
+      {"pixel shader reading a constant buffer bound directly", 0, 6,
+       Spirv2airLayout::kDirectConstantBuffers},
   };
   // Shaders calling Metal intrinsics, which all failed on build 9698 with the
   // declaration attributes Apple's current compiler writes.
@@ -1000,14 +1007,18 @@ void RunSpirv2airSelfTest(MTL::Device* device, bool is_ios,
   for (const Test& t : baseline) {
     count(run(t));
   }
-  // Most faithful first: 3 writes no attributes, 1 all but mustprogress.
+  // The cases with calls and the game pairs take the options guest shaders
+  // are compiled with, and each declaration attributes mode iOS 16 can build
+  // (1 and 0 failed every case on builds 9699 and 9700).
+  const uint32_t game_variant =
+      GetSpirv2airVariant() & ~(3u << kAttributesShift);
   uint32_t best_mode = 0;
   uint32_t best_built = 0;
-  for (uint32_t mode : {3u, 2u, 1u}) {
+  for (uint32_t mode : {3u, 2u}) {
     uint32_t mode_built = 0;
     for (const Test& t : with_calls) {
       Test variant_test = t;
-      variant_test.variant |= mode << kAttributesShift;
+      variant_test.variant |= game_variant | (mode << kAttributesShift);
       mode_built += count(run(variant_test)) ? 1 : 0;
     }
     XELOGI(
@@ -1020,15 +1031,14 @@ void RunSpirv2airSelfTest(MTL::Device* device, bool is_ios,
     }
   }
   if (best_built) {
-    const uint32_t game_variant =
-        kSharedMemory | kTextures | (best_mode << kAttributesShift);
     for (const auto& [vertex_index, pixel_index] : game_pairs) {
       const std::string& vertex_name = modules[vertex_index].name;
-      count(run(
-          {"game " + vertex_name + " alone", vertex_index, -1, game_variant}));
+      count(run({"game " + vertex_name + " alone", vertex_index, -1,
+                 game_variant | (best_mode << kAttributesShift)}));
       if (pixel_index >= 0) {
         count(run({"game " + vertex_name + " and " + modules[pixel_index].name,
-                   vertex_index, pixel_index, game_variant}));
+                   vertex_index, pixel_index,
+                   game_variant | (best_mode << kAttributesShift)}));
       }
     }
   }
