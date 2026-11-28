@@ -104,6 +104,18 @@ constexpr uint32_t kHeapTextureHandleOffset = 8;
 // Index records in the {binding, binding} table, enough for any stage's
 // textures and samplers.
 constexpr uint32_t kMaxBindings = 256;
+// metal_spirv2air_options bits. kDirectSharedMemory: shared memory is the
+// stage's MslBufferIndex::kSharedMemory buffer instead of pointers in the
+// argument buffer. kDirectTextures: texture k is [[texture(k)]] and sampler j
+// [[sampler(j)]], instead of the heaps and index records.
+// kConstantTextureIndices: the index records are read through a constant
+// pointer instead of a device one. kPreciseMath: the precise math intrinsics
+// instead of the fast ones.
+constexpr uint32_t kDirectSharedMemory = 1;
+constexpr uint32_t kDirectTextures = 2;
+constexpr uint32_t kConstantTextureIndices = 4;
+constexpr uint32_t kPreciseMath = 8;
+constexpr uint32_t kOptionMask = 15;
 }  // namespace Spirv2airLayout
 
 }  // namespace metal

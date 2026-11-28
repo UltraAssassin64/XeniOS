@@ -93,7 +93,6 @@ using BYTE = uint8_t;
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
 DECLARE_bool(skip_unchanged_render_target_transfers);
-DECLARE_string(metal_shader_compiler);
 DECLARE_bool(metal_spirv2air_self_test);
 DEFINE_bool(
     metal_gpu_ordered_fences, true,
@@ -774,10 +773,6 @@ MetalCommandProcessor::~MetalCommandProcessor() {
   }
   WaitForPendingCompletionHandlers();
   ShutdownMslAsyncCompilation();
-  spirv2air_self_test_stop_ = true;
-  if (spirv2air_self_test_thread_.joinable()) {
-    spirv2air_self_test_thread_.join();
-  }
   if (render_pass_descriptor_) {
     render_pass_descriptor_->release();
     render_pass_descriptor_ = nullptr;
@@ -1872,21 +1867,6 @@ bool MetalCommandProcessor::SetupContext() {
       records[i * 2 + 1] = i;
     }
   }
-  if (cvars::metal_shader_compiler == "spirv2air" &&
-      cvars::metal_spirv2air_self_test && UseSpirvCrossPath() &&
-      !spirv2air_self_test_thread_.joinable()) {
-    spirv2air_self_test_stop_ = false;
-    spirv2air_self_test_thread_ = std::thread([this]() {
-      xe::threading::set_name("spirv2air self-test");
-      constexpr bool kIsIos =
-#if XE_PLATFORM_IOS
-          true;
-#else
-          false;
-#endif
-      RunSpirv2airSelfTest(device_, kIsIos, spirv2air_self_test_stop_);
-    });
-  }
 
   // Create a 1x1x1 placeholder 2D array texture for unbound texture slots
   // Xbox 360 textures are typically 2D arrays (for texture atlases, cubemaps)
@@ -2310,10 +2290,6 @@ void MetalCommandProcessor::ShutdownContext() {
   frame_open_ = false;
 
   ShutdownMslAsyncCompilation();
-  spirv2air_self_test_stop_ = true;
-  if (spirv2air_self_test_thread_.joinable()) {
-    spirv2air_self_test_thread_.join();
-  }
 
 #if METAL_SHADER_CONVERTER_AVAILABLE
   shader_cache_.clear();
@@ -2421,6 +2397,18 @@ void MetalCommandProcessor::InitializeShaderStorage(
     SetMslShaderSourceCacheDirectory(shader_storage_title_root / "msl_source");
   } else {
     SetMslShaderSourceCacheDirectory(shader_storage_title_root / "msl_source");
+  }
+  if (cvars::metal_spirv2air_self_test) {
+    // Before the title runs, so no other compile shares Metal's compiler
+    // service with the pipelines it builds.
+    constexpr bool kIsIos =
+#if XE_PLATFORM_IOS
+        true;
+#else
+        false;
+#endif
+    RunSpirv2airSelfTest(device_, kIsIos,
+                         shader_storage_title_root / "spirv2air_probe");
   }
 
   if (completion_callback) {
@@ -5984,9 +5972,14 @@ bool MetalCommandProcessor::IssueDrawMsl(
   // spirv2air: each stage gets its top-level argument buffer (the stage's
   // constant tables, shared memory and the {binding, binding} index records)
   // and one heap of its textures and then its samplers (Spirv2airLayout),
-  // bound as both the resource and the sampler heap.
+  // bound as both the resource and the sampler heap. A shader compiled with
+  // Spirv2airLayout::kDirectTextures takes texture k at texture index k and
+  // sampler j at sampler index j instead, and no heap.
   auto bind_spirv2air_stage = [&](MslShader* shader,
+                                  MslShader::MslTranslation* translation,
                                   bool is_pixel_stage) -> bool {
+    const bool direct_textures = (translation->spirv2air_options() &
+                                  Spirv2airLayout::kDirectTextures) != 0;
     const auto& texture_bindings = shader->GetTextureBindingsAfterTranslation();
     const auto& sampler_bindings = shader->GetSamplerBindingsAfterTranslation();
     const uint32_t texture_count = uint32_t(texture_bindings.size());
@@ -6005,8 +5998,10 @@ bool MetalCommandProcessor::IssueDrawMsl(
     MTL::Buffer* slice_buffer = nullptr;
     NS::UInteger slice_offset = 0;
     if (!AcquireSpirvArgumentBufferSlice(
-            kHeapOffset +
-                std::max(record_count, 1u) * Spirv2airLayout::kHeapRecordBytes,
+            kHeapOffset + (direct_textures
+                               ? 0
+                               : std::max(record_count, 1u) *
+                                     Spirv2airLayout::kHeapRecordBytes),
             kSliceAlignment, &slice_buffer, &slice_offset)) {
       XELOGE("spirv2air: Failed to allocate an argument buffer slice");
       return false;
@@ -6043,8 +6038,16 @@ bool MetalCommandProcessor::IssueDrawMsl(
     std::memcpy(slice, argument_buffer, sizeof(argument_buffer));
 
     uint8_t* heap = slice + kHeapOffset;
-    std::memset(heap, 0, record_count * Spirv2airLayout::kHeapRecordBytes);
+    if (!direct_textures) {
+      std::memset(heap, 0, record_count * Spirv2airLayout::kHeapRecordBytes);
+    }
     MetalTextureCache* metal_texture_cache = texture_cache_.get();
+    // Slots bound directly are what the Metal Shading Language path's binding
+    // cache would otherwise take as still bound by it.
+    auto* bound_textures = is_pixel_stage ? &msl_bound_pixel_textures_
+                                          : &msl_bound_vertex_textures_;
+    auto* bound_samplers = is_pixel_stage ? &msl_bound_pixel_samplers_
+                                          : &msl_bound_vertex_samplers_;
     for (uint32_t i = 0; i < texture_count; ++i) {
       const auto& binding = texture_bindings[i];
       MTL::Texture* texture = texture_cache_->GetTextureForBinding(
@@ -6062,6 +6065,15 @@ bool MetalCommandProcessor::IssueDrawMsl(
             break;
         }
       }
+      if (direct_textures) {
+        if (is_pixel_stage) {
+          current_render_encoder_->setFragmentTexture(texture, i);
+        } else {
+          current_render_encoder_->setVertexTexture(texture, i);
+        }
+        (*bound_textures)[i] = texture;
+        continue;
+      }
       if (!texture) {
         continue;
       }
@@ -6078,12 +6090,44 @@ bool MetalCommandProcessor::IssueDrawMsl(
       if (!sampler_state) {
         sampler_state = null_sampler_;
       }
+      if (direct_textures) {
+        const uint32_t sampler_index = i - texture_count;
+        if (is_pixel_stage) {
+          current_render_encoder_->setFragmentSamplerState(sampler_state,
+                                                           sampler_index);
+        } else {
+          current_render_encoder_->setVertexSamplerState(sampler_state,
+                                                         sampler_index);
+        }
+        (*bound_samplers)[sampler_index] = sampler_state;
+        continue;
+      }
       const MTL::ResourceID handle = sampler_state->gpuResourceID();
       std::memcpy(heap + i * Spirv2airLayout::kHeapRecordBytes, &handle,
                   sizeof(handle));
     }
 
-    if (is_pixel_stage) {
+    if (direct_textures) {
+      if (is_pixel_stage) {
+        current_render_encoder_->setFragmentBuffer(
+            slice_buffer, slice_offset, Spirv2airLayout::kArgumentBuffer);
+        msl_bound_pixel_texture_count_ =
+            std::max(msl_bound_pixel_texture_count_, texture_count);
+        msl_bound_pixel_sampler_count_ = std::max(
+            msl_bound_pixel_sampler_count_, record_count - texture_count);
+        msl_bound_pixel_texture_binding_uid_ = 0;
+        msl_bound_pixel_sampler_binding_uid_ = 0;
+      } else {
+        current_render_encoder_->setVertexBuffer(
+            slice_buffer, slice_offset, Spirv2airLayout::kArgumentBuffer);
+        msl_bound_vertex_texture_count_ =
+            std::max(msl_bound_vertex_texture_count_, texture_count);
+        msl_bound_vertex_sampler_count_ = std::max(
+            msl_bound_vertex_sampler_count_, record_count - texture_count);
+        msl_bound_vertex_texture_binding_uid_ = 0;
+        msl_bound_vertex_sampler_binding_uid_ = 0;
+      }
+    } else if (is_pixel_stage) {
       current_render_encoder_->setFragmentBuffer(
           slice_buffer, slice_offset, Spirv2airLayout::kArgumentBuffer);
       current_render_encoder_->setFragmentBuffer(
@@ -6106,8 +6150,10 @@ bool MetalCommandProcessor::IssueDrawMsl(
     return true;
   };
   if (use_spirv2air) {
-    if (!texture_cache_ || !bind_spirv2air_stage(msl_vertex_shader, false) ||
-        (msl_pixel_shader && !bind_spirv2air_stage(msl_pixel_shader, true))) {
+    if (!texture_cache_ ||
+        !bind_spirv2air_stage(msl_vertex_shader, vertex_translation, false) ||
+        (msl_pixel_shader &&
+         !bind_spirv2air_stage(msl_pixel_shader, pixel_translation, true))) {
       return false;
     }
     UseRenderEncoderResource(spirv2air_texture_indices_,

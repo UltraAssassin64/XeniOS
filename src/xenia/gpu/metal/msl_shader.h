@@ -10,7 +10,6 @@
 #ifndef XENIA_GPU_METAL_MSL_SHADER_H_
 #define XENIA_GPU_METAL_MSL_SHADER_H_
 
-#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -52,6 +51,9 @@ class MslShader : public SpirvShader {
     // shaders from one of the two, as their stage interfaces differ; a later
     // CompileToMsl call adds the Metal Shading Language one.
     MTL::Function* spirv2air_function() const { return spirv2air_function_; }
+    // The metal_spirv2air_options (Spirv2airLayout) spirv2air_function was
+    // compiled with, which say how a draw binds its resources.
+    uint32_t spirv2air_options() const { return spirv2air_options_; }
     const std::string& msl_source() const { return msl_source_; }
     const std::string& entry_point_name() const { return entry_point_name_; }
     bool is_valid() const {
@@ -77,6 +79,7 @@ class MslShader : public SpirvShader {
     MTL::Function* metal_function_ = nullptr;
     MTL::Library* spirv2air_library_ = nullptr;
     MTL::Function* spirv2air_function_ = nullptr;
+    uint32_t spirv2air_options_ = 0;
     bool uses_argument_buffers_ = false;
     MTL::ArgumentEncoder* argument_encoder_ = nullptr;
     uint32_t argument_encoder_alignment_ = 0;
@@ -91,13 +94,15 @@ class MslShader : public SpirvShader {
   Translation* CreateTranslationInstance(uint64_t modification) override;
 };
 
-// metal_spirv2air_self_test: builds Metal pipelines from small shaders
-// compiled with spirv2air, each using one more feature, and logs which ones
-// Metal builds. Stops between pipelines once stop is set.
+// metal_spirv2air_self_test: builds Metal pipelines, one at a time, from
+// small shaders compiled with spirv2air with each metal_spirv2air_options
+// variant that bears on them, and from the shaders DumpSpirv2airPipelineShaders
+// wrote to probe_dir, and logs which ones Metal builds.
 void RunSpirv2airSelfTest(MTL::Device* device, bool is_ios,
-                          const std::atomic<bool>& stop);
+                          const std::filesystem::path& probe_dir);
 // Writes the SPIR-V of the shaders of a pipeline Metal refused to build from
-// their spirv2air functions to spirv2air_probe, for the first 8 pipelines.
+// their spirv2air functions to spirv2air_probe, for the first 8 pairs of
+// shaders.
 void DumpSpirv2airPipelineShaders(const MslShader::MslTranslation& vertex,
                                   const MslShader::MslTranslation* pixel);
 

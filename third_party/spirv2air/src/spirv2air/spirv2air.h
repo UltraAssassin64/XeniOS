@@ -15,7 +15,7 @@ namespace spirv2air {
 
 // Identifies the output format for caches: two builds with the same kVersion must produce byte-identical output
 // for the same input. Bump it with every change that changes any output byte.
-inline constexpr char kVersion[] = "spirv2air 1.0.8 xenios-ios16.1";
+inline constexpr char kVersion[] = "spirv2air 1.0.8 xenios-ios16.2";
 
 // Non-semantic extended instruction set read by spirv2air (SPV_KHR_non_semantic_info; other consumers ignore it).
 // KeepBranch (no operands; result type void) in a block makes the conditional branch ending that block reach the
@@ -96,6 +96,15 @@ struct GraphicsBindings {
   // The caller binds the matching color attachment and disables fixed-function blending.
   // Include this mask in shader cache keys. Zero preserves the default resource ABI.
   uint32_t framebufferFetchMask = 0;
+  // XeniOS: Metal argument-table bindings in place of the argument buffer and heaps, for the loads iOS 16's compiler
+  // fails on (a device pointer or a texture handle read from memory). sharedMemoryBuffer >= 0 makes the shared memory
+  // StorageBuffer [[buffer(sharedMemoryBuffer)]] (read-write unless every variable bound there is NonWritable).
+  // directTextures makes texture binding n [[texture(n)]] and sampler binding n [[sampler(n - the module's lowest
+  // sampler binding)]], with no index records or heaps; a texture binding above 30 or a sampler index above 15 is an
+  // error. constantTextureIndices reads the index records through a constant pointer instead of a device one.
+  int sharedMemoryBuffer = -1;
+  bool directTextures = false;
+  bool constantTextureIndices = false;
 };
 
 // Target platform. The default, macOS 14, reproduces the original output byte for byte. iOS and iOS Simulator write
@@ -128,6 +137,9 @@ struct Options {
   bool vertexIndexRelativeToBase = true;
   bool positionInfToNan = true;
   HalfPackingRounding halfPackingRounding = HalfPackingRounding::NearestEven;
+  // XeniOS: graphics modules call the precise math intrinsics (air.<op>.f32, as compute modules do) instead of
+  // air.fast_<op>.f32. This option affects output bytes.
+  bool preciseMath = false;
 };
 
 Result translate(const uint32_t* words, size_t word_count, const Options& options = {});

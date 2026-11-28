@@ -930,12 +930,67 @@ void Translator::buildSignature() {
             S(typeName), S("air.arg_name"), S(typeName)};
   };
   argTlab_ = int(addArg(m_.ptrTy(tlabTy_, 2), indirect(options_.graphics.argumentBuffer, "struct.ArgumentBuffer")));
-  if (usesTextures_)
+  const bool directTextures = options_.graphics.directTextures;
+  if (usesTextures_ && !directTextures)
     argResHeap_ =
         int(addArg(m_.ptrTy(resHeapTy_, 2), indirect(options_.graphics.resourceHeapBuffer, "struct.ResourceHeap")));
-  if (usesSamplers_)
+  if (usesSamplers_ && !directTextures)
     argSmpHeap_ =
         int(addArg(m_.ptrTy(smpHeapTy_, 2), indirect(options_.graphics.samplerHeapBuffer, "struct.SamplerHeap")));
+  // XeniOS: direct resources (GraphicsBindings::sharedMemoryBuffer and directTextures), with the metadata MSL gives a
+  // `device uchar*` buffer, a `texture2d<float, sample>` (and the other dimensions) and a `sampler` argument.
+  if (options_.graphics.sharedMemoryBuffer >= 0) {
+    std::vector<uint32_t> sharedVars;
+    bool writable = false;
+    for (uint32_t var : globals_) {
+      const SType& pt = type(varType_[var]);
+      const Decorations& d = decor_[var];
+      if (pt.storage != spv::StorageClassStorageBuffer || argOfInput_.count(var) || storageSlot(d) >= 0 ||
+          d.set != options_.graphics.sharedMemorySet || d.binding != options_.graphics.sharedMemoryBinding)
+        continue;
+      sharedVars.push_back(var);
+      writable = writable || !memberDecor_[pt.elem].nonWritable;
+    }
+    if (!sharedVars.empty()) {
+      int arg = int(addArg(
+          m_.ptrTy(i8_, 1), {S("air.buffer"), S("air.location_index"), I(options_.graphics.sharedMemoryBuffer), I(1),
+                             S(writable ? "air.read_write" : "air.read"), S("air.address_space"), I(1),
+                             S("air.arg_type_size"), I(1), S("air.arg_type_align_size"), I(1), S("air.arg_type_name"),
+                             S("uchar"), S("air.arg_name"), S("shared_memory")}));
+      for (uint32_t var : sharedVars) argOfInput_[var] = arg;
+    }
+  }
+  if (directTextures && (usesTextures_ || usesSamplers_)) {
+    uint32_t firstSampler = UINT32_MAX;
+    for (uint32_t var : globals_)
+      if (type(varType_[var]).storage == spv::StorageClassUniformConstant && !attachmentArgs_.count(var) &&
+          type(type(varType_[var]).elem).op == spv::OpTypeSampler)
+        firstSampler = std::min(firstSampler, decor_[var].binding);
+    for (uint32_t var : globals_) {
+      const SType& pt = type(varType_[var]);
+      if (pt.storage != spv::StorageClassUniformConstant || attachmentArgs_.count(var)) continue;
+      const SType& t = type(pt.elem);
+      const uint32_t binding = decor_[var].binding;
+      if (t.op == spv::OpTypeSampler) {
+        const uint32_t index = binding - firstSampler;
+        if (index > 15) fail("sampler binding " + std::to_string(binding) + " is above [[sampler(15)]]");
+        argOfInput_[var] =
+            int(addArg(m_.ptrTy(samplerTy_, 2), {S("air.sampler"), S("air.location_index"), I(index), I(1),
+                                                 S("air.arg_type_name"), S("sampler"), S("air.arg_name"),
+                                                 S("sampler" + std::to_string(index))}));
+        continue;
+      }
+      if (binding > 30) fail("texture binding " + std::to_string(binding) + " is above [[texture(30)]]");
+      const char* typeName = t.dim == spv::Dim3D     ? "texture3d"
+                             : t.dim == spv::DimCube ? (t.arrayed ? "texturecube_array" : "texturecube")
+                             : t.arrayed             ? "texture2d_array"
+                                                     : "texture2d";
+      argOfInput_[var] = int(addArg(
+          m_.ptrTy(textureTypes_.at(t.dim | (t.arrayed ? kArrayedKey : 0)), 1),
+          {S("air.texture"), S("air.location_index"), I(binding), I(1), S("air.sample"), S("air.arg_type_name"),
+           S(std::string(typeName) + "<float, sample>"), S("air.arg_name"), S("texture" + std::to_string(binding))}));
+    }
+  }
   if (zpdCounter != kNone)
     argOfInput_[zpdCounter] = int(addArg(
         m_.ptrTy(i8_, 1), {S("air.buffer"), S("air.location_index"), I(options_.graphics.occlusionCounterBuffer), I(1), S("air.read_write"),
@@ -1258,8 +1313,9 @@ void Translator::buildEntry() {
       }
     }
   }
-  if (usesTextures_ || usesSamplers_)
-    textureIndices_ = tlabSlot(vertex ? options_.graphics.vertexTextureIndicesOffset : options_.graphics.fragmentTextureIndicesOffset, m_.ptrTy(i8_, 1));
+  if ((usesTextures_ || usesSamplers_) && !options_.graphics.directTextures)
+    textureIndices_ = tlabSlot(vertex ? options_.graphics.vertexTextureIndicesOffset : options_.graphics.fragmentTextureIndicesOffset,
+                               m_.ptrTy(i8_, options_.graphics.constantTextureIndices ? 2 : 1));
 }
 
 // The value an input variable starts with.
@@ -1677,13 +1733,15 @@ Pointer Translator::accessChain(const Pointer& base, const uint32_t* idx, unsign
 
 Value* Translator::loadResource(const Pointer& p) {
   if (compute()) return p.ptr;  // the texture argument itself
+  if (options_.graphics.directTextures) return main_->args[argOfInput_.at(p.variable)];  // XeniOS: likewise
   const Decorations& d = decor_[p.variable];
   const SType& t = type(p.type);
   bool sampler = t.op == spv::OpTypeSampler;
   // The stage's index buffer holds one {texture heap index, sampler heap index} pair per binding.
   Value* slot = b_->gep(i8_, textureIndices_, {m_.constInt(i64_, options_.graphics.textureIndexStride * d.binding +
                                   (sampler ? options_.graphics.samplerIndexOffset : options_.graphics.textureIndexOffset))}, true);
-  Value* index = b_->load(i32_, b_->cast(BitCast, slot, m_.ptrTy(i32_, 1)), 4);
+  Value* index =
+      b_->load(i32_, b_->cast(BitCast, slot, m_.ptrTy(i32_, options_.graphics.constantTextureIndices ? 2 : 1)), 4);
   Value* heap = b_->cast(BitCast, main_->args[sampler ? argSmpHeap_ : argResHeap_], m_.ptrTy(i8_, 2));
   Value* entry = b_->gep(i8_, heap, {b_->cast(SExt, b_->binop(Mul, index, cint(options_.graphics.descriptorStride)), i64_)}, true);
   uint32_t handleOffset = sampler ? options_.graphics.samplerHandleOffset : options_.graphics.textureHandleOffset;
@@ -1785,7 +1843,8 @@ Value* Translator::fast(const char* op, ValueRef args) {
     for (const auto& [name, decl] : fastDecls_)
       if (name == op) f = decl;
     if (!f) {
-      f = intrinsicDecl(std::string(compute() ? "air." : "air.fast_") + op + ".f32", f32_, s, AttrClass::Pure);
+      f = intrinsicDecl(std::string(compute() || options_.preciseMath ? "air." : "air.fast_") + op + ".f32", f32_, s,
+                        AttrClass::Pure);
       fastDecls_.push_back({op, f});
     }
     return b_->call(f, s, nullptr, "", 0);

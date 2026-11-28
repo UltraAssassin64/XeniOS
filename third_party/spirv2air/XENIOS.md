@@ -14,13 +14,32 @@ Changes in this copy, so its output targets iOS 16:
   the function's `VERS` language version in the metallib (upstream the `metallib.h` default, 3.1;
   iOS 16 rejected every pipeline with "Function main is using language version 3.1 which is
   incompatible with this OS").
-- `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.1".
+- `spirv2air.h` `GraphicsBindings::sharedMemoryBuffer`, `directTextures` and `constantTextureIndices`,
+  and `Options::preciseMath` (`translate.cpp`: `buildSignature`, `buildEntry`, `loadResource`,
+  `fast`): Metal argument-table bindings for the shared memory StorageBuffer (`air.buffer`) and for
+  textures and samplers (`air.texture`/`air.sampler`, sampler index = binding minus the module's
+  lowest sampler binding), with no index records or heaps, as compute modules already have; the
+  index records read through a constant pointer; and the precise math intrinsics, which compute
+  modules call, in graphics modules. All off by default, so the default output is unchanged. iOS
+  16's compiler fails on the pointers and handles these replace (below).
+- `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.2".
 
-Checked on iOS 16.5.1 (A16): Metal accepts the libraries and functions (build 9691), and builds a
-pipeline from a depth-only vertex shader (build 9696), but every pipeline with a pixel shader the
-games tried failed with "Compiler encountered an internal error", most after about 20 s. The
-AIR is otherwise identical to upstream's iOS 18 output. metal_spirv2air_self_test (msl_shader.cc,
-shaders in src/xenia/gpu/metal/spirv2air_self_test_spirv.h) builds pipelines from small shaders
-that each add one feature, to find what iOS 16's compiler can't take. `include/spirv/unified1` holds the
+Checked on iOS 16.5.1 (A16): Metal accepts the libraries and functions (build 9691). On build 9697
+its self-test (metal_spirv2air_self_test in XeniOS's msl_shader.cc, shaders in
+src/xenia/gpu/metal/spirv2air_self_test_spirv.h) built pipelines from vertex shaders with outputs,
+pixel shaders writing a constant, reading inputs (centroid too), reading a constant buffer through
+the argument buffer and with early fragment tests, each also paired with a Metal Shading Language
+shader for the other stage; and failed ("Compiler encountered an internal error") a pixel shader
+sampling a texture through the heaps (in 19 ms), one sampling a texture array with gradients and
+one with discard (30 s each, while the game's own spirv2air pipelines were failing alongside). The
+game's vertex shaders, which read shared memory through the argument buffer's device pointer, failed
+too, with no texture or discard. The common factor of the texture and vertex shader failures: a
+device pointer or a texture or sampler handle loaded from memory (the argument buffer's
+struct_type_info is empty); constant pointers loaded from it work. The discard shader loads no
+pointer, so its failure is open (it may have been the game's compiles failing alongside). The
+options above take those loads out; the next self-test checks each one, and discard again, in
+isolation (before the title runs, so no other compile shares the compiler service).
+
+`include/spirv/unified1` holds the
 Khronos headers the translator includes (spirv.hpp from third_party/SPIRV-Cross, GLSL.std.450.h from
 third_party/glslang, both MIT).

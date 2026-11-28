@@ -3419,9 +3419,10 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
 - spirv2air: the language version error is gone, but Metal failed every
   pipeline with a pixel shader ("Compiler encountered an internal error",
   most after 20.0-30.1 s, so the compiler service timing out rather than
-  failing fast): GTA IV 6 vertex/pixel pairs, EoT 1. The only spirv2air
-  pipeline drawn was a depth-only one (VS 0A6D1DD7767FDF27 mod 14000000, no
-  pixel shader). The MSL fallback (64930c2ef) then drew them, which is the
+  failing fast): GTA IV 6 vertex/pixel pairs, EoT 1. (Corrected on 9697: the
+  depth-only VS 0A6D1DD7767FDF27 mod 14000000 that drew had also fallen back
+  to MSL; no spirv2air pipeline drew at all.) The MSL fallback (64930c2ef)
+  then drew them, which is the
   partial picture the owner saw (clears and backgrounds missing while their
   pipelines waited 20 s each); EoT stayed black. The cached spirv2air
   metallibs (u9696 shader folders) disassemble with llvm-dis 18: typed-pointer
@@ -3447,6 +3448,57 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   main calling spirv2air::translate with GetSpirv2airOptions(true)'s values
   reproduces the metallib from those files, and the bitcode (after the
   0x0B17C0DE wrapper) reads with llvm-dis.
+
+### Owner's run on build 9697 (8a65f365f; zip "9697_GTA_IV", one GTA IV log with metal_shader_compiler = "spirv2air" and 14 spirv2air_probe dumps) and the next build
+
+- Self-test (it ran on its own thread while the game compiled): built the
+  MSL control, spirv2air vertex shaders alone (position; two outputs),
+  spirv2air VS + MSL PS, MSL VS + spirv2air PS with an input, and spirv2air
+  pixel shaders writing a constant, with an input, a centroid input, reading
+  a constant buffer, with early fragment tests (1-5 ms each). Failed
+  ("Compiler encountered an internal error"): texture sample through the
+  heaps (19 ms), texture array with gradients (30 s), discard (30 s).
+- The game's depth-only VS 0A6D1DD7767FDF27 (no texture, no discard) failed
+  too, and every GTA pair. The dumps (2 distinct pipelines: that VS alone, and
+  VS 36ABDDAAD812101D + PS E14499F47375C20B, the pair dumped 6 times for its
+  render-state variants) translate offline with our options: the game VSs
+  read shared memory through a device pointer loaded from the argument
+  buffer; the PS also loads the index records' device pointer and texture
+  and sampler handles from the heaps, and has discard and texture-array
+  samples with gradients. The passing constant-buffer test loads a constant
+  pointer from the argument buffer. So the hypothesis: iOS 16's compiler
+  crashes on a device pointer or a resource handle loaded from memory
+  (spirv2air writes an empty air.struct_type_info), not on constant pointers.
+  Discard has no pointer load, so it is open; the 30 s results may be
+  collateral, as the game's spirv2air pipelines were crashing the compiler
+  service at the same time.
+- Next build: spirv2air options (vendored change, XENIOS.md):
+  GraphicsBindings::sharedMemoryBuffer (shared memory as [[buffer(0)]], as
+  the MSL path binds it), directTextures ([[texture(k)]] and [[sampler(j)]],
+  as compute modules already have), constantTextureIndices, and
+  Options::preciseMath. metal_spirv2air_options (default 3 = shared memory and
+  textures direct) picks them for the draw path; each translation keeps the
+  bits it was compiled with (spirv2air_options()), the cache key includes
+  them, and bind_spirv2air_stage binds textures/samplers directly for
+  kDirectTextures (updating the MSL path's binding cache). The self-test
+  (metal_spirv2air_self_test, now default false) runs synchronously in
+  InitializeShaderStorage, before the title starts, one pipeline at a time,
+  rechecking the MSL control after each failure; 22 synthetic cases (new:
+  VS and PS reading shared memory with and without kDirectSharedMemory, a
+  dynamically indexed constant buffer, math functions fast and precise, the
+  texture cases with kConstantTextureIndices and kDirectTextures) plus every
+  distinct dumped game pair in spirv2air_probe: VS alone (options 0, 1) and
+  the pair (options 0, 3, 11). The dumps keep one file pair per distinct
+  shader pair.
+- Owner's question (fast math and matrices): spirv2air has no
+  MTLCompileOptions because an AIR library is already compiled IR; precision
+  is chosen per operation when translating (graphics: air.fast_* for floor,
+  exp2, rsqrt, saturate and so on, no fast-math flags on plain arithmetic;
+  compute: the precise intrinsics). The Xenos-specific semantics (legacy
+  multiply, min/max, clamping) are explicit SPIR-V operations from the
+  translator, so they survive either way. "Matrices" in spirv2air's notes are
+  simdgroup matrices (A14+ compute), which the translator never emits. The
+  self-test's math case compares fast and precise.
 
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
