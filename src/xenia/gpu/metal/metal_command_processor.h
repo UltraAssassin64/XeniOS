@@ -803,6 +803,9 @@ class MetalCommandProcessor : public CommandProcessor {
   MTL::Buffer* null_buffer_ = nullptr;
   // {binding, binding} index records for spirv2air shaders (Spirv2airLayout).
   MTL::Buffer* spirv2air_texture_indices_ = nullptr;
+  // metal_spirv2air_self_test's thread, and the request for it to stop.
+  std::thread spirv2air_self_test_thread_;
+  std::atomic<bool> spirv2air_self_test_stop_{false};
   MTL::Texture* null_texture_ = nullptr;
   MTL::SamplerState* null_sampler_ = nullptr;
 

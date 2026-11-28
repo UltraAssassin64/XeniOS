@@ -10,6 +10,7 @@
 #ifndef XENIA_GPU_METAL_MSL_SHADER_H_
 #define XENIA_GPU_METAL_MSL_SHADER_H_
 
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -89,6 +90,16 @@ class MslShader : public SpirvShader {
  protected:
   Translation* CreateTranslationInstance(uint64_t modification) override;
 };
+
+// metal_spirv2air_self_test: builds Metal pipelines from small shaders
+// compiled with spirv2air, each using one more feature, and logs which ones
+// Metal builds. Stops between pipelines once stop is set.
+void RunSpirv2airSelfTest(MTL::Device* device, bool is_ios,
+                          const std::atomic<bool>& stop);
+// Writes the SPIR-V of the shaders of a pipeline Metal refused to build from
+// their spirv2air functions to spirv2air_probe, for the first 8 pipelines.
+void DumpSpirv2airPipelineShaders(const MslShader::MslTranslation& vertex,
+                                  const MslShader::MslTranslation* pixel);
 
 // MSL source cache root used by SPIRV-Cross translations.
 void SetMslShaderSourceCacheDirectory(const std::filesystem::path& cache_dir);

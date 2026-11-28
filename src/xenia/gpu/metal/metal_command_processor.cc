@@ -93,6 +93,8 @@ using BYTE = uint8_t;
 DECLARE_bool(clear_memory_page_state);
 DECLARE_bool(submit_on_primary_buffer_end);
 DECLARE_bool(skip_unchanged_render_target_transfers);
+DECLARE_string(metal_shader_compiler);
+DECLARE_bool(metal_spirv2air_self_test);
 DEFINE_bool(
     metal_gpu_ordered_fences, true,
     "With shared memory aliasing guest RAM: publish the game's shader-done "
@@ -772,6 +774,10 @@ MetalCommandProcessor::~MetalCommandProcessor() {
   }
   WaitForPendingCompletionHandlers();
   ShutdownMslAsyncCompilation();
+  spirv2air_self_test_stop_ = true;
+  if (spirv2air_self_test_thread_.joinable()) {
+    spirv2air_self_test_thread_.join();
+  }
   if (render_pass_descriptor_) {
     render_pass_descriptor_->release();
     render_pass_descriptor_ = nullptr;
@@ -1866,6 +1872,21 @@ bool MetalCommandProcessor::SetupContext() {
       records[i * 2 + 1] = i;
     }
   }
+  if (cvars::metal_shader_compiler == "spirv2air" &&
+      cvars::metal_spirv2air_self_test && UseSpirvCrossPath() &&
+      !spirv2air_self_test_thread_.joinable()) {
+    spirv2air_self_test_stop_ = false;
+    spirv2air_self_test_thread_ = std::thread([this]() {
+      xe::threading::set_name("spirv2air self-test");
+      constexpr bool kIsIos =
+#if XE_PLATFORM_IOS
+          true;
+#else
+          false;
+#endif
+      RunSpirv2airSelfTest(device_, kIsIos, spirv2air_self_test_stop_);
+    });
+  }
 
   // Create a 1x1x1 placeholder 2D array texture for unbound texture slots
   // Xbox 360 textures are typically 2D arrays (for texture atlases, cubemaps)
@@ -2289,6 +2310,10 @@ void MetalCommandProcessor::ShutdownContext() {
   frame_open_ = false;
 
   ShutdownMslAsyncCompilation();
+  spirv2air_self_test_stop_ = true;
+  if (spirv2air_self_test_thread_.joinable()) {
+    spirv2air_self_test_thread_.join();
+  }
 
 #if METAL_SHADER_CONVERTER_AVAILABLE
   shader_cache_.clear();
@@ -5094,6 +5119,7 @@ bool MetalCommandProcessor::IssueDrawMsl(
       }
       // Metal rejected the spirv2air pipeline (the error is logged once per
       // pipeline): the draw takes the Metal Shading Language shaders.
+      DumpSpirv2airPipelineShaders(*vertex_translation, pixel_translation);
       use_spirv2air = false;
       if (!compile_msl_for_draw()) {
         return false;

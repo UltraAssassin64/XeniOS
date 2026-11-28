@@ -16,8 +16,11 @@ Changes in this copy, so its output targets iOS 16:
   incompatible with this OS").
 - `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.1".
 
-Checked on iOS 16.5.1 (A16): Metal accepts the libraries and functions (build 9691). Not checked
-yet: that it accepts every pipeline and intrinsic spirv2air emits (the AIR is otherwise identical to
-upstream's iOS 18 output). `include/spirv/unified1` holds the
+Checked on iOS 16.5.1 (A16): Metal accepts the libraries and functions (build 9691), and builds a
+pipeline from a depth-only vertex shader (build 9696), but every pipeline with a pixel shader the
+games tried failed with "Compiler encountered an internal error", most after about 20 s. The
+AIR is otherwise identical to upstream's iOS 18 output. metal_spirv2air_self_test (msl_shader.cc,
+shaders in src/xenia/gpu/metal/spirv2air_self_test_spirv.h) builds pipelines from small shaders
+that each add one feature, to find what iOS 16's compiler can't take. `include/spirv/unified1` holds the
 Khronos headers the translator includes (spirv.hpp from third_party/SPIRV-Cross, GLSL.std.450.h from
 third_party/glslang, both MIT).

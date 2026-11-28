@@ -19,6 +19,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <regex>
@@ -39,6 +40,7 @@
 #include "xenia/gpu/metal/metal_perf_counters.h"
 #include "xenia/gpu/metal/metal_shader_cache.h"
 #include "xenia/gpu/metal/msl_bindings.h"
+#include "xenia/gpu/metal/spirv2air_self_test_spirv.h"
 
 DEFINE_bool(
     metal_spirvcross_strip_nocontract_optnone, true,
@@ -102,6 +104,14 @@ DEFINE_bool(
     "lines). The first modules it rejects or Metal refuses are written to "
     "spirv2air_probe in the title's shader storage.",
     "Metal");
+DEFINE_bool(
+    metal_spirv2air_self_test, true,
+    "With metal_shader_compiler \"spirv2air\": at startup, on a thread of "
+    "its own, build Metal pipelines from small shaders compiled with "
+    "spirv2air, each using one more feature, and log which ones Metal builds "
+    "(\"spirv2air self-test\" lines). A pipeline Metal can't build can take "
+    "20 s to fail.",
+    "Metal");
 DEFINE_string(
     metal_shader_compiler, "msl",
     "Guest shader compiler.\n"
@@ -152,6 +162,8 @@ struct Spirv2airProbeStats {
   std::map<std::string, uint32_t> rejections;
   std::map<std::string, uint32_t> library_errors;
   uint32_t dumped = 0;
+  // Pipelines DumpSpirv2airPipelineShaders wrote the shaders of.
+  uint32_t pipelines_dumped = 0;
 };
 std::mutex g_spirv2air_probe_mutex;
 Spirv2airProbeStats g_spirv2air_probe_stats;
@@ -585,6 +597,235 @@ void SetMslShaderSourceCacheDirectory(const std::filesystem::path& cache_dir) {
 void ClearMslShaderSourceCacheDirectory() {
   std::lock_guard<std::mutex> lock(g_msl_source_cache_mutex);
   g_msl_source_cache_directory.clear();
+}
+
+void RunSpirv2airSelfTest(MTL::Device* device, bool is_ios,
+                          const std::atomic<bool>& stop) {
+  namespace test = spirv2air_self_test;
+  struct Module {
+    const char* name;
+    const uint32_t* words;
+    size_t word_count;
+  };
+  static const Module kModules[] = {
+      {"vertex shader writing only the position", test::kVertexPosition,
+       std::size(test::kVertexPosition)},
+      {"vertex shader with two outputs", test::kVertexOutputs,
+       std::size(test::kVertexOutputs)},
+      {"pixel shader writing a constant", test::kPixelConstant,
+       std::size(test::kPixelConstant)},
+      {"pixel shader with an input", test::kPixelInput,
+       std::size(test::kPixelInput)},
+      {"pixel shader with a centroid input", test::kPixelCentroidInput,
+       std::size(test::kPixelCentroidInput)},
+      {"pixel shader reading a constant buffer", test::kPixelConstantBuffer,
+       std::size(test::kPixelConstantBuffer)},
+      {"pixel shader sampling a texture", test::kPixelTexture,
+       std::size(test::kPixelTexture)},
+      {"pixel shader sampling a texture array with gradients",
+       test::kPixelTextureArrayGradients,
+       std::size(test::kPixelTextureArrayGradients)},
+      {"pixel shader with discard", test::kPixelDiscard,
+       std::size(test::kPixelDiscard)},
+      {"pixel shader with early fragment tests", test::kPixelEarlyFragmentTests,
+       std::size(test::kPixelEarlyFragmentTests)},
+  };
+  // The control's functions follow the spirv2air ones.
+  constexpr int kMslVertex = int(std::size(kModules));
+  constexpr int kMslPixel = kMslVertex + 1;
+  static const char kMslSource[] =
+      "#include <metal_stdlib>\n"
+      "using namespace metal;\n"
+      "struct Varyings {\n"
+      "  float4 position [[position]];\n"
+      "  float4 texcoord0 [[user(texcoord0)]];\n"
+      "};\n"
+      "vertex Varyings vs(uint i [[vertex_id]]) {\n"
+      "  float2 p = float2(float(i & 1) * 4.0 - 1.0, float(i & 2) * 2.0 - "
+      "1.0);\n"
+      "  Varyings v;\n"
+      "  v.position = float4(p, 0.0, 1.0);\n"
+      "  v.texcoord0 = float4(p * 0.5 + 0.5, 0.0, 1.0);\n"
+      "  return v;\n"
+      "}\n"
+      "struct Inputs {\n"
+      "  float4 texcoord0 [[user(texcoord0)]];\n"
+      "};\n"
+      "fragment float4 fs(Inputs in [[stage_in]]) { return in.texcoord0; }\n";
+  // Each pipeline's vertex and pixel shader (-1: none), as kModules indices.
+  struct Test {
+    const char* name;
+    int vertex;
+    int pixel;
+  };
+  static const Test kTests[] = {
+      {"Metal Shading Language control", kMslVertex, kMslPixel},
+      {"vertex shader writing only the position, no pixel shader", 0, -1},
+      {"vertex shader with two outputs, no pixel shader", 1, -1},
+      {"vertex shader with two outputs, Metal Shading Language pixel shader", 1,
+       kMslPixel},
+      {"Metal Shading Language vertex shader, pixel shader with an input",
+       kMslVertex, 3},
+      {"pixel shader writing a constant", 0, 2},
+      {"pixel shader with an input", 1, 3},
+      {"pixel shader with a centroid input", 1, 4},
+      {"pixel shader reading a constant buffer", 0, 5},
+      {"pixel shader sampling a texture", 1, 6},
+      {"pixel shader sampling a texture array with gradients", 1, 7},
+      {"pixel shader with discard", 1, 8},
+      {"pixel shader with early fragment tests", 0, 9},
+  };
+  auto to_ms = [](std::chrono::steady_clock::duration duration) {
+    return std::chrono::duration<double, std::milli>(duration).count();
+  };
+  auto error_text = [](NS::Error* error) -> std::string {
+    return error && error->localizedDescription()
+               ? error->localizedDescription()->utf8String()
+               : "unknown error";
+  };
+
+  std::vector<MTL::Library*> libraries;
+  std::vector<MTL::Function*> functions(kMslPixel + 1, nullptr);
+  for (int i = 0; i < kMslVertex; ++i) {
+    const Module& module = kModules[i];
+    spirv2air::Result result = spirv2air::translate(
+        module.words, module.word_count, GetSpirv2airOptions(is_ios));
+    if (!result.ok()) {
+      XELOGW("spirv2air self-test: spirv2air can't translate the {}: {}",
+             module.name, result.error);
+      continue;
+    }
+    NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
+    dispatch_data_t data =
+        dispatch_data_create(result.metallib.data(), result.metallib.size(),
+                             nullptr, DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+    NS::Error* error = nullptr;
+    MTL::Library* library = device->newLibrary(data, &error);
+    dispatch_release(data);
+    if (library) {
+      libraries.push_back(library);
+      functions[i] = library->newFunction(
+          NS::String::string("main", NS::UTF8StringEncoding));
+    } else {
+      XELOGW("spirv2air self-test: Metal refused the library of the {}: {}",
+             module.name, error_text(error));
+    }
+    pool->release();
+  }
+  {
+    NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
+    MTL::CompileOptions* options = MTL::CompileOptions::alloc()->init();
+    NS::Error* error = nullptr;
+    MTL::Library* library = device->newLibrary(
+        NS::String::string(kMslSource, NS::UTF8StringEncoding), options,
+        &error);
+    options->release();
+    if (library) {
+      libraries.push_back(library);
+      functions[kMslVertex] = library->newFunction(
+          NS::String::string("vs", NS::UTF8StringEncoding));
+      functions[kMslPixel] = library->newFunction(
+          NS::String::string("fs", NS::UTF8StringEncoding));
+    } else {
+      XELOGW(
+          "spirv2air self-test: the Metal Shading Language control didn't "
+          "compile: {}",
+          error_text(error));
+    }
+    pool->release();
+  }
+
+  uint32_t built = 0;
+  uint32_t failed = 0;
+  for (const Test& t : kTests) {
+    if (stop.load(std::memory_order_relaxed)) {
+      break;
+    }
+    MTL::Function* vertex_function = functions[t.vertex];
+    MTL::Function* fragment_function =
+        t.pixel >= 0 ? functions[t.pixel] : nullptr;
+    if (!vertex_function || (t.pixel >= 0 && !fragment_function)) {
+      XELOGW("spirv2air self-test, {}: skipped, a shader didn't load", t.name);
+      continue;
+    }
+    NS::AutoreleasePool* pool = NS::AutoreleasePool::alloc()->init();
+    MTL::RenderPipelineDescriptor* desc =
+        MTL::RenderPipelineDescriptor::alloc()->init();
+    desc->setVertexFunction(vertex_function);
+    if (fragment_function) {
+      desc->setFragmentFunction(fragment_function);
+      desc->colorAttachments()->object(0)->setPixelFormat(
+          MTL::PixelFormatRGBA8Unorm);
+    }
+    desc->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
+    NS::Error* error = nullptr;
+    const auto begin = std::chrono::steady_clock::now();
+    MTL::RenderPipelineState* pipeline =
+        device->newRenderPipelineState(desc, &error);
+    const double pipeline_ms = to_ms(std::chrono::steady_clock::now() - begin);
+    desc->release();
+    if (pipeline) {
+      ++built;
+      XELOGI("spirv2air self-test, {}: built in {:.1f} ms", t.name,
+             pipeline_ms);
+      pipeline->release();
+    } else {
+      ++failed;
+      XELOGW("spirv2air self-test, {}: failed after {:.1f} ms: {}", t.name,
+             pipeline_ms, error_text(error));
+    }
+    pool->release();
+  }
+  XELOGI("spirv2air self-test ({}): {} pipelines built, {} failed",
+         spirv2air::kVersion, built, failed);
+  for (MTL::Function* function : functions) {
+    if (function) {
+      function->release();
+    }
+  }
+  for (MTL::Library* library : libraries) {
+    library->release();
+  }
+}
+
+void DumpSpirv2airPipelineShaders(const MslShader::MslTranslation& vertex,
+                                  const MslShader::MslTranslation* pixel) {
+  std::filesystem::path dump_dir;
+  {
+    std::lock_guard<std::mutex> lock(g_msl_source_cache_mutex);
+    if (g_msl_source_cache_directory.empty()) {
+      return;
+    }
+    dump_dir = g_msl_source_cache_directory.parent_path() / "spirv2air_probe";
+  }
+  uint32_t pipeline_index;
+  {
+    std::lock_guard<std::mutex> lock(g_spirv2air_probe_mutex);
+    if (g_spirv2air_probe_stats.pipelines_dumped >= 8) {
+      return;
+    }
+    pipeline_index = ++g_spirv2air_probe_stats.pipelines_dumped;
+  }
+  std::error_code ec;
+  std::filesystem::create_directories(dump_dir, ec);
+  for (const MslShader::MslTranslation* translation : {&vertex, pixel}) {
+    if (!translation) {
+      continue;
+    }
+    std::string base = fmt::format(
+        "pipeline{}_{}_{:016X}_{:016X}", pipeline_index,
+        translation->shader().type() == xenos::ShaderType::kVertex ? "VS"
+                                                                   : "PS",
+        translation->shader().ucode_data_hash(), translation->modification());
+    const std::vector<uint8_t>& spirv = translation->translated_binary();
+    std::ofstream spv(dump_dir / (base + ".spv"), std::ios::binary);
+    spv.write(reinterpret_cast<const char*>(spirv.data()),
+              std::streamsize(spirv.size()));
+  }
+  XELOGI(
+      "spirv2air: the SPIR-V of the shaders of a pipeline Metal refused is in "
+      "spirv2air_probe (pipeline{}_*.spv)",
+      pipeline_index);
 }
 
 namespace {

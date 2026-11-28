@@ -3412,6 +3412,42 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   edcad3c19; GTA IV with adequate cooling holds about a minute longer before
   its slowdown (owner), MSL performance otherwise unchanged.
 
+### Owner's runs on build 9696 (64930c2ef; zip "9696_logs", GTA IV twice and EoT with metal_shader_compiler = "spirv2air", plus the shader cache folders) and the next build
+
+- GTA IV loads with the XMA worker change (owner: "technically opens fine";
+  told to disregard it for now).
+- spirv2air: the language version error is gone, but Metal failed every
+  pipeline with a pixel shader ("Compiler encountered an internal error",
+  most after 20.0-30.1 s, so the compiler service timing out rather than
+  failing fast): GTA IV 6 vertex/pixel pairs, EoT 1. The only spirv2air
+  pipeline drawn was a depth-only one (VS 0A6D1DD7767FDF27 mod 14000000, no
+  pixel shader). The MSL fallback (64930c2ef) then drew them, which is the
+  partial picture the owner saw (clears and backgrounds missing while their
+  pipelines waited 20 s each); EoT stayed black. The cached spirv2air
+  metallibs (u9696 shader folders) disassemble with llvm-dis 18: typed-pointer
+  AIR 2.5 / Metal 3.0, small reducible CFGs (no irreducible loops: opt's
+  fix-irreducible adds nothing), the same intrinsics in vertex and pixel
+  shaders (air.fast_*, extract/insert_bits, sample_texture_2d_array(_grad)),
+  argument buffers as air.indirect_buffer with an empty struct_type_info. So
+  no construct stands out offline; it needs the device.
+- Next build: metal_spirv2air_self_test (default on, only with
+  metal_shader_compiler = "spirv2air") builds, on a thread of its own at
+  startup, 13 pipelines from small shaders (GLSL compiled with glslang from
+  third_party/glslang, the SPIR-V in spirv2air_self_test_spirv.h, the
+  translator's descriptor sets): an MSL control; spirv2air vertex shaders
+  alone (position only, with outputs); each spirv2air stage paired with an
+  MSL one of the other stage; pixel shaders writing a constant, with an
+  input, a centroid input, a constant buffer, a texture, a texture array
+  with gradients, discard, early fragment tests. "spirv2air self-test" lines
+  give built/failed and the time. The first 8 pipelines Metal refuses in a
+  game have their shaders' SPIR-V written to spirv2air_probe
+  (pipeline<N>_VS/PS_*.spv). spirv2air builds on Linux with clang++ -std=c++17
+  (its src/airbc, src/metallib, src/spirv2air and include; a header standing
+  in for CommonCrypto's CC_SHA256, which only fills the HASH tag); a small
+  main calling spirv2air::translate with GetSpirv2airOptions(true)'s values
+  reproduces the metallib from those files, and the bitcode (after the
+  0x0B17C0DE wrapper) reads with llvm-dis.
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings
