@@ -273,10 +273,10 @@ further edits.
 | `cpu_waits` | MetalPerfCounters field | Number of those waits. | `src/xenia/gpu/metal/metal_perf_counters.h` | 32, 92 | 2 |
 | `cpu_waits` | MetalPerfCounters field | Number of those waits. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3048 | 1 |
 | `shader_compiles` | MetalPerfCounters field | Shaders translated and compiled (MslShader). | `src/xenia/gpu/metal/metal_perf_counters.h` | 34 | 1 |
-| `shader_compiles` | MetalPerfCounters field | Shaders translated and compiled (MslShader). | `src/xenia/gpu/metal/msl_shader.cc` | 2076 | 1 |
+| `shader_compiles` | MetalPerfCounters field | Shaders translated and compiled (MslShader). | `src/xenia/gpu/metal/msl_shader.cc` | 2164 | 1 |
 | `shader_compiles` | MetalPerfCounters field | Shaders translated and compiled (MslShader). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3051 | 1 |
 | `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/metal_perf_counters.h` | 35 | 1 |
-| `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/msl_shader.cc` | 2077 | 1 |
+| `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/msl_shader.cc` | 2165 | 1 |
 | `shader_compile_us` | MetalPerfCounters field | Time spent on them (us). | `src/xenia/gpu/metal/metal_command_processor.cc` | 3053 | 1 |
 | `pipeline_compiles` | MetalPerfCounters field | Render pipeline states created. | `src/xenia/gpu/metal/metal_perf_counters.h` | 37 | 1 |
 | `pipeline_compiles` | MetalPerfCounters field | Render pipeline states created. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1213, 3056, 9278 | 3 |
@@ -288,7 +288,7 @@ further edits.
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_perf_counters.h` | 76, 90, 92 | 3 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_texture_cache.cc` | 14 | 1 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 32, 5086 | 2 |
-| `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/msl_shader.cc` | 37, 2076, 2077 | 3 |
+| `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/msl_shader.cc` | 39, 2164, 2165 | 3 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_shared_memory.cc` | 11, 144 | 2 |
 | `metal_perf_counters` | inline global | The one MetalPerfCounters instance. | `src/xenia/gpu/metal/metal_command_processor.cc` | 50, 1025, 1026, 1213, 1214, 2918, 2934, 2941, 3032, 3045, 3048, 3049, 3051, 3053, 3056, 3058, 3061, 3063, 3066, 3090, 3092, 3094, 3096, 3098, 3100, 3108, 3112, 3115, 3133, 3134, 3135, 3136, 3137, 6348, 6893, 7182, 7186, 7487, 7490, 7515, 7533, 7571, 7573, 7599, 7636, 7644, 7647, 7681, 7684, 7913, 7922, 8088, 8091, 8093, 8107, 9278, 9279 | 57 |
 | `MetalPerfMicrosecondsSince` | inline function | Microseconds since a steady_clock time point. | `src/xenia/gpu/metal/metal_perf_counters.h` | 78, 91 | 2 |
@@ -591,9 +591,9 @@ further edits.
 | `stencil_packed_set` | local in transfer_ps (MSL) | stencil_packed was computed (8_8_8_8_GAMMA source). | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8704, 8741, 8801 | 3 |
 | `transfer_stencil` | local in transfer_ps (MSL) | Guest stencil written with the depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 8800, 8803, 8806, 8967 | 4 |
 | `depth_stencil_output_state` | local in PerformTransfersAndResolveClears | GetTransferDepthAndStencilOutputState() for a draw writing stencil with depth. | `src/xenia/gpu/metal/metal_render_target_cache.cc` | 6568, 6570, 6573 | 3 |
-| `named_candidate_count` | local in CompileToMsl | Entry point candidates before those found in the MSL source, which are only searched for when none of them resolves. | `src/xenia/gpu/metal/msl_shader.cc` | 1978, 1981 | 2 |
-| `argument_encoder_begin` | local in CompileToMsl | Start of the argument encoder creation, timed for the compile timings line. | `src/xenia/gpu/metal/msl_shader.cc` | 2045, 2070 | 2 |
-| `argument_encoder_ms` | local in CompileToMsl | Its time (argument-encoder= in the compile timings line). | `src/xenia/gpu/metal/msl_shader.cc` | 2069, 2087, 2096 | 3 |
+| `named_candidate_count` | local in CompileToMsl | Entry point candidates before those found in the MSL source, which are only searched for when none of them resolves. | `src/xenia/gpu/metal/msl_shader.cc` | 2066, 2069 | 2 |
+| `argument_encoder_begin` | local in CompileToMsl | Start of the argument encoder creation, timed for the compile timings line. | `src/xenia/gpu/metal/msl_shader.cc` | 2133, 2158 | 2 |
+| `argument_encoder_ms` | local in CompileToMsl | Its time (argument-encoder= in the compile timings line). | `src/xenia/gpu/metal/msl_shader.cc` | 2157, 2175, 2184 | 3 |
 | `metal_async_compile_wait_ms` | cvar (Metal); iOS settings key | How long draws may wait per frame for a compile before being skipped; 0 (default) never waits. Settings > Performance > Wait for Shader Compiles. | `src/xenia/gpu/metal/metal_command_processor.cc` | 144, 153, 999 | 3 |
 | `metal_async_compile_wait_ms` | cvar (Metal); iOS settings key | How long draws may wait per frame for a compile before being skipped; 0 (default) never waits. Settings > Performance > Wait for Shader Compiles. | `src/xenia/ui/windowed_app_main_ios.mm` | 3615 | 1 |
 | `queue_arrival` | MslShaderCompileRequest and MslPipelineCompileRequest field | Queue order within a priority: the latest shader request first (a shader still needed in a later frame is queued again), pipelines first in, first out. | `src/xenia/gpu/metal/metal_command_processor.h` | 580, 600, 613, 622 | 6 |
@@ -692,7 +692,7 @@ further edits.
 | `hotspot_start` | local | First guest address of the logged code. | `src/xenia/kernel/util/shim_utils.cc` | 747, 755, 757 | 3 |
 | `row` | loop variable | Line of eight words in the code dump. | `src/xenia/kernel/util/shim_utils.cc` | 749, 755, 757 | 5 |
 | `word` | loop variable | Word within that line. | `src/xenia/kernel/util/shim_utils.cc` | 751, 755 | 4 |
-| `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/gpu/metal/msl_shader.cc` | 50, 1920 | 2 |
+| `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/gpu/metal/msl_shader.cc` | 52, 2008 | 2 |
 | `metal_shader_preserve_invariance` | cvar (GPU); iOS settings key | Compile Metal shaders with preserveInvariance so [[invariant]] positions are bit-identical across vertex shaders (default on). Settings > Accuracy > Consistent Vertex Positions. | `src/xenia/ui/windowed_app_main_ios.mm` | 3678 | 1 |
 | `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.h` | 226, 673 | 2 |
 | `last_update_height_used_` | RenderTargetCache member | Height in guest pixels the last Update estimated the draw uses (draw_extent_estimator_), 0 if not estimated. | `src/xenia/gpu/render_target_cache.cc` | 623, 841 | 2 |
@@ -838,13 +838,13 @@ further edits.
 | `msl_fetch_constants_version_` | MetalCommandProcessor member | Version of the cached fetch constants, bumped when recopied. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5605, 5609, 5613 | 3 |
 | `msl_inline_constants_bound_versions_` | MetalCommandProcessor member | Per constant block slot (11), the version passed with set*Bytes in the current render encoder; 0 for none, cleared with the encoder state. | `src/xenia/gpu/metal/metal_command_processor.h` | 948 | 1 |
 | `msl_inline_constants_bound_versions_` | MetalCommandProcessor member | Per constant block slot (11), the version passed with set*Bytes in the current render encoder; 0 for none, cleared with the encoder state. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5450, 5458, 5731, 7739 | 4 |
-| `metal_log_shader_hashes` | cvar (GPU) | Comma-separated shader ucode hashes whose microcode disassembly and generated MSL are logged when translated ("Shader log" lines), and whose float constants the frame detail log adds per draw. Settings > Metal (generated section). | `src/xenia/gpu/metal/msl_shader.cc` | 79, 427 | 2 |
+| `metal_log_shader_hashes` | cvar (GPU) | Comma-separated shader ucode hashes whose microcode disassembly and generated MSL are logged when translated ("Shader log" lines), and whose float constants the frame detail log adds per draw. Settings > Metal (generated section). | `src/xenia/gpu/metal/msl_shader.cc` | 81, 447 | 2 |
 | `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/msl_shader.h` | 26 | 1 |
-| `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/msl_shader.cc` | 426, 1792 | 2 |
+| `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/msl_shader.cc` | 446, 1880 | 2 |
 | `ShouldLogMslShader` | function (xe::gpu::metal) | metal_log_shader_hashes lists the hash. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6438 | 1 |
-| `log_shader_lines` | lambda in MslTranslation::CompileToMsl | Logs a text line by line with the shader's stage, hash and modification. | `src/xenia/gpu/metal/msl_shader.cc` | 1795, 1809, 1810 | 3 |
-| `line_begin` | local in log_shader_lines | Start of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1796, 1797, 1798, 1805, 1806 | 6 |
-| `line_end` | local in log_shader_lines | End of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1798, 1799, 1800, 1805, 1806 | 5 |
+| `log_shader_lines` | lambda in MslTranslation::CompileToMsl | Logs a text line by line with the shader's stage, hash and modification. | `src/xenia/gpu/metal/msl_shader.cc` | 1883, 1897, 1898 | 3 |
+| `line_begin` | local in log_shader_lines | Start of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1884, 1885, 1886, 1893, 1894 | 6 |
+| `line_end` | local in log_shader_lines | End of the line being logged. | `src/xenia/gpu/metal/msl_shader.cc` | 1886, 1887, 1888, 1893, 1894 | 5 |
 | `frame_detail_shader` | loop variable in IssueDrawMsl | The draw's vertex or pixel shader, for its float constants in the frame detail log. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6435, 6437, 6438, 6441, 6444, 6459 | 6 |
 | `is_pixel` | local in IssueDrawMsl | frame_detail_shader is the pixel shader. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6441, 6449, 6458 | 3 |
 | `frame_detail_constants` | local in IssueDrawMsl | The shader's float constants for the log line. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6442, 6452, 6459 | 3 |
@@ -1180,17 +1180,17 @@ further edits.
 | `paste_button` | local in the text setting editor | Pastes the clipboard into the field. | `src/xenia/ui/windowed_app_main_ios.mm` | 8609, 8610, 8612, 8613, 8614, 8623 | 6 |
 | `pasted` | local in the paste button handler | The clipboard text. | `src/xenia/ui/windowed_app_main_ios.mm` | 8615, 8616, 8617 | 3 |
 | `text_stream` | local in ApplyGameConfigToSections | Writes an override as TOML text. | `src/xenia/ui/windowed_app_main_ios.mm` | 3992, 3993, 3994 | 3 |
-| `metal_share_argument_encoders` | cvar; iOS settings key | Share one texture/sampler argument encoder between shaders with the same argument buffer layout instead of reflecting each compiled function (default on). Settings > All Options: Metal. | `src/xenia/gpu/metal/msl_shader.cc` | 87, 478, 2131, 2133 | 4 |
-| `g_argument_encoder_cache_mutex` | file-local static (anonymous namespace) | Guards g_argument_encoder_cache (compile threads translate concurrently). | `src/xenia/gpu/metal/msl_shader.cc` | 481, 2137, 2148 | 3 |
-| `g_argument_encoder_cache` | file-local static (anonymous namespace) | Argument encoders by GetArgumentBufferLayoutKey, one reference each, kept for the process lifetime. | `src/xenia/gpu/metal/msl_shader.cc` | 482, 2138, 2139, 2149, 2158 | 5 |
-| `GetArgumentBufferLayoutKey` | function (anonymous namespace) | Hash of the spvDescriptorSetBuffer structs' member types and [[id]] slots (names left out) and the device; 0 if absent or unexpected. | `src/xenia/gpu/metal/msl_shader.cc` | 478, 489, 2134 | 3 |
-| `argument_buffer_layout_key` | local in CompileToMsl | This translation's layout key, 0 when sharing is off or the key could not be made. | `src/xenia/gpu/metal/msl_shader.cc` | 2132, 2136, 2138, 2147, 2150, 2156 | 6 |
-| `kStructPrefix` | constant in GetArgumentBufferLayoutKey | The text that starts an argument buffer struct in SPIRV-Cross output. | `src/xenia/gpu/metal/msl_shader.cc` | 491, 495 | 2 |
-| `struct_begin` | local in GetArgumentBufferLayoutKey | Position of the struct being read. | `src/xenia/gpu/metal/msl_shader.cc` | 494, 495, 497, 498, 504, 536 | 8 |
-| `struct_end` | local in GetArgumentBufferLayoutKey | Position of the struct's closing `};`. | `src/xenia/gpu/metal/msl_shader.cc` | 497, 499, 500, 507, 508, 536 | 6 |
-| `id_pos` | local in GetArgumentBufferLayoutKey | Position of a member's `[[id(` attribute. | `src/xenia/gpu/metal/msl_shader.cc` | 512, 513, 519, 533 | 4 |
-| `name_begin` | local in GetArgumentBufferLayoutKey | Start of the member name left out of the key. | `src/xenia/gpu/metal/msl_shader.cc` | 523, 524, 525, 526, 527, 529, 532 | 7 |
-| `device_address` | local in GetArgumentBufferLayoutKey | The device pointer, hashed into the key. | `src/xenia/gpu/metal/msl_shader.cc` | 541, 542, 543 | 3 |
+| `metal_share_argument_encoders` | cvar; iOS settings key | Share one texture/sampler argument encoder between shaders with the same argument buffer layout instead of reflecting each compiled function (default on). Settings > All Options: Metal. | `src/xenia/gpu/metal/msl_shader.cc` | 89, 498, 2219, 2221 | 4 |
+| `g_argument_encoder_cache_mutex` | file-local static (anonymous namespace) | Guards g_argument_encoder_cache (compile threads translate concurrently). | `src/xenia/gpu/metal/msl_shader.cc` | 501, 2225, 2236 | 3 |
+| `g_argument_encoder_cache` | file-local static (anonymous namespace) | Argument encoders by GetArgumentBufferLayoutKey, one reference each, kept for the process lifetime. | `src/xenia/gpu/metal/msl_shader.cc` | 502, 2226, 2227, 2237, 2246 | 5 |
+| `GetArgumentBufferLayoutKey` | function (anonymous namespace) | Hash of the spvDescriptorSetBuffer structs' member types and [[id]] slots (names left out) and the device; 0 if absent or unexpected. | `src/xenia/gpu/metal/msl_shader.cc` | 498, 509, 2222 | 3 |
+| `argument_buffer_layout_key` | local in CompileToMsl | This translation's layout key, 0 when sharing is off or the key could not be made. | `src/xenia/gpu/metal/msl_shader.cc` | 2220, 2224, 2226, 2235, 2238, 2244 | 6 |
+| `kStructPrefix` | constant in GetArgumentBufferLayoutKey | The text that starts an argument buffer struct in SPIRV-Cross output. | `src/xenia/gpu/metal/msl_shader.cc` | 511, 515 | 2 |
+| `struct_begin` | local in GetArgumentBufferLayoutKey | Position of the struct being read. | `src/xenia/gpu/metal/msl_shader.cc` | 514, 515, 517, 518, 524, 556 | 8 |
+| `struct_end` | local in GetArgumentBufferLayoutKey | Position of the struct's closing `};`. | `src/xenia/gpu/metal/msl_shader.cc` | 517, 519, 520, 527, 528, 556 | 6 |
+| `id_pos` | local in GetArgumentBufferLayoutKey | Position of a member's `[[id(` attribute. | `src/xenia/gpu/metal/msl_shader.cc` | 532, 533, 539, 553 | 4 |
+| `name_begin` | local in GetArgumentBufferLayoutKey | Start of the member name left out of the key. | `src/xenia/gpu/metal/msl_shader.cc` | 543, 544, 545, 546, 547, 549, 552 | 7 |
+| `device_address` | local in GetArgumentBufferLayoutKey | The device pointer, hashed into the key. | `src/xenia/gpu/metal/msl_shader.cc` | 561, 562, 563 | 3 |
 | `unresolved_calls` | static local in ResolveFunction (a64) | How many calls the a64 resolve thunk could not resolve (no function at the guest address); the first 16 are logged with the address and guest lr. | `src/xenia/cpu/backend/a64/a64_backend.cc` | 905, 906 | 2 |
 | `host_crash_context` | local in Emulator::ExceptionCallback (ARM64) | Host registers of the fault, for the host PC, link register and JIT state registers in the crash dump. | `src/xenia/emulator.cc` | 1744, 1755, 1756, 1757, 1758 | 8 |
 | `host_code_start` | local in Emulator::ExceptionCallback (ARM64) | Start of the machine code of the guest function the host PC was mapped to, for the offset in the crash dump. | `src/xenia/emulator.cc` | 1745, 1751, 1752, 1753, 1754 | 6 |
@@ -1222,8 +1222,8 @@ further edits.
 | `would_load` | local lambda in TextureCache::GetUsedTexturePotentialLoadMask | Whether RequestTextures would load the texture for a key: none cached, or the cached one outdated (always with resolution scaling). | `src/xenia/gpu/texture_cache.cc` | 509, 533, 537, 540 | 4 |
 | `texture_it` | local in would_load | The cached texture for the key. | `src/xenia/gpu/texture_cache.cc` | 513, 514, 515, 516 | 4 |
 | `signed_key` | local in GetUsedTexturePotentialLoadMask | Key of the separate signed version; same name and role as in RequestTextures. | `src/xenia/gpu/texture_cache.cc` | 535, 536, 537 | 3 |
-| `metal_shader_fast_math` | cvar (bool, GPU) | Compile SPIRV-Cross Metal shaders with fast math (default on); off compiles IEEE math that keeps infinities and NaN, for games relying on 0 x infinity = 0 or on infinities (A/B for Spider-Man: Edge of Time). Settings > All Options: GPU. | `src/xenia/gpu/metal/msl_shader.cc` | 60, 70, 2000 | 3 |
-| `metal_vertex_shader_fast_math` | cvar (bool, GPU) | Vertex shaders also use fast math (default off): off keeps positions bit-identical between shaders computing them with different but equivalent instructions (depth pre-pass then an equal-depth pass, Spider-Man: Edge of Time's hypersense copies). Settings > All Options: GPU. | `src/xenia/gpu/metal/msl_shader.cc` | 59, 2002 | 2 |
+| `metal_shader_fast_math` | cvar (bool, GPU) | Compile SPIRV-Cross Metal shaders with fast math (default on); off compiles IEEE math that keeps infinities and NaN, for games relying on 0 x infinity = 0 or on infinities (A/B for Spider-Man: Edge of Time). Settings > All Options: GPU. | `src/xenia/gpu/metal/msl_shader.cc` | 62, 72, 2088 | 3 |
+| `metal_vertex_shader_fast_math` | cvar (bool, GPU) | Vertex shaders also use fast math (default off): off keeps positions bit-identical between shaders computing them with different but equivalent instructions (depth pre-pass then an equal-depth pass, Spider-Man: Edge of Time's hypersense copies). Settings > All Options: GPU. | `src/xenia/gpu/metal/msl_shader.cc` | 61, 2090 | 2 |
 | `sleep_zero_backoff_us` | cvar (uint32, Kernel) | Sleep length for a guest thread polling with Sleep(0); 0 always yields. Default 50. | `src/xenia/kernel/xthread.cc` | 50, 1275 | 2 |
 | `sleep_zero_last_us` | thread_local in XThread::Delay | Time (us) of this thread's previous Sleep(0). | `src/xenia/kernel/xthread.cc` | 1273, 1281, 1285 | 3 |
 | `sleep_zero_run` | thread_local in XThread::Delay | Quick Sleep(0) calls in a row on this thread. | `src/xenia/kernel/xthread.cc` | 1274, 1281, 1283, 1287 | 4 |
@@ -1247,77 +1247,77 @@ further edits.
 | `SplitForPendingResolveOutput` | MetalCommandProcessor member function | The copy->draw split: ends the render pass and loads the textures (keep-CB), or commits the command buffer. | `src/xenia/gpu/metal/metal_command_processor.h` | 445 | 1 |
 | `SplitForPendingResolveOutput` | MetalCommandProcessor member function | The copy->draw split: ends the render pass and loads the textures (keep-CB), or commits the command buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3601, 4870, 5152 | 3 |
 | `known_texture_mask` | local in IssueDraw | Textures of already translated shaders, for splitting before the render pass begins. | `src/xenia/gpu/metal/metal_command_processor.cc` | 3593, 3596, 3599, 3600, 3601 | 5 |
-| `metal_spirv2air_probe` | cvar (bool, Metal) | Also compile each guest shader with spirv2air (iOS 16 target) without drawing with it, and log Metal's acceptance, rejections and timings ("spirv2air probe" lines); not with metal_shader_compiler "spirv2air". | `src/xenia/gpu/metal/msl_shader.cc` | 100, 2378 | 2 |
-| `metal_shader_compiler` | cvar (string, Metal) | Guest shader compiler: "msl" (SPIRV-Cross, default) or "spirv2air" (falls back to msl per shader and for tessellation). Same name and role as XeniOS's, which selects between spirv2air and msc on its DXIL path. | `src/xenia/gpu/metal/msl_shader.cc` | 132, 401, 1519, 2379 | 4 |
-| `Spirv2airProbeStats` | struct (anonymous namespace) | spirv2air totals (probe or compiler). | `src/xenia/gpu/metal/msl_shader.cc` | 167, 187, 334 | 3 |
-| `shaders` | member of Spirv2airProbeStats | Shaders given to spirv2air. | `src/xenia/gpu/metal/msl_shader.cc` | 168, 335, 385, 402, 405 | 6 |
-| `translated` | member of Spirv2airProbeStats | Shaders spirv2air translated (or found in the disk cache). | `src/xenia/gpu/metal/msl_shader.cc` | 169, 345, 402, 405 | 4 |
-| `libraries` | member of Spirv2airProbeStats | Libraries Metal accepted. | `src/xenia/gpu/metal/msl_shader.cc` | 170, 347, 402 | 3 |
-| `functions` | member of Spirv2airProbeStats | Libraries whose main function Metal returned. | `src/xenia/gpu/metal/msl_shader.cc` | 171, 350, 390, 403 | 4 |
-| `cached` | member of Spirv2airProbeStats, local in CompileSpirv2air | Accepted shaders whose library came from metal_shader_disk_cache / this one did. | `src/xenia/gpu/metal/msl_shader.cc` | 173, 281, 288, 291, 326, 351, 352, 403 | 8 |
-| `translate_ms` | member of Spirv2airProbeStats, local in CompileSpirv2air | spirv2air translation (or cache load) time (sum over accepted shaders / of this shader). | `src/xenia/gpu/metal/msl_shader.cc` | 175, 295, 354, 403 | 5 |
-| `library_ms` | member of Spirv2airProbeStats, local in CompileSpirv2air | newLibraryWithData plus newFunction time. | `src/xenia/gpu/metal/msl_shader.cc` | 176, 301, 324, 355, 404 | 6 |
-| `msl_library_ms` | member of Spirv2airProbeStats, parameter of CompileSpirv2air and ProbeSpirv2air | The Metal Shading Language library compile time of the same shader (probe only, else 0). | `src/xenia/gpu/metal/msl_shader.cc` | 177, 270, 356, 392, 394, 416, 423 | 8 |
-| `rejections` | member of Spirv2airProbeStats, local in CompileSpirv2air | spirv2air rejection reasons with counts (and their text for the summary). | `src/xenia/gpu/metal/msl_shader.cc` | 178, 339, 386, 387, 388, 405 | 6 |
-| `library_errors` | member of Spirv2airProbeStats | Metal library or function errors with counts. | `src/xenia/gpu/metal/msl_shader.cc` | 179, 359 | 2 |
-| `dumped` | member of Spirv2airProbeStats | Modules written to spirv2air_probe (at most 16). | `src/xenia/gpu/metal/msl_shader.cc` | 180, 368, 369 | 3 |
-| `g_spirv2air_probe_mutex` | global (anonymous namespace) | Guards g_spirv2air_probe_stats. | `src/xenia/gpu/metal/msl_shader.cc` | 186, 333 | 2 |
-| `g_spirv2air_probe_stats` | global (anonymous namespace) | The spirv2air totals. | `src/xenia/gpu/metal/msl_shader.cc` | 187, 334 | 2 |
-| `kSpirv2airOptionsRevision` | constant (anonymous namespace) | Bumped when GetSpirv2airOptions changes; seeds the disk cache key. | `src/xenia/gpu/metal/msl_shader.cc` | 191, 238 | 2 |
-| `GetSpirv2airOptions` | function (anonymous namespace) | spirv2air options for this backend's SPIR-V and the draw path's Spirv2airLayout. | `src/xenia/gpu/metal/msl_shader.cc` | 198, 293, 856 | 3 |
-| `GetSpirvExecutionModel` | function (anonymous namespace) | The execution model of a SPIR-V module's first entry point (spirv2air takes vertex and fragment shaders). | `src/xenia/gpu/metal/msl_shader.cc` | 242, 1522 | 2 |
-| `word_count_op` | local in GetSpirvExecutionModel | The instruction's word count. | `src/xenia/gpu/metal/msl_shader.cc` | 245, 246, 253 | 3 |
-| `CompileSpirv2air` | function (anonymous namespace) | Compiles SPIR-V with spirv2air (or loads it from the disk cache), loads the library and main function and records the result; used by the probe and the compiler. | `src/xenia/gpu/metal/msl_shader.cc` | 267, 419, 1535 | 3 |
-| `library_out` | parameter of CompileSpirv2air | Where the library goes. | `src/xenia/gpu/metal/msl_shader.cc` | 271, 273, 407 | 3 |
-| `function_out` | parameter of CompileSpirv2air | Where the main function goes. | `src/xenia/gpu/metal/msl_shader.cc` | 272, 274, 408 | 3 |
-| `ProbeSpirv2air` | function (anonymous namespace) | metal_spirv2air_probe: CompileSpirv2air without the disk cache, releasing what it made. | `src/xenia/gpu/metal/msl_shader.cc` | 414, 2380 | 2 |
-| `translate_begin` | local in CompileSpirv2air | Start of the translation. | `src/xenia/gpu/metal/msl_shader.cc` | 279, 296 | 2 |
-| `library_error` | local in CompileSpirv2air | Metal's error for the library or function. | `src/xenia/gpu/metal/msl_shader.cc` | 298, 315, 320, 358, 363 | 5 |
-| `library_begin` | local in CompileSpirv2air | Start of the library load. | `src/xenia/gpu/metal/msl_shader.cc` | 304, 324 | 2 |
-| `accepted` | local in CompileSpirv2air | Accepted shaders (at least 1) to average over. | `src/xenia/gpu/metal/msl_shader.cc` | 390, 394, 403, 404 | 4 |
-| `msl_compile` | local in CompileSpirv2air | The Metal Shading Language compile time for the summary, when the probe measured it. | `src/xenia/gpu/metal/msl_shader.cc` | 391, 393, 404 | 3 |
-| `cached_metallib` | local in CompileSpirv2air | The disk cache entry. | `src/xenia/gpu/metal/msl_shader.cc` | 283, 284, 285, 286, 287 | 5 |
-| `spirv2air_model` | local in MslTranslation::CompileToMsl | The module's execution model. | `src/xenia/gpu/metal/msl_shader.cc` | 1521, 1523, 1524 | 3 |
-| `spirv2air_cache_key` | local in MslTranslation::CompileToMsl | Disk cache key: the SPIR-V hashed with the spirv2air version, kSpirv2airOptionsRevision and the platform. | `src/xenia/gpu/metal/msl_shader.cc` | 1528, 1531, 1539 | 3 |
-| `spirv2air_library_` | MslTranslation member | The spirv2air library. | `src/xenia/gpu/metal/msl_shader.cc` | 1127, 1128, 1129, 1539 | 4 |
-| `spirv2air_function_` | MslTranslation member | The spirv2air main function. | `src/xenia/gpu/metal/msl_shader.cc` | 1123, 1124, 1125, 1519, 1539 | 5 |
+| `metal_spirv2air_probe` | cvar (bool, Metal) | Also compile each guest shader with spirv2air (iOS 16 target) without drawing with it, and log Metal's acceptance, rejections and timings ("spirv2air probe" lines); not with metal_shader_compiler "spirv2air". | `src/xenia/gpu/metal/msl_shader.cc` | 102, 2466 | 2 |
+| `metal_shader_compiler` | cvar (string, Metal) | Guest shader compiler: "msl" (SPIRV-Cross, default) or "spirv2air" (falls back to msl per shader and for tessellation). Same name and role as XeniOS's, which selects between spirv2air and msc on its DXIL path. | `src/xenia/gpu/metal/msl_shader.cc` | 143, 423, 1609, 2467 | 4 |
+| `Spirv2airProbeStats` | struct (anonymous namespace) | spirv2air totals (probe or compiler). | `src/xenia/gpu/metal/msl_shader.cc` | 178, 198, 356 | 3 |
+| `shaders` | member of Spirv2airProbeStats | Shaders given to spirv2air. | `src/xenia/gpu/metal/msl_shader.cc` | 179, 357, 407, 424, 427 | 6 |
+| `translated` | member of Spirv2airProbeStats | Shaders spirv2air translated (or found in the disk cache). | `src/xenia/gpu/metal/msl_shader.cc` | 180, 367, 424, 427 | 4 |
+| `libraries` | member of Spirv2airProbeStats | Libraries Metal accepted. | `src/xenia/gpu/metal/msl_shader.cc` | 181, 369, 424 | 3 |
+| `functions` | member of Spirv2airProbeStats | Libraries whose main function Metal returned. | `src/xenia/gpu/metal/msl_shader.cc` | 182, 372, 412, 425 | 4 |
+| `cached` | member of Spirv2airProbeStats, local in CompileSpirv2air | Accepted shaders whose library came from metal_shader_disk_cache / this one did. | `src/xenia/gpu/metal/msl_shader.cc` | 184, 303, 310, 313, 348, 373, 374, 425 | 8 |
+| `translate_ms` | member of Spirv2airProbeStats, local in CompileSpirv2air | spirv2air translation (or cache load) time (sum over accepted shaders / of this shader). | `src/xenia/gpu/metal/msl_shader.cc` | 186, 317, 376, 425 | 5 |
+| `library_ms` | member of Spirv2airProbeStats, local in CompileSpirv2air | newLibraryWithData plus newFunction time. | `src/xenia/gpu/metal/msl_shader.cc` | 187, 323, 346, 377, 426 | 6 |
+| `msl_library_ms` | member of Spirv2airProbeStats, parameter of CompileSpirv2air and ProbeSpirv2air | The Metal Shading Language library compile time of the same shader (probe only, else 0). | `src/xenia/gpu/metal/msl_shader.cc` | 188, 292, 378, 414, 416, 438, 442 | 8 |
+| `rejections` | member of Spirv2airProbeStats, local in CompileSpirv2air | spirv2air rejection reasons with counts (and their text for the summary). | `src/xenia/gpu/metal/msl_shader.cc` | 189, 361, 408, 409, 410, 427 | 6 |
+| `library_errors` | member of Spirv2airProbeStats | Metal library or function errors with counts. | `src/xenia/gpu/metal/msl_shader.cc` | 190, 381 | 2 |
+| `dumped` | member of Spirv2airProbeStats | Modules written to spirv2air_probe (at most 16). | `src/xenia/gpu/metal/msl_shader.cc` | 191, 390, 391 | 3 |
+| `g_spirv2air_probe_mutex` | global (anonymous namespace) | Guards g_spirv2air_probe_stats. | `src/xenia/gpu/metal/msl_shader.cc` | 197, 355 | 2 |
+| `g_spirv2air_probe_stats` | global (anonymous namespace) | The spirv2air totals. | `src/xenia/gpu/metal/msl_shader.cc` | 198, 356 | 2 |
+| `kSpirv2airOptionsRevision` | constant (anonymous namespace) | Bumped when GetSpirv2airOptions changes; seeds the disk cache key. | `src/xenia/gpu/metal/msl_shader.cc` | 202, 260 | 2 |
+| `GetSpirv2airOptions` | function (anonymous namespace) | spirv2air options for this backend's SPIR-V and the draw path's Spirv2airLayout. | `src/xenia/gpu/metal/msl_shader.cc` | 209, 315, 797 | 3 |
+| `GetSpirvExecutionModel` | function (anonymous namespace) | The execution model of a SPIR-V module's first entry point (spirv2air takes vertex and fragment shaders). | `src/xenia/gpu/metal/msl_shader.cc` | 264, 1612 | 2 |
+| `word_count_op` | local in GetSpirvExecutionModel | The instruction's word count. | `src/xenia/gpu/metal/msl_shader.cc` | 267, 268, 275 | 3 |
+| `CompileSpirv2air` | function (anonymous namespace) | Compiles SPIR-V with spirv2air (or loads it from the disk cache), loads the library and main function and records the result; used by the probe and the compiler. | `src/xenia/gpu/metal/msl_shader.cc` | 289, 441, 1623 | 3 |
+| `library_out` | parameter of CompileSpirv2air | Where the library goes. | `src/xenia/gpu/metal/msl_shader.cc` | 293, 295, 429 | 3 |
+| `function_out` | parameter of CompileSpirv2air | Where the main function goes. | `src/xenia/gpu/metal/msl_shader.cc` | 294, 296, 430 | 3 |
+| `ProbeSpirv2air` | function (anonymous namespace) | metal_spirv2air_probe: CompileSpirv2air without the disk cache, releasing what it made. | `src/xenia/gpu/metal/msl_shader.cc` | 436, 2468 | 2 |
+| `translate_begin` | local in CompileSpirv2air | Start of the translation. | `src/xenia/gpu/metal/msl_shader.cc` | 301, 318 | 2 |
+| `library_error` | local in CompileSpirv2air | Metal's error for the library or function. | `src/xenia/gpu/metal/msl_shader.cc` | 320, 337, 342, 380, 385 | 5 |
+| `library_begin` | local in CompileSpirv2air | Start of the library load. | `src/xenia/gpu/metal/msl_shader.cc` | 326, 346 | 2 |
+| `accepted` | local in CompileSpirv2air | Accepted shaders (at least 1) to average over. | `src/xenia/gpu/metal/msl_shader.cc` | 412, 416, 425, 426 | 4 |
+| `msl_compile` | local in CompileSpirv2air | The Metal Shading Language compile time for the summary, when the probe measured it. | `src/xenia/gpu/metal/msl_shader.cc` | 413, 415, 426 | 3 |
+| `cached_metallib` | local in CompileSpirv2air | The disk cache entry. | `src/xenia/gpu/metal/msl_shader.cc` | 305, 306, 307, 308, 309 | 5 |
+| `spirv2air_model` | local in MslTranslation::CompileToMsl | The module's execution model. | `src/xenia/gpu/metal/msl_shader.cc` | 1611, 1613, 1614 | 3 |
+| `spirv2air_cache_key` | local in MslTranslation::CompileToMsl | Disk cache key: the SPIR-V hashed with the spirv2air version, kSpirv2airOptionsRevision and the platform. | `src/xenia/gpu/metal/msl_shader.cc` | 1616, 1619, 1627 | 3 |
+| `spirv2air_library_` | MslTranslation member | The spirv2air library. | `src/xenia/gpu/metal/msl_shader.cc` | 1217, 1218, 1219, 1627 | 4 |
+| `spirv2air_function_` | MslTranslation member | The spirv2air main function. | `src/xenia/gpu/metal/msl_shader.cc` | 1213, 1214, 1215, 1609, 1627 | 5 |
 | `spirv2air_library_` | MslTranslation member | The spirv2air library. | `src/xenia/gpu/metal/msl_shader.h` | 80 | 1 |
 | `spirv2air_function_` | MslTranslation member | The spirv2air main function. | `src/xenia/gpu/metal/msl_shader.h` | 53, 60, 81 | 3 |
 | `spirv2air_function` | MslTranslation method | The spirv2air main function, if compiled with metal_shader_compiler "spirv2air". | `src/xenia/gpu/metal/msl_shader.h` | 53 | 1 |
 | `spirv2air_function` | MslTranslation method | The spirv2air main function, if compiled with metal_shader_compiler "spirv2air". | `src/xenia/gpu/metal/metal_command_processor.cc` | 5053, 5054, 11767, 11771 | 4 |
 | `Spirv2airLayout` | namespace | Buffer indices and top-level argument buffer and heap layout of spirv2air shaders. | `src/xenia/gpu/metal/msl_bindings.h` | 91 | 1 |
-| `Spirv2airLayout` | namespace | Buffer indices and top-level argument buffer and heap layout of spirv2air shaders. | `src/xenia/gpu/metal/msl_shader.cc` | 206, 207, 208, 214, 215, 216, 218, 220, 221, 222, 224, 227, 229, 230, 421, 719, 720, 734, 744, 805, 1527 | 21 |
+| `Spirv2airLayout` | namespace | Buffer indices and top-level argument buffer and heap layout of spirv2air shaders. | `src/xenia/gpu/metal/msl_shader.cc` | 217, 218, 219, 225, 226, 227, 229, 231, 232, 233, 235, 238, 240, 241, 243, 251, 253, 715, 716, 718 | 20 |
 | `Spirv2airLayout` | namespace | Buffer indices and top-level argument buffer and heap layout of spirv2air shaders. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1854, 1865, 5982, 5988, 5990, 5996, 6004, 6012, 6029, 6031, 6034, 6036, 6042, 6081, 6082, 6106, 6113, 6122, 6132, 6135, 6138, 6141, 6144, 6147 | 24 |
 | `kResourceHeapBuffer` | constant in Spirv2airLayout | Buffer index of the resource heap (9). | `src/xenia/gpu/metal/msl_bindings.h` | 92 | 1 |
-| `kResourceHeapBuffer` | constant in Spirv2airLayout | Buffer index of the resource heap (9). | `src/xenia/gpu/metal/msl_shader.cc` | 206 | 1 |
+| `kResourceHeapBuffer` | constant in Spirv2airLayout | Buffer index of the resource heap (9). | `src/xenia/gpu/metal/msl_shader.cc` | 217 | 1 |
 | `kResourceHeapBuffer` | constant in Spirv2airLayout | Buffer index of the resource heap (9). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6135, 6144 | 2 |
 | `kSamplerHeapBuffer` | constant in Spirv2airLayout | Buffer index of the sampler heap (10). | `src/xenia/gpu/metal/msl_bindings.h` | 93 | 1 |
-| `kSamplerHeapBuffer` | constant in Spirv2airLayout | Buffer index of the sampler heap (10). | `src/xenia/gpu/metal/msl_shader.cc` | 207 | 1 |
+| `kSamplerHeapBuffer` | constant in Spirv2airLayout | Buffer index of the sampler heap (10). | `src/xenia/gpu/metal/msl_shader.cc` | 218 | 1 |
 | `kSamplerHeapBuffer` | constant in Spirv2airLayout | Buffer index of the sampler heap (10). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6138, 6147 | 2 |
 | `kArgumentBuffer` | constant in Spirv2airLayout | Buffer index of the top-level argument buffer (11). | `src/xenia/gpu/metal/msl_bindings.h` | 94 | 1 |
-| `kArgumentBuffer` | constant in Spirv2airLayout | Buffer index of the top-level argument buffer (11). | `src/xenia/gpu/metal/msl_shader.cc` | 208 | 1 |
+| `kArgumentBuffer` | constant in Spirv2airLayout | Buffer index of the top-level argument buffer (11). | `src/xenia/gpu/metal/msl_shader.cc` | 219 | 1 |
 | `kArgumentBuffer` | constant in Spirv2airLayout | Buffer index of the top-level argument buffer (11). | `src/xenia/gpu/metal/metal_command_processor.cc` | 6132, 6141 | 2 |
 | `kConstantBufferCount` | constant in Spirv2airLayout | Constant buffer pointers at the top-level argument buffer's start (7). | `src/xenia/gpu/metal/msl_bindings.h` | 95, 96 | 2 |
-| `kConstantBufferCount` | constant in Spirv2airLayout | Constant buffer pointers at the top-level argument buffer's start (7). | `src/xenia/gpu/metal/msl_shader.cc` | 214 | 1 |
+| `kConstantBufferCount` | constant in Spirv2airLayout | Constant buffer pointers at the top-level argument buffer's start (7). | `src/xenia/gpu/metal/msl_shader.cc` | 225 | 1 |
 | `kSharedMemoryReadOffset` | constant in Spirv2airLayout | Offset of the shared memory pointer for reading. | `src/xenia/gpu/metal/msl_bindings.h` | 96, 97 | 2 |
-| `kSharedMemoryReadOffset` | constant in Spirv2airLayout | Offset of the shared memory pointer for reading. | `src/xenia/gpu/metal/msl_shader.cc` | 215 | 1 |
+| `kSharedMemoryReadOffset` | constant in Spirv2airLayout | Offset of the shared memory pointer for reading. | `src/xenia/gpu/metal/msl_shader.cc` | 226 | 1 |
 | `kSharedMemoryReadOffset` | constant in Spirv2airLayout | Offset of the shared memory pointer for reading. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6029 | 1 |
 | `kSharedMemoryWriteOffset` | constant in Spirv2airLayout | Offset of the shared memory pointer for writing. | `src/xenia/gpu/metal/msl_bindings.h` | 97, 98 | 2 |
-| `kSharedMemoryWriteOffset` | constant in Spirv2airLayout | Offset of the shared memory pointer for writing. | `src/xenia/gpu/metal/msl_shader.cc` | 216 | 1 |
+| `kSharedMemoryWriteOffset` | constant in Spirv2airLayout | Offset of the shared memory pointer for writing. | `src/xenia/gpu/metal/msl_shader.cc` | 227 | 1 |
 | `kSharedMemoryWriteOffset` | constant in Spirv2airLayout | Offset of the shared memory pointer for writing. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6031 | 1 |
 | `kVertexTextureIndicesOffset` | constant in Spirv2airLayout | Offset of the vertex stage's index records pointer. | `src/xenia/gpu/metal/msl_bindings.h` | 98, 100 | 2 |
-| `kVertexTextureIndicesOffset` | constant in Spirv2airLayout | Offset of the vertex stage's index records pointer. | `src/xenia/gpu/metal/msl_shader.cc` | 218 | 1 |
+| `kVertexTextureIndicesOffset` | constant in Spirv2airLayout | Offset of the vertex stage's index records pointer. | `src/xenia/gpu/metal/msl_shader.cc` | 229 | 1 |
 | `kVertexTextureIndicesOffset` | constant in Spirv2airLayout | Offset of the vertex stage's index records pointer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6034 | 1 |
 | `kFragmentTextureIndicesOffset` | constant in Spirv2airLayout | Offset of the fragment stage's index records pointer. | `src/xenia/gpu/metal/msl_bindings.h` | 99, 101 | 2 |
-| `kFragmentTextureIndicesOffset` | constant in Spirv2airLayout | Offset of the fragment stage's index records pointer. | `src/xenia/gpu/metal/msl_shader.cc` | 220 | 1 |
+| `kFragmentTextureIndicesOffset` | constant in Spirv2airLayout | Offset of the fragment stage's index records pointer. | `src/xenia/gpu/metal/msl_shader.cc` | 231 | 1 |
 | `kFragmentTextureIndicesOffset` | constant in Spirv2airLayout | Offset of the fragment stage's index records pointer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6036 | 1 |
 | `kArgumentBufferBytes` | constant in Spirv2airLayout | Size of the top-level argument buffer. | `src/xenia/gpu/metal/msl_bindings.h` | 101 | 1 |
 | `kArgumentBufferBytes` | constant in Spirv2airLayout | Size of the top-level argument buffer. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5996, 6012 | 2 |
 | `kHeapRecordBytes` | constant in Spirv2airLayout | Size of a heap record. | `src/xenia/gpu/metal/msl_bindings.h` | 102 | 1 |
-| `kHeapRecordBytes` | constant in Spirv2airLayout | Size of a heap record. | `src/xenia/gpu/metal/msl_shader.cc` | 221 | 1 |
+| `kHeapRecordBytes` | constant in Spirv2airLayout | Size of a heap record. | `src/xenia/gpu/metal/msl_shader.cc` | 232 | 1 |
 | `kHeapRecordBytes` | constant in Spirv2airLayout | Size of a heap record. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6004, 6042, 6081, 6106 | 4 |
 | `kHeapTextureHandleOffset` | constant in Spirv2airLayout | Offset of a texture's handle in its heap record. | `src/xenia/gpu/metal/msl_bindings.h` | 103 | 1 |
-| `kHeapTextureHandleOffset` | constant in Spirv2airLayout | Offset of a texture's handle in its heap record. | `src/xenia/gpu/metal/msl_shader.cc` | 222 | 1 |
+| `kHeapTextureHandleOffset` | constant in Spirv2airLayout | Offset of a texture's handle in its heap record. | `src/xenia/gpu/metal/msl_shader.cc` | 233 | 1 |
 | `kHeapTextureHandleOffset` | constant in Spirv2airLayout | Offset of a texture's handle in its heap record. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6082 | 1 |
 | `kMaxBindings` | constant in Spirv2airLayout | Records in the {binding, binding} index table. | `src/xenia/gpu/metal/msl_bindings.h` | 106 | 1 |
 | `kMaxBindings` | constant in Spirv2airLayout | Records in the {binding, binding} index table. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1854, 1865, 5988, 5990 | 4 |
@@ -1326,114 +1326,136 @@ further edits.
 | `records` | local in SetupContext | The index records being filled. | `src/xenia/gpu/metal/metal_command_processor.cc` | 1863, 1866, 1867 | 3 |
 | `use_spirv2air` | local in IssueDrawMsl | The draw's pipeline takes its shaders from spirv2air (both have a spirv2air function and it isn't tessellated); false again when Metal rejects the spirv2air pipeline. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5052, 5081, 5095, 5101, 5104, 5111, 5386, 6152, 6163, 6167, 6339, 6343 | 12 |
 | `compile_msl_for_draw` | local lambda in IssueDrawMsl | Compiles the Metal Shading Language function of a draw's shaders that only have a spirv2air one, for a draw that can't use spirv2air. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5055, 5081, 5112 | 3 |
-| `metal_spirv2air_self_test` | cvar (bool, default false) | Run RunSpirv2airSelfTest when a title's shader storage is set up, before the title runs. | `src/xenia/gpu/metal/msl_shader.cc` | 110 | 1 |
+| `metal_spirv2air_self_test` | cvar (bool, default false) | Run RunSpirv2airSelfTest when a title's shader storage is set up, before the title runs. | `src/xenia/gpu/metal/msl_shader.cc` | 112 | 1 |
 | `metal_spirv2air_self_test` | cvar (bool, default false) | Run RunSpirv2airSelfTest when a title's shader storage is set up, before the title runs. | `src/xenia/gpu/metal/metal_command_processor.cc` | 96, 2401 | 2 |
-| `metal_spirv2air_options` | cvar (int, default 3) | The Spirv2airLayout option bits guest shaders are compiled with by spirv2air. | `src/xenia/gpu/metal/msl_shader.cc` | 119, 420, 1526 | 3 |
-| `RunSpirv2airSelfTest` | function | Builds pipelines one at a time from the self-test shaders and the shaders in spirv2air_probe, with the option variants that bear on them, and logs which ones Metal builds. | `src/xenia/gpu/metal/msl_shader.h` | 101 | 1 |
-| `RunSpirv2airSelfTest` | function | Builds pipelines one at a time from the self-test shaders and the shaders in spirv2air_probe, with the option variants that bear on them, and logs which ones Metal builds. | `src/xenia/gpu/metal/msl_shader.cc` | 640 | 1 |
-| `RunSpirv2airSelfTest` | function | Builds pipelines one at a time from the self-test shaders and the shaders in spirv2air_probe, with the option variants that bear on them, and logs which ones Metal builds. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2410 | 1 |
-| `DumpSpirv2airPipelineShaders` | function | Writes the SPIR-V of the shaders of a pipeline Metal refused to build from their spirv2air functions to spirv2air_probe (first 8 pairs of shaders). | `src/xenia/gpu/metal/msl_shader.h` | 106 | 1 |
-| `DumpSpirv2airPipelineShaders` | function | Writes the SPIR-V of the shaders of a pipeline Metal refused to build from their spirv2air functions to spirv2air_probe (first 8 pairs of shaders). | `src/xenia/gpu/metal/msl_shader.cc` | 958 | 1 |
-| `DumpSpirv2airPipelineShaders` | function | Writes the SPIR-V of the shaders of a pipeline Metal refused to build from their spirv2air functions to spirv2air_probe (first 8 pairs of shaders). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5110 | 1 |
-| `GetSpirv2airCacheSeed` | function (anonymous namespace) | The cache key seed of an option variant's spirv2air libraries. | `src/xenia/gpu/metal/msl_shader.cc` | 235, 1533 | 2 |
-| `variant` | parameter of GetSpirv2airOptions, GetSpirv2airCacheSeed, CompileSpirv2air and function_of; Test field; loop variable in RunSpirv2airSelfTest | Spirv2airLayout option bits (metal_spirv2air_options). | `src/xenia/gpu/metal/msl_shader.cc` | 198, 224, 227, 229, 230, 235, 238, 267, 293, 717, 803, 806, 844, 849, 856, 861, 879, 887, 889, 894, 916, 921 | 22 |
-| `spirv2air_variant` | local in MslTranslation::CompileToMsl | metal_spirv2air_options as read for this compile. | `src/xenia/gpu/metal/msl_shader.cc` | 1525, 1533, 1536, 1540 | 4 |
-| `spirv2air_options_` | MslTranslation member | The option bits spirv2air_function_ was compiled with. | `src/xenia/gpu/metal/msl_shader.h` | 56, 82 | 2 |
-| `spirv2air_options_` | MslTranslation member | The option bits spirv2air_function_ was compiled with. | `src/xenia/gpu/metal/msl_shader.cc` | 1540 | 1 |
+| `metal_spirv2air_options` | cvar (int, default 3) | The Spirv2airLayout option bits 0-3 guest shaders are compiled with by spirv2air. | `src/xenia/gpu/metal/msl_shader.cc` | 121, 250 | 2 |
+| `metal_spirv2air_declaration_attributes` | cvar (int, default 3) | spirv2air's declarationAttributes for guest shaders (Spirv2airLayout bits 4-5). | `src/xenia/gpu/metal/msl_shader.cc` | 133, 252 | 2 |
+| `RunSpirv2airSelfTest` | function | Builds pipelines one at a time, each with a time limit, from the self-test shaders (those with calls with each declaration attributes mode) and the pairs of shaders in spirv2air_probe, and logs which ones Metal builds. | `src/xenia/gpu/metal/msl_shader.h` | 101 | 1 |
+| `RunSpirv2airSelfTest` | function | Builds pipelines one at a time, each with a time limit, from the self-test shaders (those with calls with each declaration attributes mode) and the pairs of shaders in spirv2air_probe, and logs which ones Metal builds. | `src/xenia/gpu/metal/msl_shader.cc` | 660 | 1 |
+| `RunSpirv2airSelfTest` | function | Builds pipelines one at a time, each with a time limit, from the self-test shaders (those with calls with each declaration attributes mode) and the pairs of shaders in spirv2air_probe, and logs which ones Metal builds. | `src/xenia/gpu/metal/metal_command_processor.cc` | 2410 | 1 |
+| `DumpSpirv2airPipelineShaders` | function | Writes the SPIR-V of the shaders of a pipeline Metal refused to build from their spirv2air functions to spirv2air_probe, named after the pair (first 8 pairs). | `src/xenia/gpu/metal/msl_shader.h` | 106 | 1 |
+| `DumpSpirv2airPipelineShaders` | function | Writes the SPIR-V of the shaders of a pipeline Metal refused to build from their spirv2air functions to spirv2air_probe, named after the pair (first 8 pairs). | `src/xenia/gpu/metal/msl_shader.cc` | 1047 | 1 |
+| `DumpSpirv2airPipelineShaders` | function | Writes the SPIR-V of the shaders of a pipeline Metal refused to build from their spirv2air functions to spirv2air_probe, named after the pair (first 8 pairs). | `src/xenia/gpu/metal/metal_command_processor.cc` | 5110 | 1 |
+| `GetSpirv2airCacheSeed` | function (anonymous namespace) | The cache key seed of a variant's spirv2air libraries. | `src/xenia/gpu/metal/msl_shader.cc` | 257, 1621 | 2 |
+| `GetSpirv2airVariant` | function (anonymous namespace) | The variant guest shaders are compiled with, from metal_spirv2air_options and metal_spirv2air_declaration_attributes. | `src/xenia/gpu/metal/msl_shader.cc` | 249, 441, 1615 | 3 |
+| `variant` | parameter of GetSpirv2airOptions, GetSpirv2airCacheSeed, CompileSpirv2air, function_of and build; Test field | Spirv2airLayout bits. | `src/xenia/gpu/metal/msl_shader.cc` | 209, 235, 238, 240, 241, 243, 257, 260, 289, 315, 713, 789, 790, 797, 802, 820, 842, 884, 891, 894, 899, 901, 906, 909, 1007 | 25 |
+| `spirv2air_variant` | local in MslTranslation::CompileToMsl | The variant for this compile. | `src/xenia/gpu/metal/msl_shader.cc` | 1615, 1621, 1624, 1628 | 4 |
+| `spirv2air_options_` | MslTranslation member | The variant spirv2air_function_ was compiled with. | `src/xenia/gpu/metal/msl_shader.h` | 56, 82 | 2 |
+| `spirv2air_options_` | MslTranslation member | The variant spirv2air_function_ was compiled with. | `src/xenia/gpu/metal/msl_shader.cc` | 1628 | 1 |
 | `spirv2air_options` | MslTranslation member function | Returns spirv2air_options_. | `src/xenia/gpu/metal/msl_shader.h` | 56 | 1 |
 | `spirv2air_options` | MslTranslation member function | Returns spirv2air_options_. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5981 | 1 |
-| `kDirectSharedMemory` | constant in Spirv2airLayout | Option bit: shared memory as the stage's kSharedMemory buffer binding. | `src/xenia/gpu/metal/msl_bindings.h` | 114 | 1 |
-| `kDirectSharedMemory` | constant in Spirv2airLayout | Option bit: shared memory as the stage's kSharedMemory buffer binding. | `src/xenia/gpu/metal/msl_shader.cc` | 224, 719 | 2 |
-| `kDirectTextures` | constant in Spirv2airLayout | Option bit: texture k at texture index k and sampler j at sampler index j, no heaps. | `src/xenia/gpu/metal/msl_bindings.h` | 115 | 1 |
-| `kDirectTextures` | constant in Spirv2airLayout | Option bit: texture k at texture index k and sampler j at sampler index j, no heaps. | `src/xenia/gpu/metal/msl_shader.cc` | 227, 720 | 2 |
-| `kDirectTextures` | constant in Spirv2airLayout | Option bit: texture k at texture index k and sampler j at sampler index j, no heaps. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5982 | 1 |
-| `kConstantTextureIndices` | constant in Spirv2airLayout | Option bit: the index records read through a constant pointer. | `src/xenia/gpu/metal/msl_bindings.h` | 116 | 1 |
-| `kConstantTextureIndices` | constant in Spirv2airLayout | Option bit: the index records read through a constant pointer. | `src/xenia/gpu/metal/msl_shader.cc` | 229, 744 | 2 |
-| `kPreciseMath` | constant in Spirv2airLayout | Option bit: precise math intrinsics. | `src/xenia/gpu/metal/msl_bindings.h` | 117 | 1 |
-| `kPreciseMath` | constant in Spirv2airLayout | Option bit: precise math intrinsics. | `src/xenia/gpu/metal/msl_shader.cc` | 230, 734, 805 | 3 |
-| `kOptionMask` | constant in Spirv2airLayout | All the option bits. | `src/xenia/gpu/metal/msl_bindings.h` | 118 | 1 |
-| `kOptionMask` | constant in Spirv2airLayout | All the option bits. | `src/xenia/gpu/metal/msl_shader.cc` | 421, 1527 | 2 |
-| `pipelines_dumped` | Spirv2airProbeStats field | Pairs of shaders DumpSpirv2airPipelineShaders wrote. | `src/xenia/gpu/metal/msl_shader.cc` | 183, 977, 981 | 3 |
-| `dumped_pipeline_shaders` | Spirv2airProbeStats field | Their shaders' hashes and modifications. | `src/xenia/gpu/metal/msl_shader.cc` | 184, 978 | 2 |
+| `kDirectSharedMemory` | constant in Spirv2airLayout | Variant bit: shared memory as the stage's kSharedMemory buffer binding. | `src/xenia/gpu/metal/msl_bindings.h` | 117 | 1 |
+| `kDirectSharedMemory` | constant in Spirv2airLayout | Variant bit: shared memory as the stage's kSharedMemory buffer binding. | `src/xenia/gpu/metal/msl_shader.cc` | 235, 715 | 2 |
+| `kDirectTextures` | constant in Spirv2airLayout | Variant bit: texture k at texture index k and sampler j at sampler index j, no heaps. | `src/xenia/gpu/metal/msl_bindings.h` | 118 | 1 |
+| `kDirectTextures` | constant in Spirv2airLayout | Variant bit: texture k at texture index k and sampler j at sampler index j, no heaps. | `src/xenia/gpu/metal/msl_shader.cc` | 238, 716 | 2 |
+| `kDirectTextures` | constant in Spirv2airLayout | Variant bit: texture k at texture index k and sampler j at sampler index j, no heaps. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5982 | 1 |
+| `kConstantTextureIndices` | constant in Spirv2airLayout | Variant bit: the index records read through a constant pointer. | `src/xenia/gpu/metal/msl_bindings.h` | 119 | 1 |
+| `kConstantTextureIndices` | constant in Spirv2airLayout | Variant bit: the index records read through a constant pointer. | `src/xenia/gpu/metal/msl_shader.cc` | 240 | 1 |
+| `kPreciseMath` | constant in Spirv2airLayout | Variant bit: precise math intrinsics. | `src/xenia/gpu/metal/msl_bindings.h` | 120 | 1 |
+| `kPreciseMath` | constant in Spirv2airLayout | Variant bit: precise math intrinsics. | `src/xenia/gpu/metal/msl_shader.cc` | 241 | 1 |
+| `kOptionMask` | constant in Spirv2airLayout | Bits 0-3, metal_spirv2air_options's. | `src/xenia/gpu/metal/msl_bindings.h` | 121 | 1 |
+| `kOptionMask` | constant in Spirv2airLayout | Bits 0-3, metal_spirv2air_options's. | `src/xenia/gpu/metal/msl_shader.cc` | 251 | 1 |
+| `kDeclarationAttributesShift` | constant in Spirv2airLayout | Where spirv2air's declarationAttributes mode sits in a variant. | `src/xenia/gpu/metal/msl_bindings.h` | 122 | 1 |
+| `kDeclarationAttributesShift` | constant in Spirv2airLayout | Where spirv2air's declarationAttributes mode sits in a variant. | `src/xenia/gpu/metal/msl_shader.cc` | 243, 253, 718 | 3 |
+| `pipelines_dumped` | Spirv2airProbeStats field | Pairs of shaders DumpSpirv2airPipelineShaders wrote this run. | `src/xenia/gpu/metal/msl_shader.cc` | 194, 1067, 1071 | 3 |
+| `dumped_pipeline_shaders` | Spirv2airProbeStats field | Their shaders' hashes and modifications. | `src/xenia/gpu/metal/msl_shader.cc` | 195, 1068 | 2 |
 | `spirv2air_self_test` | namespace | The self-test shaders' SPIR-V. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 26 | 1 |
-| `spirv2air_self_test` | namespace | The self-test shaders' SPIR-V. | `src/xenia/gpu/metal/msl_shader.cc` | 642 | 1 |
+| `spirv2air_self_test` | namespace | The self-test shaders' SPIR-V. | `src/xenia/gpu/metal/msl_shader.cc` | 662 | 1 |
 | `kVertexPosition` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader writing only the position. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 35 | 1 |
-| `kVertexPosition` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader writing only the position. | `src/xenia/gpu/metal/msl_shader.cc` | 656 | 2 |
+| `kVertexPosition` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader writing only the position. | `src/xenia/gpu/metal/msl_shader.cc` | 674 | 2 |
 | `kVertexOutputs` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader with two outputs. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 91 | 1 |
-| `kVertexOutputs` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader with two outputs. | `src/xenia/gpu/metal/msl_shader.cc` | 657, 658 | 2 |
+| `kVertexOutputs` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader with two outputs. | `src/xenia/gpu/metal/msl_shader.cc` | 675, 676 | 2 |
 | `kVertexSharedMemory` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader reading shared memory. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 159 | 1 |
-| `kVertexSharedMemory` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader reading shared memory. | `src/xenia/gpu/metal/msl_shader.cc` | 660, 661 | 2 |
+| `kVertexSharedMemory` | constant array in spirv2air_self_test | SPIR-V of the self-test's vertex shader reading shared memory. | `src/xenia/gpu/metal/msl_shader.cc` | 678, 679 | 2 |
 | `kPixelConstant` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader writing a constant. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 214 | 1 |
-| `kPixelConstant` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader writing a constant. | `src/xenia/gpu/metal/msl_shader.cc` | 662, 663 | 2 |
+| `kPixelConstant` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader writing a constant. | `src/xenia/gpu/metal/msl_shader.cc` | 680, 681 | 2 |
 | `kPixelInput` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with an input. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 237 | 1 |
-| `kPixelInput` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with an input. | `src/xenia/gpu/metal/msl_shader.cc` | 664, 665 | 2 |
+| `kPixelInput` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with an input. | `src/xenia/gpu/metal/msl_shader.cc` | 682, 683 | 2 |
 | `kPixelCentroidInput` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with a centroid input. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 260 | 1 |
-| `kPixelCentroidInput` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with a centroid input. | `src/xenia/gpu/metal/msl_shader.cc` | 666, 667 | 2 |
+| `kPixelCentroidInput` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with a centroid input. | `src/xenia/gpu/metal/msl_shader.cc` | 684, 685 | 2 |
 | `kPixelConstantBuffer` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader reading a constant buffer. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 283 | 1 |
-| `kPixelConstantBuffer` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader reading a constant buffer. | `src/xenia/gpu/metal/msl_shader.cc` | 669, 670 | 2 |
+| `kPixelConstantBuffer` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader reading a constant buffer. | `src/xenia/gpu/metal/msl_shader.cc` | 687, 688 | 2 |
 | `kPixelConstantBufferIndexed` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader indexing a constant buffer. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 330 | 1 |
-| `kPixelConstantBufferIndexed` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader indexing a constant buffer. | `src/xenia/gpu/metal/msl_shader.cc` | 672, 673 | 2 |
+| `kPixelConstantBufferIndexed` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader indexing a constant buffer. | `src/xenia/gpu/metal/msl_shader.cc` | 690, 691 | 2 |
 | `kPixelSharedMemory` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader reading shared memory. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 372 | 1 |
-| `kPixelSharedMemory` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader reading shared memory. | `src/xenia/gpu/metal/msl_shader.cc` | 674, 675 | 2 |
+| `kPixelSharedMemory` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader reading shared memory. | `src/xenia/gpu/metal/msl_shader.cc` | 692, 693 | 2 |
 | `kPixelMath` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with math functions. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 416 | 1 |
-| `kPixelMath` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with math functions. | `src/xenia/gpu/metal/msl_shader.cc` | 676, 677 | 2 |
+| `kPixelMath` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with math functions. | `src/xenia/gpu/metal/msl_shader.cc` | 694, 695 | 2 |
 | `kPixelTexture` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader sampling a texture. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 464 | 1 |
-| `kPixelTexture` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader sampling a texture. | `src/xenia/gpu/metal/msl_shader.cc` | 678, 679 | 2 |
+| `kPixelTexture` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader sampling a texture. | `src/xenia/gpu/metal/msl_shader.cc` | 696, 697 | 2 |
 | `kPixelTextureArrayGradients` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader sampling a texture array with gradients. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 505 | 1 |
-| `kPixelTextureArrayGradients` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader sampling a texture array with gradients. | `src/xenia/gpu/metal/msl_shader.cc` | 681, 682 | 2 |
+| `kPixelTextureArrayGradients` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader sampling a texture array with gradients. | `src/xenia/gpu/metal/msl_shader.cc` | 699, 700 | 2 |
 | `kPixelDiscard` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with discard. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 554 | 1 |
-| `kPixelDiscard` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with discard. | `src/xenia/gpu/metal/msl_shader.cc` | 683, 684 | 2 |
+| `kPixelDiscard` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with discard. | `src/xenia/gpu/metal/msl_shader.cc` | 701, 702 | 2 |
 | `kPixelEarlyFragmentTests` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with early fragment tests. | `src/xenia/gpu/metal/spirv2air_self_test_spirv.h` | 584 | 1 |
-| `kPixelEarlyFragmentTests` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with early fragment tests. | `src/xenia/gpu/metal/msl_shader.cc` | 686, 687 | 2 |
-| `test` | namespace alias in RunSpirv2airSelfTest | spirv2air_self_test. | `src/xenia/gpu/metal/msl_shader.cc` | 642, 656, 657, 658, 660, 661, 662, 663, 664, 665, 666, 667, 669, 670, 672, 673, 674, 675, 676, 677, 678, 679, 681, 682, 683, 684, 686, 687 | 29 |
-| `Module` | local struct in RunSpirv2airSelfTest | A shader: its name and SPIR-V. | `src/xenia/gpu/metal/msl_shader.cc` | 643, 649, 654, 782, 783, 785, 853 | 7 |
-| `module_of` | local lambda in RunSpirv2airSelfTest | A Module from a name and SPIR-V words. | `src/xenia/gpu/metal/msl_shader.cc` | 647, 655, 657, 659, 662, 664, 666, 668, 671, 674, 676, 678, 680, 683, 685 | 15 |
-| `modules` | local in RunSpirv2airSelfTest | The self-test shaders, the control's two placeholders, then the shaders from probe_dir. | `src/xenia/gpu/metal/msl_shader.cc` | 654, 689, 691, 795, 796, 801, 802, 853 | 8 |
-| `kMslVertex` | local in RunSpirv2airSelfTest (const) | Index of the Metal Shading Language control's vertex function. | `src/xenia/gpu/metal/msl_shader.cc` | 689, 690, 722, 727, 832, 845 | 6 |
-| `kMslPixel` | local in RunSpirv2airSelfTest (const) | Index of the control's fragment function. | `src/xenia/gpu/metal/msl_shader.cc` | 690, 691, 722, 725, 834, 845 | 6 |
-| `kMslSource` | local static string in RunSpirv2airSelfTest | The control's Metal Shading Language source. | `src/xenia/gpu/metal/msl_shader.cc` | 692, 827 | 2 |
-| `Test` | local struct in RunSpirv2airSelfTest | A pipeline: its name, shader indices and option variant. | `src/xenia/gpu/metal/msl_shader.cc` | 713, 721, 886, 931 | 4 |
-| `kSharedMemory` | local constant in RunSpirv2airSelfTest | Spirv2airLayout::kDirectSharedMemory. | `src/xenia/gpu/metal/msl_shader.cc` | 719, 739, 741, 798, 804, 805 | 6 |
-| `kTextures` | local constant in RunSpirv2airSelfTest | Spirv2airLayout::kDirectTextures. | `src/xenia/gpu/metal/msl_shader.cc` | 720, 745, 748, 804, 805 | 5 |
-| `tests` | local in RunSpirv2airSelfTest | The pipelines to build, the control first. | `src/xenia/gpu/metal/msl_shader.cc` | 721, 797, 798, 806, 928, 931, 939 | 7 |
-| `dumps` | local in RunSpirv2airSelfTest | The vertex and pixel shader files in probe_dir by pipeline<N> prefix. | `src/xenia/gpu/metal/msl_shader.cc` | 755, 766, 778 | 3 |
-| `file_name` | local in RunSpirv2airSelfTest | A probe_dir entry's file name. | `src/xenia/gpu/metal/msl_shader.cc` | 758, 759, 760, 764, 766 | 5 |
-| `stage_at` | local in RunSpirv2airSelfTest | Where the pipeline<N> prefix ends in it. | `src/xenia/gpu/metal/msl_shader.cc` | 759, 760, 764, 766 | 4 |
-| `read_words` | local lambda in RunSpirv2airSelfTest | A file's contents as SPIR-V words. | `src/xenia/gpu/metal/msl_shader.cc` | 769, 782, 785 | 3 |
-| `bytes` | local in read_words | The file's bytes. | `src/xenia/gpu/metal/msl_shader.cc` | 771, 773, 774 | 3 |
-| `words` | Module field; local in read_words | SPIR-V words. | `src/xenia/gpu/metal/msl_shader.cc` | 645, 647, 649, 773, 774, 775, 788, 789, 790, 791, 799, 855 | 16 |
-| `pairs_seen` | local in RunSpirv2airSelfTest | Hashes of the pairs of shaders already added, so each is tested once. | `src/xenia/gpu/metal/msl_shader.cc` | 777, 791 | 2 |
-| `pipeline_name` | local in RunSpirv2airSelfTest | A dumps key (unused name of the structured binding). | `src/xenia/gpu/metal/msl_shader.cc` | 778 | 1 |
-| `paths` | local in RunSpirv2airSelfTest | A dumps value: the vertex and pixel shader files. | `src/xenia/gpu/metal/msl_shader.cc` | 778, 779, 782, 784, 785 | 7 |
-| `pair_hash` | local in RunSpirv2airSelfTest | Hash of a pair's SPIR-V. | `src/xenia/gpu/metal/msl_shader.cc` | 787, 791 | 2 |
-| `name` | Module and Test field; local in RunSpirv2airSelfTest | What a shader or pipeline is called in the log. | `src/xenia/gpu/metal/msl_shader.cc` | 644, 647, 649, 714, 794, 797, 798, 800, 806, 861, 879, 894, 916, 921 | 16 |
-| `vertex_index` | local in RunSpirv2airSelfTest | A dumped vertex shader's modules index. | `src/xenia/gpu/metal/msl_shader.cc` | 795, 797, 798, 806 | 4 |
-| `pixel_index` | local in RunSpirv2airSelfTest | A dumped pixel shader's modules index. | `src/xenia/gpu/metal/msl_shader.cc` | 801, 806 | 2 |
-| `error_text` | local lambda in RunSpirv2airSelfTest | An NS::Error's description, or "unknown error". | `src/xenia/gpu/metal/msl_shader.cc` | 814, 840, 879, 921 | 4 |
-| `libraries` | local in RunSpirv2airSelfTest | The libraries loaded, released at the end. | `src/xenia/gpu/metal/msl_shader.cc` | 819, 831, 872, 953 | 4 |
-| `functions` | local in RunSpirv2airSelfTest | Functions by module index and option variant; null where one didn't load. | `src/xenia/gpu/metal/msl_shader.cc` | 821, 832, 834, 846, 847, 849, 948 | 7 |
-| `function_of` | local lambda in RunSpirv2airSelfTest | A module's function for a variant, translated and loaded on first use. | `src/xenia/gpu/metal/msl_shader.cc` | 844, 887, 889 | 3 |
-| `module` | local in function_of (RunSpirv2airSelfTest) | The module being translated. | `src/xenia/gpu/metal/msl_shader.cc` | 853, 855, 861, 879 | 5 |
-| `entry` | local in RunSpirv2airSelfTest | A probe_dir directory entry. | `src/xenia/gpu/metal/msl_shader.cc` | 757, 758, 761, 766 | 4 |
-| `index` | parameter of function_of | The module. | `src/xenia/gpu/metal/msl_shader.cc` | 844, 845, 846, 849, 853 | 6 |
-| `inserted` | local in function_of | Whether the function is new to functions. | `src/xenia/gpu/metal/msl_shader.cc` | 849, 850 | 2 |
-| `build` | local lambda in RunSpirv2airSelfTest | Builds a Test's pipeline and logs a failure (and a success if asked). | `src/xenia/gpu/metal/msl_shader.cc` | 886, 932, 939 | 3 |
-| `log_success` | parameter of build | Whether to log a pipeline that builds. | `src/xenia/gpu/metal/msl_shader.cc` | 886, 914 | 2 |
-| `built` | local in RunSpirv2airSelfTest | Pipelines Metal built. | `src/xenia/gpu/metal/msl_shader.cc` | 929, 933, 947 | 3 |
-| `failed` | local in RunSpirv2airSelfTest | Pipelines Metal failed to build. | `src/xenia/gpu/metal/msl_shader.cc` | 930, 936, 947 | 3 |
-| `t` | local in RunSpirv2airSelfTest and build | The pipeline being built. | `src/xenia/gpu/metal/msl_shader.cc` | 886, 887, 889, 890, 894, 916, 921, 931, 932 | 15 |
-| `begin` | local in build and RunSpirv2airSelfTest | When the build started. | `src/xenia/gpu/metal/msl_shader.cc` | 908, 911, 938, 943 | 4 |
-| `pipeline_ms` | local in build | Time Metal took to build or fail the pipeline. | `src/xenia/gpu/metal/msl_shader.cc` | 911, 916, 921 | 3 |
-| `key` | local in RunSpirv2airSelfTest | A functions key (unused name of the structured binding). | `src/xenia/gpu/metal/msl_shader.cc` | 948 | 1 |
+| `kPixelEarlyFragmentTests` | constant array in spirv2air_self_test | SPIR-V of the self-test's pixel shader with early fragment tests. | `src/xenia/gpu/metal/msl_shader.cc` | 704, 705 | 2 |
+| `test` | namespace alias in RunSpirv2airSelfTest | spirv2air_self_test. | `src/xenia/gpu/metal/msl_shader.cc` | 662, 674, 675, 676, 678, 679, 680, 681, 682, 683, 684, 685, 687, 688, 690, 691, 692, 693, 694, 695, 696, 697, 699, 700, 701, 702, 704, 705 | 29 |
+| `Module` | local struct in RunSpirv2airSelfTest | A shader: its name and SPIR-V. | `src/xenia/gpu/metal/msl_shader.cc` | 663, 669, 672, 794 | 4 |
+| `module_of` | local lambda in RunSpirv2airSelfTest | A Module from a name and SPIR-V words. | `src/xenia/gpu/metal/msl_shader.cc` | 667, 673, 675, 677, 680, 682, 684, 686, 689, 692, 694, 696, 698, 701, 703 | 15 |
+| `modules` | local in RunSpirv2airSelfTest | The self-test shaders, then the shaders from probe_dir. | `src/xenia/gpu/metal/msl_shader.cc` | 672, 768, 769, 772, 773, 794, 1023, 1027 | 8 |
+| `Test` | local struct in RunSpirv2airSelfTest | A pipeline: its name, shader indices and variant. | `src/xenia/gpu/metal/msl_shader.cc` | 709, 720, 729, 898, 997, 1005, 1006 | 7 |
+| `kSharedMemory` | local constant in RunSpirv2airSelfTest | Spirv2airLayout::kDirectSharedMemory. | `src/xenia/gpu/metal/msl_shader.cc` | 715, 723, 733, 1021 | 4 |
+| `kTextures` | local constant in RunSpirv2airSelfTest | Spirv2airLayout::kDirectTextures. | `src/xenia/gpu/metal/msl_shader.cc` | 716, 734, 736, 1021 | 4 |
+| `kAttributesShift` | local constant in RunSpirv2airSelfTest | Spirv2airLayout::kDeclarationAttributesShift. | `src/xenia/gpu/metal/msl_shader.cc` | 717, 1007, 1021 | 3 |
+| `baseline` | local in RunSpirv2airSelfTest | Pipelines from shaders with no calls. | `src/xenia/gpu/metal/msl_shader.cc` | 720, 978, 997 | 3 |
+| `with_calls` | local in RunSpirv2airSelfTest | Pipelines from shaders calling Metal intrinsics, built with each declaration attributes mode. | `src/xenia/gpu/metal/msl_shader.cc` | 729, 978, 1005, 1013, 1036 | 5 |
+| `dumps` | local in RunSpirv2airSelfTest | The vertex and pixel shader files in probe_dir by pair_<id> prefix. | `src/xenia/gpu/metal/msl_shader.cc` | 740, 751, 764 | 3 |
+| `file_name` | local in RunSpirv2airSelfTest | A probe_dir entry's file name. | `src/xenia/gpu/metal/msl_shader.cc` | 744, 745, 749, 751 | 5 |
+| `read_words` | local lambda in RunSpirv2airSelfTest | A file's contents as SPIR-V words. | `src/xenia/gpu/metal/msl_shader.cc` | 754, 769, 773 | 3 |
+| `bytes` | local in read_words | The file's bytes. | `src/xenia/gpu/metal/msl_shader.cc` | 756, 758, 759 | 3 |
+| `words` | Module field; local in read_words | SPIR-V words. | `src/xenia/gpu/metal/msl_shader.cc` | 665, 667, 669, 758, 759, 760, 796 | 10 |
+| `game_pairs` | local in RunSpirv2airSelfTest | Each dumped pair's vertex and pixel shader (-1: none) modules indices. | `src/xenia/gpu/metal/msl_shader.cc` | 763, 775, 979, 1022 | 4 |
+| `pair_name` | local in RunSpirv2airSelfTest | A dumps key (unused name of the structured binding). | `src/xenia/gpu/metal/msl_shader.cc` | 764 | 1 |
+| `paths` | local in RunSpirv2airSelfTest | A dumps value: the vertex and pixel shader files. | `src/xenia/gpu/metal/msl_shader.cc` | 764, 765, 769, 771, 773 | 7 |
+| `vertex_index` | local in RunSpirv2airSelfTest | A game pair's vertex shader modules index. | `src/xenia/gpu/metal/msl_shader.cc` | 768, 775, 1022, 1023, 1025, 1028 | 6 |
+| `pixel_index` | local in RunSpirv2airSelfTest | A game pair's pixel shader modules index, or -1. | `src/xenia/gpu/metal/msl_shader.cc` | 770, 772, 775, 1022, 1026, 1027, 1028 | 7 |
+| `name` | Module and Test field; parameter of build | What a shader or pipeline is called in the log. | `src/xenia/gpu/metal/msl_shader.cc` | 664, 667, 669, 710, 802, 820, 842, 884, 891, 893, 906, 909, 1023, 1027 | 14 |
+| `error_text` | local lambda in RunSpirv2airSelfTest | An NS::Error's description, or "unknown error". | `src/xenia/gpu/metal/msl_shader.cc` | 781, 820, 866, 872, 969 | 5 |
+| `libraries` | local in RunSpirv2airSelfTest | The libraries loaded, released at the end. | `src/xenia/gpu/metal/msl_shader.cc` | 786, 813, 1042 | 3 |
+| `functions` | local in RunSpirv2airSelfTest | Functions by module index and variant; null where one didn't load. | `src/xenia/gpu/metal/msl_shader.cc` | 788, 790, 1037 | 3 |
+| `function_of` | local lambda in RunSpirv2airSelfTest | A module's function for a variant, translated and loaded on first use. | `src/xenia/gpu/metal/msl_shader.cc` | 789, 899, 901 | 3 |
+| `index` | parameter of function_of | The module. | `src/xenia/gpu/metal/msl_shader.cc` | 789, 790, 794 | 3 |
+| `inserted` | local in function_of | Whether the function is new to functions. | `src/xenia/gpu/metal/msl_shader.cc` | 790, 791 | 2 |
+| `kAnswerTimeout` | local constant in RunSpirv2airSelfTest | How long a pipeline gets (40 s) before the self-test stops. | `src/xenia/gpu/metal/msl_shader.cc` | 829, 879 | 2 |
+| `kTimeBudget` | local constant in RunSpirv2airSelfTest | How long the self-test may run (10 minutes). | `src/xenia/gpu/metal/msl_shader.cc` | 830, 848 | 2 |
+| `self_test_begin` | local in RunSpirv2airSelfTest | When the self-test started. | `src/xenia/gpu/metal/msl_shader.cc` | 831, 848 | 2 |
+| `stopped` | local in RunSpirv2airSelfTest | The self-test stopped early (time spent, or Metal didn't answer). | `src/xenia/gpu/metal/msl_shader.cc` | 832, 845, 850, 885, 985, 1035 | 6 |
+| `Answer` | local struct in RunSpirv2airSelfTest | Metal's answer to a pipeline request, shared with its completion handler. | `src/xenia/gpu/metal/msl_shader.cc` | 833, 863 | 2 |
+| `answered` | Answer field | The completion handler ran. | `src/xenia/gpu/metal/msl_shader.cc` | 836, 869, 880 | 3 |
+| `built` | Answer field; local in RunSpirv2airSelfTest and the control lambda | The pipeline built (count of pipelines that built). | `src/xenia/gpu/metal/msl_shader.cc` | 837, 870, 889, 896, 948, 955, 972, 980, 983, 1035 | 10 |
+| `build` | local lambda in RunSpirv2airSelfTest | Builds a pipeline with the time limit and logs a failure (and a success if asked). | `src/xenia/gpu/metal/msl_shader.cc` | 842, 909, 955 | 3 |
+| `log_success` | parameter of build | Whether to log a pipeline that builds. | `src/xenia/gpu/metal/msl_shader.cc` | 844, 892 | 2 |
+| `answer` | local in build | This request's Answer. | `src/xenia/gpu/metal/msl_shader.cc` | 863, 866, 868, 869, 870, 872, 874, 878, 879, 880, 889, 891, 896 | 13 |
+| `begin` | local in build and count | When the build started. | `src/xenia/gpu/metal/msl_shader.cc` | 864, 888, 986, 991 | 4 |
+| `pipeline_ms` | local in build | Time Metal took to build or fail the pipeline. | `src/xenia/gpu/metal/msl_shader.cc` | 888, 891, 894 | 3 |
+| `run` | local lambda in RunSpirv2airSelfTest | Loads a Test's functions and builds its pipeline. | `src/xenia/gpu/metal/msl_shader.cc` | 898, 998, 1008, 1024, 1027 | 5 |
+| `t` | parameter of run; loop variable | The pipeline to build. | `src/xenia/gpu/metal/msl_shader.cc` | 898, 899, 901, 902, 906, 909, 997, 998, 1005, 1006 | 15 |
+| `controls` | local in RunSpirv2airSelfTest | Control pipelines built so far. | `src/xenia/gpu/metal/msl_shader.cc` | 914, 941, 956 | 3 |
+| `control_salt` | local in RunSpirv2airSelfTest | Makes this run's control pipelines new to Metal's caches. | `src/xenia/gpu/metal/msl_shader.cc` | 915, 941 | 2 |
+| `control` | local lambda in RunSpirv2airSelfTest | Compiles and builds a new Metal Shading Language control pipeline. | `src/xenia/gpu/metal/msl_shader.cc` | 917, 987, 996 | 3 |
+| `kMslSource` | local static string in the control lambda | The control's Metal Shading Language source. | `src/xenia/gpu/metal/msl_shader.cc` | 918, 941 | 2 |
+| `source` | local in the control lambda | kMslSource with this control's constant. | `src/xenia/gpu/metal/msl_shader.cc` | 940, 945 | 2 |
+| `failed` | local in RunSpirv2airSelfTest | Pipelines Metal failed to build. | `src/xenia/gpu/metal/msl_shader.cc` | 981, 983, 1035 | 3 |
+| `count` | local lambda in RunSpirv2airSelfTest | Counts a result, and after a failure checks the compiler with a new control. | `src/xenia/gpu/metal/msl_shader.cc` | 779, 916, 982, 996, 998, 1008, 1024, 1027 | 8 |
+| `best_mode` | local in RunSpirv2airSelfTest | The declaration attributes mode that built the most pipelines with calls. | `src/xenia/gpu/metal/msl_shader.cc` | 1001, 1015, 1021, 1036 | 4 |
+| `best_built` | local in RunSpirv2airSelfTest | How many it built. | `src/xenia/gpu/metal/msl_shader.cc` | 1002, 1014, 1016, 1019, 1036 | 5 |
+| `mode` | local in RunSpirv2airSelfTest | A declaration attributes mode. | `src/xenia/gpu/metal/msl_shader.cc` | 1003, 1007, 1013, 1015 | 4 |
+| `mode_built` | local in RunSpirv2airSelfTest | Pipelines with calls it built. | `src/xenia/gpu/metal/msl_shader.cc` | 1004, 1008, 1013, 1014, 1016 | 6 |
+| `variant_test` | local in RunSpirv2airSelfTest | A with_calls Test with the mode in its variant. | `src/xenia/gpu/metal/msl_shader.cc` | 1006, 1007, 1008 | 3 |
+| `game_variant` | local in RunSpirv2airSelfTest | The variant game pairs are built with. | `src/xenia/gpu/metal/msl_shader.cc` | 1020, 1025, 1028 | 3 |
+| `vertex_name` | local in RunSpirv2airSelfTest | A game pair's vertex shader name. | `src/xenia/gpu/metal/msl_shader.cc` | 1023, 1025, 1027 | 3 |
+| `key` | local in RunSpirv2airSelfTest | A functions key (unused name of the structured binding). | `src/xenia/gpu/metal/msl_shader.cc` | 1037 | 1 |
+| `module` | local in function_of | The module being translated. | `src/xenia/gpu/metal/msl_shader.cc` | 794, 796, 802, 820 | 5 |
+| `entry` | local in RunSpirv2airSelfTest | A probe_dir directory entry. | `src/xenia/gpu/metal/msl_shader.cc` | 742, 744, 746, 751 | 4 |
 | `probe_dir` | parameter of RunSpirv2airSelfTest | The title's spirv2air_probe folder. | `src/xenia/gpu/metal/msl_shader.h` | 102 | 1 |
-| `probe_dir` | parameter of RunSpirv2airSelfTest | The title's spirv2air_probe folder. | `src/xenia/gpu/metal/msl_shader.cc` | 641, 757 | 2 |
-| `vertex` | Test field and local Module in RunSpirv2airSelfTest; parameter of DumpSpirv2airPipelineShaders | The pipeline's vertex shader. | `src/xenia/gpu/metal/msl_shader.h` | 106 | 1 |
-| `vertex` | Test field and local Module in RunSpirv2airSelfTest; parameter of DumpSpirv2airPipelineShaders | The pipeline's vertex shader. | `src/xenia/gpu/metal/msl_shader.cc` | 715, 782, 789, 790, 791, 794, 796, 887, 958, 974, 985 | 12 |
-| `pixel` | Test field and local Module in RunSpirv2airSelfTest; parameter of DumpSpirv2airPipelineShaders | The pipeline's pixel shader (index -1, an empty Module, or null for none). | `src/xenia/gpu/metal/msl_shader.h` | 107 | 1 |
-| `pixel` | Test field and local Module in RunSpirv2airSelfTest; parameter of DumpSpirv2airPipelineShaders | The pipeline's pixel shader (index -1, an empty Module, or null for none). | `src/xenia/gpu/metal/msl_shader.cc` | 716, 783, 785, 788, 799, 800, 802, 889, 890, 959, 975, 976, 985 | 17 |
-| `pipeline_index` | local in DumpSpirv2airPipelineShaders | The number of this pair among those dumped, in the file names. | `src/xenia/gpu/metal/msl_shader.cc` | 968, 981, 990, 1002 | 4 |
-| `spirv` | local in DumpSpirv2airPipelineShaders | The translation's SPIR-V. | `src/xenia/gpu/metal/msl_shader.cc` | 994, 996, 997 | 3 |
-| `pair` | local in DumpSpirv2airPipelineShaders | The pair's shader hashes and modifications. | `src/xenia/gpu/metal/msl_shader.cc` | 973, 978 | 2 |
+| `probe_dir` | parameter of RunSpirv2airSelfTest | The title's spirv2air_probe folder. | `src/xenia/gpu/metal/msl_shader.cc` | 661, 742 | 2 |
+| `vertex` | Test field; parameter of DumpSpirv2airPipelineShaders | The pipeline's vertex shader. | `src/xenia/gpu/metal/msl_shader.h` | 106 | 1 |
+| `vertex` | Test field; parameter of DumpSpirv2airPipelineShaders | The pipeline's vertex shader. | `src/xenia/gpu/metal/msl_shader.cc` | 711, 899, 1047, 1060, 1075 | 6 |
+| `pixel` | Test field; parameter of DumpSpirv2airPipelineShaders | The pipeline's pixel shader (index -1, or null, for none). | `src/xenia/gpu/metal/msl_shader.h` | 107 | 1 |
+| `pixel` | Test field; parameter of DumpSpirv2airPipelineShaders | The pipeline's pixel shader (index -1, or null, for none). | `src/xenia/gpu/metal/msl_shader.cc` | 712, 901, 902, 1048, 1061, 1062, 1075 | 10 |
+| `spirv` | local in DumpSpirv2airPipelineShaders | The translation's SPIR-V. | `src/xenia/gpu/metal/msl_shader.cc` | 1084, 1086, 1087 | 3 |
+| `pair` | local in DumpSpirv2airPipelineShaders | The pair's shader hashes and modifications. | `src/xenia/gpu/metal/msl_shader.cc` | 1059, 1063, 1068 | 4 |
+| `pair_id` | local in DumpSpirv2airPipelineShaders | Hash of the pair, in the file names. | `src/xenia/gpu/metal/msl_shader.cc` | 1063, 1080, 1092 | 3 |
 | `direct_textures` | local in bind_spirv2air_stage | The shader was compiled with Spirv2airLayout::kDirectTextures. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5981, 6001, 6041, 6068, 6093, 6110 | 6 |
 | `sampler_index` | local in bind_spirv2air_stage | The sampler's index with direct bindings. | `src/xenia/gpu/metal/metal_command_processor.cc` | 6094, 6097, 6100, 6102 | 4 |
 | `spirv2air_msl_fallbacks` | function-static atomic in IssueDrawMsl | Shaders compiled with the Metal Shading Language as well for a draw that can't use spirv2air; the first 16 are logged. | `src/xenia/gpu/metal/metal_command_processor.cc` | 5061, 5062 | 2 |
@@ -1838,7 +1860,7 @@ further edits.
 | `counter_text` | 5 |
 | `pipeline_vertex_ticks` | 3 |
 | `pipeline_fragment_ticks` | 3 |
-| `source` | 9 |
+| `source` | 11 |
 | `call` | 3 |
 | `window_seconds` | 2 |
 | `MetalCompileStallTracker` | 8 |
@@ -2392,8 +2414,8 @@ further edits.
 | `metal_spirv2air_probe` | 2 |
 | `Spirv2airProbeStats` | 3 |
 | `translated` | 4 |
-| `libraries` | 7 |
-| `functions` | 11 |
+| `libraries` | 6 |
+| `functions` | 7 |
 | `translate_ms` | 5 |
 | `library_ms` | 6 |
 | `msl_library_ms` | 8 |
@@ -2426,7 +2448,7 @@ further edits.
 | `spirv2air_library_` | 5 |
 | `spirv2air_function_` | 8 |
 | `spirv2air_function` | 5 |
-| `Spirv2airLayout` | 46 |
+| `Spirv2airLayout` | 45 |
 | `kResourceHeapBuffer` | 4 |
 | `kSamplerHeapBuffer` | 4 |
 | `kArgumentBuffer` | 4 |
@@ -2443,17 +2465,45 @@ further edits.
 | `records` | 3 |
 | `use_spirv2air` | 12 |
 | `compile_msl_for_draw` | 3 |
-| `metal_spirv2air_options` | 3 |
+| `metal_spirv2air_declaration_attributes` | 2 |
+| `GetSpirv2airVariant` | 3 |
+| `kDeclarationAttributesShift` | 4 |
+| `kAttributesShift` | 3 |
+| `baseline` | 3 |
+| `with_calls` | 5 |
+| `game_pairs` | 4 |
+| `pair_name` | 1 |
+| `kAnswerTimeout` | 2 |
+| `kTimeBudget` | 2 |
+| `self_test_begin` | 2 |
+| `stopped` | 6 |
+| `Answer` | 2 |
+| `answered` | 3 |
+| `answer` | 13 |
+| `run` | 15 |
+| `controls` | 6 |
+| `control_salt` | 2 |
+| `control` | 25 |
+| `count` | 20 |
+| `best_mode` | 4 |
+| `best_built` | 5 |
+| `mode` | 4 |
+| `mode_built` | 6 |
+| `variant_test` | 3 |
+| `game_variant` | 3 |
+| `vertex_name` | 3 |
+| `pair_id` | 3 |
+| `metal_spirv2air_options` | 2 |
 | `GetSpirv2airCacheSeed` | 2 |
-| `variant` | 22 |
+| `variant` | 25 |
 | `spirv2air_variant` | 4 |
 | `spirv2air_options_` | 3 |
 | `spirv2air_options` | 2 |
 | `kDirectSharedMemory` | 3 |
 | `kDirectTextures` | 4 |
-| `kConstantTextureIndices` | 3 |
-| `kPreciseMath` | 4 |
-| `kOptionMask` | 3 |
+| `kConstantTextureIndices` | 2 |
+| `kPreciseMath` | 2 |
+| `kOptionMask` | 2 |
 | `dumped_pipeline_shaders` | 2 |
 | `kVertexSharedMemory` | 3 |
 | `kPixelConstantBufferIndexed` | 3 |
@@ -2461,29 +2511,24 @@ further edits.
 | `kPixelMath` | 3 |
 | `module_of` | 15 |
 | `modules` | 8 |
-| `kSharedMemory` | 6 |
-| `kTextures` | 5 |
-| `tests` | 7 |
+| `kSharedMemory` | 4 |
+| `kTextures` | 4 |
 | `dumps` | 3 |
 | `file_name` | 5 |
-| `stage_at` | 4 |
 | `read_words` | 3 |
 | `bytes` | 3 |
-| `pairs_seen` | 2 |
-| `pipeline_name` | 1 |
 | `paths` | 7 |
-| `pair_hash` | 2 |
-| `vertex_index` | 4 |
-| `pixel_index` | 2 |
+| `vertex_index` | 6 |
+| `pixel_index` | 7 |
 | `function_of` | 3 |
 | `module` | 5 |
 | `entry` | 4 |
-| `index` | 22 |
+| `index` | 19 |
 | `inserted` | 2 |
 | `build` | 3 |
 | `log_success` | 2 |
 | `probe_dir` | 3 |
-| `pair` | 2 |
+| `pair` | 4 |
 | `direct_textures` | 6 |
 | `sampler_index` | 4 |
 | `metal_spirv2air_self_test` | 3 |
@@ -2502,23 +2547,20 @@ further edits.
 | `kPixelDiscard` | 3 |
 | `kPixelEarlyFragmentTests` | 3 |
 | `test` | 29 |
-| `Module` | 7 |
-| `kMslVertex` | 6 |
-| `kMslPixel` | 6 |
+| `Module` | 4 |
 | `kMslSource` | 2 |
-| `Test` | 4 |
-| `error_text` | 4 |
-| `built` | 3 |
+| `Test` | 7 |
+| `error_text` | 5 |
+| `built` | 10 |
 | `failed` | 3 |
 | `t` | 15 |
 | `begin` | 4 |
 | `pipeline_ms` | 3 |
-| `pipeline_index` | 4 |
 | `spirv` | 3 |
-| `name` | 16 |
-| `words` | 16 |
-| `vertex` | 13 |
-| `pixel` | 18 |
+| `name` | 14 |
+| `words` | 10 |
+| `vertex` | 7 |
+| `pixel` | 11 |
 | `spirv2air_msl_fallbacks` | 2 |
 | `bind_spirv2air_stage` | 3 |
 | `record_count` | 8 |
@@ -2572,8 +2614,9 @@ further edits.
   `options` (the MTL::CompileOptions), `stage` ("VS"/"PS"), `ec` and the
   parameters `device` and `is_ios` are named and used as in
   `CompileSpirv2air`, `desc`, `pipeline`, `vertex_function` and
-  `fragment_function` as in `CreateMslPipelineState`, and `it` as an
-  iterator elsewhere; in `DumpSpirv2airPipelineShaders` `dump_dir`, `lock`,
+  `fragment_function` as in `CreateMslPipelineState` (`pipeline` and
+  `error` also as the completion handler's parameters), `lock` as a
+  lock_guard/unique_lock elsewhere, and `it` as an iterator elsewhere; in `DumpSpirv2airPipelineShaders` `dump_dir`, `lock`,
   `stats`, `ec`, `base` and `spv` are as in `CompileSpirv2air`, and
   `translation` as in IssueDrawMsl's loop; in `bind_spirv2air_stage` the
   parameter `translation` and the locals `bound_textures` and
@@ -2581,7 +2624,7 @@ further edits.
   `bind_msl_samplers`. Not listed. The test shaders' GLSL is in
   `spirv2air_self_test_spirv.h` above each array. spirv2air's own new options
   (`sharedMemoryBuffer`, `directTextures`, `constantTextureIndices`,
-  `preciseMath`, and the locals `directTextures`, `sharedVars`, `writable`,
+  `preciseMath`, `declarationAttributes`, the lambda `drop`, and the locals `directTextures`, `sharedVars`, `writable`,
   `arg`, `firstSampler`, `binding`, `index` and `typeName` in translate.cpp)
   are in the vendored copy, listed in its XENIOS.md instead.
 - `depth_attachment` and `stencil_attachment` in `BeginCommandBuffer` (the

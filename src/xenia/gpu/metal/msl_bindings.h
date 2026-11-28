@@ -110,12 +110,16 @@ constexpr uint32_t kMaxBindings = 256;
 // [[sampler(j)]], instead of the heaps and index records.
 // kConstantTextureIndices: the index records are read through a constant
 // pointer instead of a device one. kPreciseMath: the precise math intrinsics
-// instead of the fast ones.
+// instead of the fast ones. Bits 4-5 (from
+// metal_spirv2air_declaration_attributes): spirv2air's declarationAttributes,
+// which of the attributes Apple's current compiler writes on intrinsic
+// declarations are written.
 constexpr uint32_t kDirectSharedMemory = 1;
 constexpr uint32_t kDirectTextures = 2;
 constexpr uint32_t kConstantTextureIndices = 4;
 constexpr uint32_t kPreciseMath = 8;
 constexpr uint32_t kOptionMask = 15;
+constexpr uint32_t kDeclarationAttributesShift = 4;
 }  // namespace Spirv2airLayout
 
 }  // namespace metal

@@ -1812,11 +1812,19 @@ Function* Translator::declare(const std::string& name, Type* ret, const std::vec
         a = {Attr::get("mustprogress"), Attr::get("nounwind"), Attr::get("willreturn")};
         break;
     }
+    // XeniOS: Options::declarationAttributes (iOS 16's compiler failed every module with a call).
+    auto drop = [&](std::initializer_list<const char*> names) {
+      for (const char* n : names)
+        a.erase(std::remove_if(a.begin(), a.end(), [&](const Attr& attr) { return attr == Attr::get(n); }), a.end());
+    };
+    if (options_.declarationAttributes >= 1) drop({"mustprogress"});
+    if (options_.declarationAttributes >= 2) drop({"willreturn", "nofree", "nosync"});
+    if (options_.declarationAttributes >= 3) a.clear();
     list = m_.attrList(a);
   }
   f = m_.addFunction(name, m_.fnTy(ret, params));
   f->attrs = list;
-  f->unnamedAddr = 2;
+  f->unnamedAddr = options_.declarationAttributes >= 3 ? 0 : 2;
   return f;
 }
 

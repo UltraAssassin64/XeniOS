@@ -3500,6 +3500,40 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   simdgroup matrices (A14+ compute), which the translator never emits. The
   self-test's math case compares fast and precise.
 
+### Owner's runs on build 9698 (2b4b47e9e; zip "9698_logs_1": GTA IV with the self-test 00-29-24, GTA IV and EoT with spirv2air and options 3) and the next build
+
+- Game runs: GTA drew the intro, then only the bottom-right loading corner;
+  EoT nothing. Every spirv2air pipeline with calls still failed after 20-30 s
+  and fell back to MSL (direct bindings or not).
+- Self-test (synchronous, 48 pipelines, it ran for over 1.5 hours): built the
+  control, both VS (shared memory read through the argument buffer pointer
+  too, so the pointer theory was wrong), pixel shaders writing a constant,
+  with inputs, a constant buffer, early fragment tests; failed the indexed
+  constant buffer (14 ms), math functions fast and precise, discard, shared
+  memory in a PS (both options), the texture cases with every option, and
+  every game shader, the last pipeline taking 140 s, 1120 s, then 3600 s.
+  The "control builds again in 0.0 ms" lines were Metal's pipeline cache,
+  not a compile. A second run (07-39-26) never reached
+  InitializeShaderStorage's self-test (no lines), so only one run counts.
+- Offline: every test module that built has no call instruction; every one
+  that failed calls at least one intrinsic (air.convert, fast_* math,
+  discard_fragment, unpack, sample). A module with calls is the only kind
+  with intrinsic declarations and a PARAMATTR block: mustprogress (kind 70,
+  LLVM 12), nofree, nosync, nounwind, readnone, willreturn, as Apple's
+  current compiler writes them. Times were multiples of ~10 s: the compiler
+  service retrying a hung compile.
+- Next build: spirv2air Options::declarationAttributes (0 as now; 1 without
+  mustprogress; 2 without mustprogress, willreturn, nofree, nosync; 3 none and
+  no local_unnamed_addr) from metal_spirv2air_declaration_attributes (new
+  cvar, default 3; a separate cvar because configs save
+  metal_spirv2air_options = 3). Self-test: async pipeline builds with a 40 s
+  limit (stops when Metal doesn't answer), a 10 minute budget, a new MSL
+  control after each failure (unique constant so no cache hit), the 4 call-
+  free baselines, the 6 call cases for modes 3, 2 and 1, then the game pairs
+  with the mode that built the most. Dumps are now pair_<id>_VS/PS_*.spv
+  (runs numbered pipelineN from 1 and mixed pairs up; old files are
+  ignored).
+
 ### Per-game settings and copy/paste (owner's request, 2026-11-20)
 
 - Long-press a game > "Game Settings" (above Compatibility): the settings

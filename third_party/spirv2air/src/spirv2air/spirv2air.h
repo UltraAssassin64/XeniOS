@@ -15,7 +15,7 @@ namespace spirv2air {
 
 // Identifies the output format for caches: two builds with the same kVersion must produce byte-identical output
 // for the same input. Bump it with every change that changes any output byte.
-inline constexpr char kVersion[] = "spirv2air 1.0.8 xenios-ios16.2";
+inline constexpr char kVersion[] = "spirv2air 1.0.8 xenios-ios16.3";
 
 // Non-semantic extended instruction set read by spirv2air (SPV_KHR_non_semantic_info; other consumers ignore it).
 // KeepBranch (no operands; result type void) in a block makes the conditional branch ending that block reach the
@@ -140,6 +140,10 @@ struct Options {
   // XeniOS: graphics modules call the precise math intrinsics (air.<op>.f32, as compute modules do) instead of
   // air.fast_<op>.f32. This option affects output bytes.
   bool preciseMath = false;
+  // XeniOS: the attributes of intrinsic declarations. 0: the sets Apple's current compiler writes; 1: without
+  // mustprogress (LLVM 12); 2: without mustprogress, willreturn, nofree and nosync; 3: none, and no local_unnamed_addr.
+  // This option affects output bytes.
+  int declarationAttributes = 0;
 };
 
 Result translate(const uint32_t* words, size_t word_count, const Options& options = {});

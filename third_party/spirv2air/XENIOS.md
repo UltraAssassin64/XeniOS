@@ -22,23 +22,25 @@ Changes in this copy, so its output targets iOS 16:
   index records read through a constant pointer; and the precise math intrinsics, which compute
   modules call, in graphics modules. All off by default, so the default output is unchanged. iOS
   16's compiler fails on the pointers and handles these replace (below).
-- `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.2".
+- `spirv2air.h` `Options::declarationAttributes` (`translate.cpp` `declare`): which of the attributes
+  Apple's current compiler writes on intrinsic declarations are written: all (0, the default), all but
+  `mustprogress` (1), only `nounwind`, `readnone`/`readonly`, `argmemonly` and `convergent` (2), or
+  none and no `local_unnamed_addr` (3).
+- `spirv2air.h` `kVersion`: "spirv2air 1.0.8 xenios-ios16.3".
 
-Checked on iOS 16.5.1 (A16): Metal accepts the libraries and functions (build 9691). On build 9697
-its self-test (metal_spirv2air_self_test in XeniOS's msl_shader.cc, shaders in
-src/xenia/gpu/metal/spirv2air_self_test_spirv.h) built pipelines from vertex shaders with outputs,
-pixel shaders writing a constant, reading inputs (centroid too), reading a constant buffer through
-the argument buffer and with early fragment tests, each also paired with a Metal Shading Language
-shader for the other stage; and failed ("Compiler encountered an internal error") a pixel shader
-sampling a texture through the heaps (in 19 ms), one sampling a texture array with gradients and
-one with discard (30 s each, while the game's own spirv2air pipelines were failing alongside). The
-game's vertex shaders, which read shared memory through the argument buffer's device pointer, failed
-too, with no texture or discard. The common factor of the texture and vertex shader failures: a
-device pointer or a texture or sampler handle loaded from memory (the argument buffer's
-struct_type_info is empty); constant pointers loaded from it work. The discard shader loads no
-pointer, so its failure is open (it may have been the game's compiles failing alongside). The
-options above take those loads out; the next self-test checks each one, and discard again, in
-isolation (before the title runs, so no other compile shares the compiler service).
+Checked on iOS 16.5.1 (A16): Metal accepts the libraries and functions (build 9691). Pipelines:
+XeniOS's self-test (metal_spirv2air_self_test in msl_shader.cc, shaders in
+src/xenia/gpu/metal/spirv2air_self_test_spirv.h) on builds 9697 and 9698 built every module with no
+call (vertex shaders with outputs or reading shared memory through the argument buffer's device
+pointer, pixel shaders writing a constant, reading inputs or a constant buffer, with early fragment
+tests) and failed every module calling an intrinsic ("Compiler encountered an internal error"): a
+float-to-int conversion (in 14 ms), math functions (fast and precise), discard, a texture sample
+(with heaps or direct bindings), unpack, and every game shader. Bound directly or not made no
+difference. Only a module with a call has intrinsic declarations, and so an attribute table:
+`mustprogress` (LLVM 12), `willreturn`, `nofree`, `nosync`, `nounwind`, `readnone`, ... as Apple's
+current compiler writes them. declarationAttributes 1-3 test whether iOS 16's compiler is the one
+that can't take them. Failures took multiples of about 10 s (one hung for an hour), so the
+compiler service retries a hung compile; the self-test now gives each pipeline 40 s.
 
 `include/spirv/unified1` holds the
 Khronos headers the translator includes (spirv.hpp from third_party/SPIRV-Cross, GLSL.std.450.h from
