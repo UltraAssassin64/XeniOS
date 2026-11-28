@@ -3602,6 +3602,33 @@ spirv2air (owner: start testing it, a fork may be needed for iOS 16):
   case; the call cases and game pairs take the guest variant; mode 1 is
   no longer tried (3 minutes of failures).
 
+### Owner's runs on build 9701 (3d1d8cbdb; zip "9701_logs_and_shaders": GTA IV 09-43-22 and 09-47-12, Arkham City 09-50-23 and 10-01-03, all metal_shader_compiler "msl")
+
+- Owner: GPU feels lighter and shaders cache, the CPU struggles; Arkham
+  City dialogue desyncs or skips in scripted scenes, which also stutter; GTA
+  IV slows its audio on one line of dialogue.
+- All four runs used MSL, not spirv2air.
+- GTA IV late: 60-74 ms frames with the GPU 55-80% busy. The busiest thread
+  is the game's audio thread F8000CD0 (~81% of a core), in a VMX loop at
+  8216DBA8-8216DC7C (vector loads and stores, vaddfp, vmaddfp: the mixer)
+  and FFmpeg's WMA decoder, which runs on that thread because
+  use_dedicated_xma_thread is off. Each vmaddfp emits three
+  VECTOR_DENORMFLUSH ops (~7 NEON each) and the multiply-add; the flushes
+  can't be dropped as FZ follows VSCR.NJ.
+- Arkham City: 40-55 ms with the GPU ~90-100%; Main XThread and XThread13407
+  each 80-90% of a core in guest code. XMA decodes inline there too. The
+  "XMA hang" lines are only the XMACreateContext-called-often report.
+- Upstream XeniOS has ~250 CPU/A64 commits this branch lacks, among them
+  loop register promotion (f22d2ff66, 1720a55b2, 3140c6cb9, ...: guest
+  registers of a hot loop kept in host registers, BF4's hottest loop 77 -> 54
+  host instructions) and a JIT corpus recorder/replayer (747457884, offline
+  measurement, not an AOT cache). f22d2ff66 does not apply: it builds on
+  upstream emitter work (short-branch shadows, physical remap bound, label
+  bookkeeping) the branch lacks; a64 differs by ~8.4k/3.1k lines.
+- Suggested to the owner: dedicated XMA thread on for GTA IV and Arkham City
+  (moves FFmpeg off the game's audio/main thread); next CPU work would be a
+  staged port of upstream's A64 backend, pending the owner's go-ahead.
+
 ### iOS input and interface (owner's request, 2026-11-28)
 
 Owner asked for XeniOS's custom touch layouts, its lag and repeated-input
